@@ -29,3 +29,9 @@ Initial plan used a generic `/workspace` mount. **Josiah redirected** this to mi
 ### Authentication
 
 Josiah questioned how to auto-provide the Anthropic API key, noting he had logged in via `claude login` rather than setting an environment variable. Investigation confirmed that `claude login` stores OAuth credentials in `~/.claude/.credentials.json`. Since `run.sh` already mounts `~/.claude` into the container, authentication is inherited automatically — no API key env var is needed. The `-e ANTHROPIC_API_KEY` line was removed from `run.sh`.
+
+---
+
+## First Successful Run — 2026-05-11
+
+Josiah confirmed Claude Code running inside the container. The filesystem boundary, user identity mirroring, `~/.claude` credential passthrough, and `~/Development/personal` mount all functioned as designed on the first attempt.
