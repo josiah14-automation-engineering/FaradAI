@@ -1,0 +1,22 @@
+# Python
+*.log
+.env
+node_modules/
+__pycache__/
+*.pyc
+
+# Claude Code
+.claude/settings.local.json
+
+# Vim
+*.swp
+*.swo
+*.swn
+*~
+.netrwhist
+tags
+
+# Emacs
+\#*\#
+.\#*
+.dir-locals.el

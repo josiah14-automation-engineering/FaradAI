@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+docker build \
+  --build-arg USERNAME="$(whoami)" \
+  --build-arg USER_UID="$(id -u)" \
+  --build-arg USER_GID="$(id -g)" \
+  -t faradai:latest \
+  "$(dirname "$0")"
