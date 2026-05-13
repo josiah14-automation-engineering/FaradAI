@@ -13,4 +13,3 @@ docker run -it --rm \
   -e OPENROUTER_API_KEY="$(pass show openrouter/api-key)" \
   faradai:latest \
   "${@:-claude}"
-</arg_value>
