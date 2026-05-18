@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y \
     npm \
     python3 \
     python3-pip \
+    python3-venv \
+    pipx \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @anthropic-ai/claude-code
@@ -28,5 +30,10 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
 RUN mkdir -p /home/${USERNAME}/Development/personal \
     && chown ${USER_UID}:${USER_GID} /home/${USERNAME}/Development/personal
 
+ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
+
 USER ${USERNAME}
+
+RUN pipx install aider-chat
+
 WORKDIR /home/${USERNAME}/Development/personal

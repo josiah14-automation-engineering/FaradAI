@@ -35,3 +35,33 @@ Josiah questioned how to auto-provide the Anthropic API key, noting he had logge
 ## First Successful Run — 2026-05-11
 
 Josiah confirmed Claude Code running inside the container. The filesystem boundary, user identity mirroring, `~/.claude` credential passthrough, and `~/Development/personal` mount all functioned as designed on the first attempt.
+
+---
+
+## Session 2 — 2026-05-13
+
+### Aider Integration
+
+Josiah added `aider` to the container and configured it with an OpenRouter API key (`OPENROUTER_API_KEY` env var), giving the container a second AI coding tool alongside Claude Code. Aider was confirmed functional via a smoke test against `openrouter/anthropic/claude-3-haiku`, which returned a response and cost breakdown on the first attempt.
+
+### Memory Passthrough Confirmed
+
+**Josiah verified** that the `~/.claude` mount carries not just credentials but also the full persistent memory system (`~/.claude/projects/.../memory/`). Memory files written in prior sessions are accessible inside the container, meaning context and collaboration preferences persist across container restarts without any additional mounting or configuration.
+
+### Ring-2.6-1T Code Review
+
+Ring-2.6-1T (via aider/OpenRouter) reviewed the FaradAI project files and produced a prioritized issue table. The high-severity finding was a security inconsistency: `run.sh` passes `OPENROUTER_API_KEY` as an environment variable despite the BUILDLOG explicitly documenting that env vars are visible to the agent. Additional findings covered `.dockerignore` absence, version pinning, resource limits, and minor shell style.
+
+**Josiah reviewed the findings and accepted the env var exposure as a known tradeoff.** The `OPENROUTER_API_KEY` carries a hard cost limit, making the blast radius of any leak bounded and tolerable. The risk is acknowledged, not overlooked.
+
+---
+
+### Lesson: Environment Variables Are Not Secret from the Agent
+
+During the aider smoke test, a broad `env | grep` command was used to check for relevant API keys. The full `OPENROUTER_API_KEY` value appeared in the tool output and was transmitted to Anthropic's servers as part of the conversation context. The key had a cost limit, so exposure was low-risk, but the pattern is worth noting.
+
+**The Faraday cage protects the filesystem boundary, not the process environment.** Any secret present as an environment variable is visible to the agent and will be transmitted if it appears in tool output. Mitigations:
+
+- Scope `env` greps to exactly the variable name you intend to expose.
+- Keep secrets out of the container environment entirely when possible (e.g., inject only at the point of use, or store outside the mount).
+- Prefer keys with tight cost limits and short rotation cycles for anything used inside AI coding sessions.

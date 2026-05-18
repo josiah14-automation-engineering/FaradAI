@@ -7,6 +7,7 @@ docker run -it --rm \
   --memory=4g \
   --cpus=4 \
   -v "${HOME}/.claude:/home/${USER}/.claude" \
+  -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
   -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
   -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
   -w "/home/${USER}/Development/personal" \
