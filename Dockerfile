@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     pipx \
+    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @anthropic-ai/claude-code
