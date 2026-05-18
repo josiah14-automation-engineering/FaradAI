@@ -56,6 +56,22 @@ Ring-2.6-1T (via aider/OpenRouter) reviewed the FaradAI project files and produc
 
 ---
 
+---
+
+## Session 3 — 2026-05-18
+
+### Fix: Missing `.claude.json` Mount
+
+Claude Code reported "configuration file not found at `/home/josiah/.claude.json`" on container startup. **Josiah identified** that `run.sh` mounted `~/.claude/` (the directory) but not `~/.claude.json` (a sibling file at the same level). The two are distinct filesystem objects; mounting the directory does not capture the file beside it. The fix was a one-line addition to `run.sh`.
+
+### Aider Credential Hardening
+
+**Josiah directed** replacing the `-e OPENROUTER_API_KEY` environment variable with a file-based approach, mirroring how Claude Code credentials are handled via the `~/.claude` mount. Aider reads `~/.aider.conf.yml` natively; the key is stored there on the host and mounted read-only into the container. The `-e OPENROUTER_API_KEY` line and its `pass` invocation were removed from `run.sh` entirely.
+
+This closes the env-var exposure vector documented in Session 2. The key is still technically file-readable if the agent looks directly at `~/.aider.conf.yml`, but it will no longer surface through incidental `env` output or tool call logging.
+
+---
+
 ### Lesson: Environment Variables Are Not Secret from the Agent
 
 During the aider smoke test, a broad `env | grep` command was used to check for relevant API keys. The full `OPENROUTER_API_KEY` value appeared in the tool output and was transmitted to Anthropic's servers as part of the conversation context. The key had a cost limit, so exposure was low-risk, but the pattern is worth noting.
@@ -65,3 +81,62 @@ During the aider smoke test, a broad `env | grep` command was used to check for 
 - Scope `env` greps to exactly the variable name you intend to expose.
 - Keep secrets out of the container environment entirely when possible (e.g., inject only at the point of use, or store outside the mount).
 - Prefer keys with tight cost limits and short rotation cycles for anything used inside AI coding sessions.
+
+---
+
+### Smoke Test: Credential Hardening (cont.)
+
+Testing the `~/.aider.conf.yml` approach revealed a configuration error: the file used `openrouter-api-key` as the key name, which aider does not recognize. The correct format is `api-key: openrouter=<key>`, corresponding to aider's `--api-key PROVIDER=KEY` flag.
+
+**Josiah caught** that reading `~/.aider.conf.yml` to diagnose the issue would transmit the API key to Anthropic's servers — the same exposure vector the file-based approach was designed to avoid. He redirected to a manual fix instead.
+
+Note: the API key also appeared in tool output during the smoke test (`aider: error: unrecognized arguments: --openrouter-api-key=<key>`), demonstrating again that secrets surfacing in command output are captured in context regardless of how they entered the environment.
+
+### Ring-2.6-1T Model Slug
+
+OpenRouter model slug for Ring-2.6-1T confirmed: `openrouter/inclusionai/ring-2.6-1t`. Josiah looked this up directly on the OpenRouter model directory.
+
+---
+
+## Session 4 — 2026-05-18
+
+### Aider Smoke Test (Session 3 cont.)
+
+Aider re-tested after Josiah manually applied the `~/.aider.conf.yml` credential fix from Session 3. Test confirmed clean: Ring-2.6-1T responded via aider with no credential errors and no key exposure in output. File-based credential approach working as intended.
+
+### Persistent Ring Session — tmux
+
+Josiah proposed using aider to hold an interactive Ring-2.6-1T session in the background, enabling live comparison between Anansi and Ring on coding questions. The approach: start aider in a background tmux pane, communicate via `tmux send-keys` and `tmux capture-pane`.
+
+`which tmux` confirmed tmux is not present in the container. **Josiah directed** adding it to the Dockerfile. Added `tmux` to the `apt-get install` block — one-line change, rebuild required.
+
+---
+
+## Session 5 — 2026-05-18
+
+### Aider tmux Smoke Test
+
+After rebuild, aider launched successfully in a detached tmux session. First real call to Ring-2.6-1T via the tmux pane failed with:
+
+```
+litellm.BadRequestError: LLM Provider NOT provided. You passed model=inclusionai/ring-2.6-1t
+```
+
+The model slug in `~/.aider.conf.yml` was `inclusionai/ring-2.6-1t` — missing the `openrouter/` provider prefix that LiteLLM requires for routing. The correct slug is `openrouter/inclusionai/ring-2.6-1t`. Because `~/.aider.conf.yml` is mounted `:ro`, the fix cannot be applied from inside the container; it must be made on the host. Worked around mid-session via `/model openrouter/inclusionai/ring-2.6-1t` inside aider.
+
+This exposes a gap: `:ro` mounts protect credentials from agent writes but also block legitimate config corrections. The host-side fix to `~/.aider.conf.yml` is pending.
+
+### Ring Analysis of FaradAI
+
+With the model slug corrected, Ring-2.6-1T analyzed the FaradAI project files via the tmux aider session. Ring confirmed the core design is sound and flagged several improvement areas (detailed findings in ring-feedback.md if recorded). Key issues surfaced:
+
+- Inconsistent mount modes: `~/.aider.conf.yml` `:ro` but `~/.claude` and `~/.claude.json` read-write
+- No `.dockerignore`
+- Hardcoded resource limits in `run.sh`
+- No image versioning strategy
+
+### `.credentials.json` Read-Only Overlay
+
+Ring's mount inconsistency observation prompted a targeted fix. Josiah scoped the problem: `~/.claude` needs to remain read-write so the agent can update memory, history, and settings — but `~/.credentials.json` (the OAuth token) within it should be protected from writes.
+
+Docker allows a more-specific volume mount to overlay a broader one. **Josiah directed** adding a second `-v` line mounting `~/.claude/.credentials.json` as `:ro` on top of the read-write `~/.claude` mount. The more specific path wins in Docker's mount resolution, giving per-file granularity without splitting the directory mount.
