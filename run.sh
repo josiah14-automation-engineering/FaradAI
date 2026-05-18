@@ -8,9 +8,9 @@ docker run -it --rm \
   --cpus=4 \
   -v "${HOME}/.claude:/home/${USER}/.claude" \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
+  -v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro" \
   -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
   -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
   -w "/home/${USER}/Development/personal" \
-  -e OPENROUTER_API_KEY="$(pass show openrouter/api-key)" \
   faradai:latest \
   "${@:-claude}"
