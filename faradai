@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if docker ps --format '{{.Names}}' | grep -qx 'faradai'; then
+if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
   # exec replaces this process on success; set -e exits on failure — no exit needed
   exec docker exec -it faradai "${@:-bash}"
 fi
+
+# Remove any stopped container with this name so --name faradai doesn't conflict
+docker rm -f faradai 2>/dev/null || true
 
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
