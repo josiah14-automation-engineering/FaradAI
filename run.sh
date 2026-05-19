@@ -11,6 +11,7 @@ docker run -it --rm \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
   -v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro" \
   -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
+  -v "${HOME}/.ssh:/home/${USER}/.ssh:ro" \
   -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
   -w "/home/${USER}/Development/personal" \
   faradai:latest \
