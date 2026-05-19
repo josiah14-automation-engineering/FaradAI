@@ -180,3 +180,41 @@ A hard `ENTRYPOINT ["claude"]` was rejected because it would have broken the mul
 ### Remaining Open Item
 
 The `~/.aider.conf.yml` model slug fix (`inclusionai/ring-2.6-1t` → `openrouter/inclusionai/ring-2.6-1t`) remains a host-side fix. The file is mounted `:ro` and cannot be corrected from inside the container.
+
+---
+
+## Solo Fix — 2026-05-19
+
+**Josiah independently identified and corrected** a permissions bug in `entrypoint.sh`: the script was being `COPY`'d into the image after the `USER` directive, meaning it landed owned by the non-root user and was not executable by root — making it unusable as an `ENTRYPOINT`. Josiah caught this, diagnosed it without AI assistance, and committed the fix directly. No session needed.
+
+---
+
+## Session 7 — 2026-05-19
+
+### Bug: `aider: not found` at Runtime
+
+On first launch of the rebuilt container, `./run.sh aider` failed with `/usr/local/bin/entrypoint.sh: line 9: exec: aider: not found`.
+
+Root cause: `pipx install aider-chat==0.86.2` was running as root (before the `USER` directive), so pipx dropped the binary into `/root/.local/bin` rather than `/home/${USERNAME}/.local/bin` — the path the `ENV PATH` line points to. The binary was installed but unreachable by the non-root user at runtime.
+
+### Least-Privilege Install for Both Tools
+
+**Josiah questioned** why `npm install -g @anthropic-ai/claude-code` was still running as root when the same problem could apply. It can — global npm writes to system paths by default. Fix: configure npm to use a user-local prefix before installing.
+
+Both tools now install after `USER ${USERNAME}`:
+
+```dockerfile
+RUN npm config set prefix "/home/${USERNAME}/.local"
+RUN npm install -g @anthropic-ai/claude-code@2.1.143
+RUN pipx install aider-chat==0.86.2
+```
+
+The `ENV PATH` line already includes `/home/${USERNAME}/.local/bin`, so both binaries are found without further changes. No root access required for either tool at install time. Rebuild required.
+
+### Layer Consolidation
+
+**Josiah independently consolidated** the remaining root-context `RUN` blocks: `userdel`/`groupdel`, `groupadd`/`useradd`, and the `mkdir`/`chown` for the mount point were merged into a single chained `RUN`. He also pulled the `sudo` purge up into the initial `apt-get` step rather than leaving it as its own layer. Result: fewer image layers, smaller image.
+
+### Rebuild Confirmed
+
+Rebuild succeeded. Both tools reachable at runtime. Current session is running from inside this image.
