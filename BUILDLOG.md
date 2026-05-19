@@ -140,3 +140,43 @@ With the model slug corrected, Ring-2.6-1T analyzed the FaradAI project files vi
 Ring's mount inconsistency observation prompted a targeted fix. Josiah scoped the problem: `~/.claude` needs to remain read-write so the agent can update memory, history, and settings — but `~/.credentials.json` (the OAuth token) within it should be protected from writes.
 
 Docker allows a more-specific volume mount to overlay a broader one. **Josiah directed** adding a second `-v` line mounting `~/.claude/.credentials.json` as `:ro` on top of the read-write `~/.claude` mount. The more specific path wins in Docker's mount resolution, giving per-file granularity without splitting the directory mount.
+
+---
+
+## Session 6 — 2026-05-19
+
+### README Brought Current
+
+The README had not been updated since Session 1 and was significantly behind: it listed only two mounts, made no mention of aider or tmux, and had no security or credential documentation. The README was rewritten to reflect the full mount table (all six mounts with modes and purposes), current tooling list, resource limits, the file-based credential model, and an aider config example with the correct model slug format. Open items from `ring-feedback.md` were consolidated into a table at the bottom.
+
+### Closing All Open Items
+
+All items from the `ring-feedback.md` priority table were addressed and committed individually:
+
+**`.dockerignore`**
+Added to exclude `.git`, `.aider.chat.history.md`, and documentation files from the build context sent to the Docker daemon.
+
+**Version pinning**
+`@anthropic-ai/claude-code` pinned to `2.1.143` and `aider-chat` pinned to `0.86.2` — the current latest at time of session. Prevents build drift across rebuilds.
+
+**`sudo` removal**
+Added an explicit `apt-get purge --auto-remove sudo` before the `USER` directive. **Anansi caught** a bug in the initial placement: the purge had been inserted after `USER ${USERNAME}`, where it would run as non-root and silently fail. Corrected before commit.
+
+**SSH support**
+Added `openssh-client` to the `apt-get install` block and `-v "${HOME}/.ssh:/home/${USER}/.ssh:ro"` to `run.sh`. The key mount alone was insufficient — the SSH binary was also absent from the image.
+
+**Entrypoint design — `claude/aider/tmux/bash` mode selector**
+
+The `ENTRYPOINT` open item prompted a design discussion. Three approaches were surfaced:
+
+- **A — status quo arg override:** `./run.sh` defaults to claude, `./run.sh aider` runs aider. Simple but offers no discovery.
+- **B — interactive select menu:** wrapper script prompts if no arg given.
+- **C — tmux split as default:** leans into the dual-tool intent; `./run.sh tmux` opens both tools side by side.
+
+**Josiah accepted all three as valid modes** and directed that claude be the default when no argument is provided. Implemented as `entrypoint.sh` — a wrapper script copied into the image at `/usr/local/bin/entrypoint.sh` and set as `ENTRYPOINT`. Modes: `claude` (default), `aider`, `tmux` (split session, claude left / aider right), `bash`. `run.sh` was updated to pass `"$@"` through as-is; the default is now handled in the entrypoint rather than the shell script.
+
+A hard `ENTRYPOINT ["claude"]` was rejected because it would have broken the multi-tool arg pattern — subsequent arguments would be passed to `claude` rather than selecting a different tool.
+
+### Remaining Open Item
+
+The `~/.aider.conf.yml` model slug fix (`inclusionai/ring-2.6-1t` → `openrouter/inclusionai/ring-2.6-1t`) remains a host-side fix. The file is mounted `:ro` and cannot be corrected from inside the container.
