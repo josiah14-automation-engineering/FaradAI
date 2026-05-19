@@ -22,30 +22,62 @@ Builds `faradai:latest` using your host user's username, UID, and GID — derive
 ./run.sh
 ```
 
-Launches an interactive Claude Code session inside the container. To run aider instead:
+Launches an interactive Claude Code session inside the container.
 
-```bash
-./run.sh aider
-```
+### Modes
 
-Any arguments passed to `run.sh` replace the default `claude` entrypoint.
+An optional argument selects which tool to launch:
 
-### Mounts
-
-| Host | Container | Mode | Purpose |
-|------|-----------|------|---------|
-| `~/.claude/` | `~/.claude/` | read-write | Settings, memory, conversation history |
-| `~/.claude/.credentials.json` | `~/.claude/.credentials.json` | read-only | OAuth token — overlaid `:ro` on top of the directory mount |
-| `~/.claude.json` | `~/.claude.json` | read-write | Claude Code config file |
-| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider config including OpenRouter API key |
-| `~/.gitconfig` | `~/.gitconfig` | read-only | Git identity |
-| `~/Development/personal` | `~/Development/personal` | read-write | Your project files |
-
-The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references work identically inside and outside the container.
+| Command | Result |
+|---------|--------|
+| `./run.sh` | Claude Code (default) |
+| `./run.sh aider` | aider |
+| `./run.sh tmux` | tmux split — Claude Code left, aider right |
+| `./run.sh bash` | bare shell, useful for debugging |
 
 ### Resource limits
 
-`run.sh` applies `--memory=4g` and `--cpus=4` to bound what the container can consume.
+`run.sh` reads three environment variables to set container resource limits, with sensible defaults if unset:
+
+| Variable | Default | Controls |
+|----------|---------|----------|
+| `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
+| `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
+| `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
+
+Override inline:
+```bash
+FARADAI_MEMORY=8g FARADAI_CPUS=8 ./run.sh
+```
+
+Or set permanently in your shell rc file (`~/.zshrc`, `~/.bashrc`, etc.):
+```sh
+export FARADAI_MEMORY=4g
+export FARADAI_CPUS=4
+export FARADAI_PIDS=512
+```
+
+`run.sh` also uses `$HOME` and `$USER` for mount paths — these are standard shell variables set automatically by your shell and require no configuration.
+
+### Mounts
+
+| Host | Container | Mode | Required for |
+|------|-----------|------|--------------|
+| `~/.claude/` | `~/.claude/` | read-write | Claude Code — settings, memory, conversation history |
+| `~/.claude/.credentials.json` | `~/.claude/.credentials.json` | read-only | Claude Code — OAuth token, overlaid `:ro` on top of the directory mount to protect it from writes |
+| `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
+| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access |
+| `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
+| `~/.ssh/` | `~/.ssh/` | read-only | SSH-based git remotes (optional if you only use HTTPS) |
+| `~/Development/personal` | `~/Development/personal` | read-write | Your project files — the primary work surface |
+
+The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references, memory files, and tooling behave identically inside and outside the container.
+
+Credentials are delivered as mounted files rather than environment variables — any secret in the environment will appear in tool output if `env` is inspected. See [Security model](#security-model).
+
+### Resource limits
+
+`run.sh` applies `--memory=4g`, `--cpus=4`, and `--pids-limit=512` to bound what the container can consume.
 
 ## What's in the image
 
