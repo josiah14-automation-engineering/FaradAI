@@ -46,6 +46,7 @@ RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true \
     python3 \
     python3-pip \
     python3-venv \
+    tmux \
     vim \
  && rm -rf /var/lib/apt/lists/* \
  && userdel -r ubuntu 2>/dev/null || true \
