@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     tmux \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @anthropic-ai/claude-code@2.1.143
 
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
@@ -35,6 +35,6 @@ ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
 USER ${USERNAME}
 
-RUN pipx install aider-chat
+RUN pipx install aider-chat==0.86.2
 
 WORKDIR /home/${USERNAME}/Development/personal
