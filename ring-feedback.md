@@ -1,84 +1,100 @@
 # Ring Feedback — FaradAI Project
 
-All feedback provided during the analysis of the FaradAI project, compiled chronologically.
+Updated assessment — 2026-05-19. Previous review entries archived below.
 
 ---
 
-## Initial Analysis (BUILDLOG.md, CLAUDE.md, Dockerfile, README.md, build.sh)
+## Updated Assessment
+
+### Overall State
+
+The FaradAI project is in strong shape. The prior review's most critical finding (API key in environment) has been resolved, and the overall engineering quality — build portability, credential handling, documentation, and container design — is high. The remaining items are incremental hardening and maintenance tasks, none of which are blockers for current use.
+
+---
+
+### Resolved Since Prior Review
+
+All issues flagged in the original analysis have been addressed:
+
+| # | Prior Finding | Resolution |
+|---|---------------|------------|
+| 1 | `OPENROUTER_API_KEY` passed as env var contradicted documented security lesson | Removed entirely. Aider now reads key from `~/.aider.conf.yml` mounted `:ro`. |
+| 2 | No `.dockerignore` — build context may leak credentials | `.dockerignore` added. Excludes `.git`, history files, and documentation. |
+| 3 | No version pinning on `claude-code` and `aider-chat` | Pinned to `@anthropic-ai/claude-code@2.1.143` and `aider-chat==0.86.2`. |
+| 4 | No resource limits (`--memory`, `--cpus`) | `run.sh` now passes `--memory=4g` and `--cpus=4`. |
+| 5 | `$(whoami)` called 4 times instead of stored in variable | Consolidated into `USER="$(whoami)"` at the top of `run.sh`. |
+| 6 | No SSH key mount for SSH-based git access | `openssh-client` installed in Dockerfile; `-v "${HOME}/.ssh:/home/${USER}/.ssh:ro"` added to `run.sh`. |
+| 7 | `pass` dependency not documented | Eliminated — `OPENROUTER_API_KEY` no longer fetched via `pass` at runtime. |
+| 8 | No `ENTRYPOINT` in Dockerfile | `entrypoint.sh` added as `ENTRYPOINT` with multi-mode support (`claude`/`aider`/`tmux`/`bash`). |
+| 9 | Python adds ~150MB — confirm it's needed | Retained with documented justification in `CLAUDE.md` ("available for intermediate scripting tasks"). |
+| 10 | `sudo` not explicitly removed | `apt-get purge --auto-remove sudo` consolidated into the initial `apt-get` step. |
+
+Additional fixes observed in the current codebase not in the original open items:
+
+- **`~/.claude.json` mount added** — previously only the `~/.claude/` directory was mounted, missing the sibling config file.
+- **`~/.claude/.credentials.json` read-only overlay** — a second volume mount overlays the OAuth token as `:ro` on top of the read-write `~/.claude` directory, preventing the agent from modifying credentials while still allowing memory/history writes.
+- **Tool installs moved after `USER` directive** — `npm config set prefix` and both `pipx`/`npm install` commands now run as the non-root user, fixing the `aider: not found` runtime error caused by binaries landing in `/root/.local/bin`.
+- **Layer consolidation** — root-context `RUN` blocks merged, reducing image layer count and size.
+
+---
+
+### Remaining Open Items
+
+| # | Severity | Issue | File(s) |
+|---|----------|-------|---------|
+| 1 | High | No multi-stage build. The `sudo` binary is purged in a later layer but still exists in the base image layer history. Anyone who extracts the image tarball and mounts a pre-purge layer can access it. A multi-stage build (builder stage → clean minimal base) is the only way to produce a final image whose layer history never includes `sudo`. Flagged as a pre-open-source priority in `TODO.md`. | `Dockerfile` |
+| 2 | Medium | No `--pids-limit` in `run.sh`. `--memory` and `--cpus` were added, but process count is unbounded. An AI agent running shell commands that fork heavily (parallel tool calls, recursive find, etc.) could exhaust the container's process table. A conservative value like `--pids-limit 512` would bound this. | `run.sh` |
+| 3 | Medium | README open items table is stale. The table at the bottom of `README.md` lists five issues that are all resolved per `TODO.md` and the current codebase. This creates confusion for anyone reading the README. The table should be removed or replaced with current state. | `README.md` |
+| 4 | Low | Python inclusion not explicitly justified in README. `CLAUDE.md` mentions Python is "available for intermediate scripting tasks," but the README's "What's in the image" section doesn't explain why it's there. A one-line justification would preempt questions, especially given the ~150MB cost. | `README.md` |
+| 5 | Low | No `HEALTHCHECK` in Dockerfile. Not critical for an interactive session container, but a basic health check (e.g., verifying `claude --version` runs) would improve robustness for orchestration environments. | `Dockerfile` |
+| 6 | Low | No `--pull` in `docker run` or `docker build`. The container will run a cached image even if a newer one exists. Adding `--pull always` to `run.sh` (or `--pull missing` to `build.sh`) would ensure freshness. | `run.sh`, `build.sh` |
+| 7 | Low | No SSH agent forwarding. `~/.ssh` is mounted read-only, but `SSH_AUTH_SOCK` is not forwarded. Any git operations requiring SSH agent-based authentication (e.g., GitHub with SSH keys managed by `ssh-agent`) will fail inside the container. | `run.sh` |
+
+---
+
+### New Observations
+
+**1. `entrypoint.sh` is well-designed**
+The mode-selector pattern (`claude` / `aider` / `tmux` / `bash`) is clean and extensible. Using `exec` to replace the shell process with the target binary preserves signal handling (`SIGINT`/`SIGTERM` propagate correctly). The `bash` fallback is useful for debugging. No changes needed.
+
+**2. `CLAUDE.md` is effective but could be slightly more defensive**
+The instruction "Never search above this directory" is good, but a secondary guardrail could be added: explicitly instructing the agent not to execute commands that inspect or modify `/etc`, `/root`, or system-level paths. The current version relies on the filesystem mount alone, which is sufficient — but defense-in-depth doesn't hurt for a container running an autonomous agent.
+
+**3. Credential file exposure is still possible — just harder**
+The file-based approach for `~/.aider.conf.yml` is a meaningful improvement over environment variables, but the file is still readable by the non-root user inside the container. If the agent ever logs or transmits the contents of configuration files (e.g., during debugging or "read my config" requests), the API key would be exposed. The `:ro` mount prevents modification but not reading. This is an inherent tradeoff of file-based credential delivery to an autonomous agent — acknowledged in the project's security model section, but worth reiterating.
+
+**4. No container name in `run.sh`**
+`run.sh` runs with `--rm` (auto-remove on exit), which is appropriate for ephemeral sessions. However, there is no `--name` flag, making it harder to reference a running container for debugging (e.g., `docker exec`). Minor ergonomic gap.
+
+**5. Build reproducibility**
+Both tool versions are pinned, and the base image tag (`ubuntu:24.04`) is not pinned to a specific digest. Over time, `ubuntu:24.04` will receive updated packages on rebuild even with the same Dockerfile. For true reproducibility, pinning to a digest (e.g., `ubuntu:24.04@sha256:...`) would be needed. Likely unnecessary for the current stage of the project but worth noting for future hardening.
+
+**6. `BUILDLOG.md` is excellent practice**
+The decision log is thorough and honest — documenting not just what was done but why, including mistakes and their corrections. This is particularly valuable for a project with a security-sensitive design. No changes needed.
+
+---
+
+### Summary
+
+The two highest-priority items for future work are the multi-stage build (to eliminate `sudo` from layer history before open-sourcing) and adding `--pids-limit` to `run.sh`. Everything else is low-severity polish.
+
+---
+
+## Original Analysis — 2026-05-18
+
+*(Preserved for reference. All open items from this review have since been resolved.)*
 
 ### Overall Assessment
 
 A well-thought-out, minimal Docker container for sandboxed AI coding assistance. The architecture is clean and the documentation is solid. The core idea — enforcing filesystem isolation at the OS level rather than relying on behavioral guardrails — is sound and well-executed.
 
-### Strengths
-
-1. **Portable build script** — `build.sh` derives UID/GID/username at runtime. No hardcoded personal info.
-2. **Ubuntu 24.04 default user cleanup** — Catching the UID 1000 `ubuntu` user conflict and explicitly removing it before creating the host-mirrored user is a sharp detail.
-3. **Credential passthrough via `~/.claude` mount** — Elegant. No need for API key env vars when `claude login` already stores OAuth tokens on the host.
-4. **`CLAUDE.md` as an in-container instruction set** — Smart. The AI agent reads this file and knows its boundaries.
-5. **`BUILDLOG.md` as decision log** — Great practice. Documents *why* things were done, not just *what* was done.
-
-### Observations
-
-1. **Missing `run.sh`** — The README references `run.sh` and it was listed as a repo file, but it hadn't been provided for review. This is arguably the most important file — it defines the runtime behavior (mounts, env vars, entrypoint).
-
-2. **No version pinning for key packages** — `npm install -g @anthropic-ai/claude-code` and `pipx install aider-chat` have no version tags. Two builds on different days could produce different images.
-
-3. **No `.dockerignore`** — Without a `.dockerignore`, the entire build context (potentially including `~/.claude/` with credentials) gets sent to the Docker daemon.
-
-4. **No `ENTRYPOINT` or `HEALTHCHECK` in Dockerfile** — The Dockerfile relies entirely on `run.sh` to supply the runtime command.
-
-5. **Claude Code installed as root, used as non-root user** — `npm install -g @anthropic-ai/claude-code` runs as root (before the `USER` directive). Depending on where npm places the binary, the non-root user may or may not have execute permissions.
-
-6. **Python installed but not explicitly used** — Python and pip are installed anticipating Claude Code may invoke Python. This adds ~150MB to the image.
-
-7. **Security: sudo availability** — Ubuntu 24.04 base images typically include `sudo`. The created user isn't added to sudoers by default, but it's worth explicitly removing or not installing `sudo` for a tighter security posture.
-
-8. **Environment variable lesson** — The BUILDLOG.md correctly notes: *"The Faraday cage protects the filesystem boundary, not the process environment."* The decision to drop the `ANTHROPIC_API_KEY` env var and rely on mounted credentials is the right call.
-
----
-
-## Updated Analysis (after `run.sh` added)
-
-### Key Finding: Security Inconsistency
-
-The `BUILDLOG.md` explicitly documents the lesson:
-
-> *"The Faraday cage protects the filesystem boundary, not the process environment. Any secret present as an environment variable is visible to the agent and will be transmitted if it appears in tool output."*
-
-And yet `run.sh` passes `OPENROUTER_API_KEY` as an environment variable via `-e`. This is the exact pattern the build log warned against. The aider chat tool can see this key in `env` output, and any tool call that includes environment inspection will leak it.
-
-### Other Observations
-
-1. **`$(whoami)` is called 4 times** — Minor, but storing it in a variable improves readability and ensures consistency within a single invocation.
-
-2. **No resource limits** — No `--memory`, `--cpus`, or `--pids` limits. An AI agent running shell commands could consume unbounded resources.
-
-3. **No SSH key mount** — If any projects require SSH-based git access, the container will fail to authenticate.
-
-4. **`pass` is a hard dependency** — Not mentioned in the README. If `pass` isn't configured, `run.sh` will fail at startup.
-
-### Suggested Changes to `run.sh`
-
-- Store `USER` in a variable to avoid repeated `$(whoami)` calls.
-- Add `--memory=4g` and `--cpus=4` resource limits.
-- Reconsider passing `OPENROUTER_API_KEY` as an env var given the documented security concern.
-
----
-
-## Error Check: `set -euo pipefail`
-
-Confirmed: `set -euo pipefail` on line 2 of `run.sh` is valid, idiomatic bash. No fix needed.
-
----
-
-## Summary of Open Items
+### Summary of Open Items (all resolved)
 
 | # | Severity | Issue | File |
 |---|----------|-------|------|
 | 1 | High | `OPENROUTER_API_KEY` passed as env var contradicts documented security lesson | `run.sh` |
-| 2 | Medium | No `.dockerignore` — build context may leak credentials | (new file needed) |
-| 3 | Medium | No version pinning on `claude-code` and `aider-chat` | `Dockerfile` |
+| 2 | Medium | No `.dockerignore` — build context may include `~/.claude/` and other sensitive dirs | (new file needed) |
+| 3 | Medium | No version pinning on `claude-code` and `aider-chat` — rebuild results may drift | `Dockerfile` |
 | 4 | Medium | No resource limits (`--memory`, `--cpus`, `--pids`) | `run.sh` |
 | 5 | Low | `$(whoami)` called 4 times instead of stored in variable | `run.sh` |
 | 6 | Low | No SSH key mount for SSH-based git access | `run.sh` |
@@ -86,5 +102,3 @@ Confirmed: `set -euo pipefail` on line 2 of `run.sh` is valid, idiomatic bash. N
 | 8 | Low | No `ENTRYPOINT` or `HEALTHCHECK` in Dockerfile | `Dockerfile` |
 | 9 | Low | Python adds ~150MB — confirm it's needed | `Dockerfile` |
 | 10 | Low | `sudo` not explicitly removed for tighter security | `Dockerfile` |
-</arg_value>
-</tool_call>
