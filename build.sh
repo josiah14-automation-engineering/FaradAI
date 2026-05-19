@@ -2,6 +2,7 @@
 set -euo pipefail
 
 docker build \
+  --network=host \
   --build-arg USERNAME="$(whoami)" \
   --build-arg USER_UID="$(id -u)" \
   --build-arg USER_GID="$(id -g)" \

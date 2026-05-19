@@ -311,6 +311,16 @@ The read-write mount on `~/.tmux/plugins/` means plugin installations persist on
 
 **README updated** with the two new mount rows and a tmux plugin support section explaining what's covered and explicitly setting expectations that unsupported deps are the user's responsibility.
 
+### Post-Commit Fixes — Session 10
+
+**Josiah independently made three changes** after the Session 10 commit:
+
+**zsh added to the image.** `zsh` was added to the final-stage apt install block and `useradd` was updated to pass `--shell /bin/zsh`, making zsh the default shell for the created user. Without this, the container shell defaults to bash even though the mounted `.zshrc` and user environment expect zsh.
+
+**`~/.aider.conf.yml` mount made conditional.** The hardcoded `-v ~/.aider.conf.yml:...` line in `run.sh` was replaced with the same conditional array pattern used for the tmux mounts — skipped if the file doesn't exist on the host. This makes the container usable without an aider config (Claude Code-only setups). README prerequisite note updated to mark aider config as optional.
+
+These changes follow the pattern established in this session: conditional mounts for optional host files rather than failing if the file is absent.
+
 ### Deep Aider Smoke Test — tmux
 
 Deeper smoke test exercised the full tmux→aider→OpenRouter→Ring path:
@@ -323,3 +333,40 @@ Deeper smoke test exercised the full tmux→aider→OpenRouter→Ring path:
 Ring responded correctly — thinking block, answer, token/cost breakdown ($0.00012). The `tmux send-keys` / `tmux capture-pane` round-trip works as an async communication channel between the Claude Code session and the aider pane.
 
 **Josiah confirmed** the `./run.sh tmux` split-pane mode (claude left / aider right) works as well. Session kept live after smoke test at Josiah's direction.
+
+### Aider Credential Mount — Made Optional
+
+`~/.aider.conf.yml` was previously an unconditional mount in `run.sh`, causing the container to fail for users without the file. Changed to a conditional mount using the same pattern as the existing tmux mounts: the `-v` line is only added if the file exists on the host.
+
+Josiah decided against the stronger `pass`-injection approach (which would eliminate the persistent plaintext file entirely). Documented instead in the README security model section: the `:ro` mount is write-protection only, not secrecy — the agent can read the file if directed to, transmitting the key to Anthropic's servers. Mitigation: scope the OpenRouter key to a hard cost limit.
+
+### zsh Added
+
+Added `zsh` to the final stage `apt-get install` block and set it as the login shell via `--shell /bin/zsh` on the `useradd` line. No `~/.zshrc` mount — Josiah opted to keep the shell config self-contained in the image rather than carrying over host config.
+
+---
+
+## Session 11 — 2026-05-19
+
+### tmux Removed — `docker exec` Pattern Adopted
+
+**Josiah identified** a fundamental keybinding conflict with the tmux-in-container approach: because the host tmux config uses the same prefix key, host tmux intercepts it before the inner session ever sees it. The split-pane mode was effectively unusable.
+
+**Decision:** strip tmux from the container entrypoint entirely and replace with a `docker exec` pattern. The container is given a stable name (`--name faradai`), allowing any number of host terminals — tmux panes, terminal emulator splits, separate windows — to attach via `docker exec -it faradai <tool>`. Multi-tool workflows are now handled at the host level, with whatever multiplexer the user already has, instead of inside the container.
+
+### `faradai` Executable
+
+`run.sh` was superseded and deleted. A new `faradai` script was created as the single host-side entrypoint. It checks whether a container named `faradai` is already running:
+
+- **Running:** `exec docker exec -it faradai <args>` — attaches to the existing container
+- **Not running:** starts a new container via `docker run` with the full mount table
+
+`exec` replaces the shell process on success; `set -euo pipefail` exits on failure — no explicit `exit` needed after the exec branch.
+
+An `install.sh` was added alongside it to `chmod +x` the script and copy it to `/usr/local/bin/faradai` via `sudo install`. Both scripts made executable in the repo.
+
+The tmux conf and plugin mounts were removed from `run.sh` (and are absent from the new `faradai` script) since they are no longer needed.
+
+### Image Cleanup — tmux and zsh Removed
+
+With tmux no longer used, **Josiah directed** removing it and all packages that existed solely to support it: `tmux`, `xclip`, `xsel`, `fzf`, and `zsh`. The container shell reverts to `/bin/bash`. README and BUILDLOG updated to reflect the new `faradai` executable pattern, the removed mounts, and the trimmed image contents.

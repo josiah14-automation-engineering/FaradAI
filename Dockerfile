@@ -39,7 +39,6 @@ RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true \
     git \
     iproute2 \
     iputils-ping \
-    fzf \
     net-tools \
     netcat-openbsd \
     nodejs \
@@ -47,15 +46,12 @@ RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true \
     python3 \
     python3-pip \
     python3-venv \
-    tmux \
     vim \
-    xclip \
-    xsel \
  && rm -rf /var/lib/apt/lists/* \
  && userdel -r ubuntu 2>/dev/null || true \
  && groupdel ubuntu 2>/dev/null || true \
  && groupadd --gid ${USER_GID} ${USERNAME} \
- && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home ${USERNAME} \
+ && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME} \
  && mkdir -p /home/${USERNAME}/Development/personal \
  && chown ${USER_UID}:${USER_GID} /home/${USERNAME}/Development/personal
 

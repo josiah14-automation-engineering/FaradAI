@@ -6,7 +6,7 @@ A Docker container for running Claude Code (and aider) with a hard filesystem bo
 
 - Docker
 - A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
-- An `~/.aider.conf.yml` on the host with your OpenRouter API key (for aider)
+- An `~/.aider.conf.yml` on the host with your OpenRouter API key (optional — for aider; skipped if the file does not exist)
 
 ## Build
 
@@ -16,28 +16,37 @@ A Docker container for running Claude Code (and aider) with a hard filesystem bo
 
 Builds `faradai:latest` using your host user's username, UID, and GID — derived at runtime, nothing hardcoded.
 
+## Install
+
+```bash
+./install.sh
+```
+
+Makes `faradai` executable and copies it to `/usr/local/bin/faradai`. After this, `faradai` is available as a system command.
+
 ## Run
 
 ```bash
-./run.sh
+faradai
 ```
 
-Launches an interactive Claude Code session inside the container.
+If no container is running, starts a new one and launches Claude Code (default). If a container named `faradai` is already running, attaches to it instead via `docker exec`.
+
+This means you can open as many terminals as you like — tmux panes, terminal emulator splits, separate windows — and each one that runs `faradai <tool>` will land inside the same container.
 
 ### Modes
 
-An optional argument selects which tool to launch:
+An optional argument selects which tool to launch (or attach to):
 
 | Command | Result |
 |---------|--------|
-| `./run.sh` | Claude Code (default) |
-| `./run.sh aider` | aider |
-| `./run.sh tmux` | tmux split — Claude Code left, aider right |
-| `./run.sh bash` | bare shell, useful for debugging |
+| `faradai` | Claude Code (default) |
+| `faradai aider` | aider |
+| `faradai bash` | bare shell, useful for debugging |
 
 ### Resource limits
 
-`run.sh` reads three environment variables to set container resource limits, with sensible defaults if unset:
+`faradai` reads three environment variables to set container resource limits, with sensible defaults if unset:
 
 | Variable | Default | Controls |
 |----------|---------|----------|
@@ -47,17 +56,17 @@ An optional argument selects which tool to launch:
 
 Override inline:
 ```bash
-FARADAI_MEMORY=8g FARADAI_CPUS=8 ./run.sh
+FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 ```
 
-Or set permanently in your shell rc file (`~/.zshrc`, `~/.bashrc`, etc.):
+Or set permanently in your shell rc file (`~/.bashrc`, `~/.zshrc`, etc.):
 ```sh
 export FARADAI_MEMORY=4g
 export FARADAI_CPUS=4
 export FARADAI_PIDS=512
 ```
 
-`run.sh` also uses `$HOME` and `$USER` for mount paths — these are standard shell variables set automatically by your shell and require no configuration.
+`faradai` also uses `$HOME` and `$USER` for mount paths — these are standard shell variables set automatically by your shell and require no configuration.
 
 ### Mounts
 
@@ -66,11 +75,9 @@ export FARADAI_PIDS=512
 | `~/.claude/` | `~/.claude/` | read-write | Claude Code — settings, memory, conversation history |
 | `~/.claude/.credentials.json` | `~/.claude/.credentials.json` | read-only | Claude Code — OAuth token, overlaid `:ro` on top of the directory mount to protect it from writes |
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
-| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access |
+| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH-based git remotes (optional if you only use HTTPS) |
-| `~/.tmux.conf` | `~/.tmux.conf` | read-only | tmux — user config (skipped if file does not exist on host) |
-| `~/.tmux/plugins/` | `~/.tmux/plugins/` | read-write | tmux — TPM plugin installations; read-write so TPM can install plugins (skipped if directory does not exist on host) |
 | `~/Development/personal` | `~/Development/personal` | read-write | Your project files — the primary work surface |
 
 The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references, memory files, and tooling behave identically inside and outside the container.
@@ -85,18 +92,8 @@ Credentials are delivered as mounted files rather than environment variables —
 - aider (via pipx venv, pre-installed)
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
-- tmux (for backgrounding aider sessions alongside Claude Code)
 - vim — available when shelling in for manual edits or troubleshooting
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
-- tmux plugin dependencies: `xclip`, `xsel` (X11 clipboard — used by tmux-yank and clipboard keybindings), `fzf` (fuzzy finder — used by session switcher plugins)
-
-### tmux plugin support
-
-`~/.tmux.conf` and `~/.tmux/plugins/` are mounted from the host if they exist, so your tmux config and TPM plugin state carry over into the container. The image includes the system dependencies needed by the most common TPM plugins.
-
-Plugins with no system dependencies (tmux-sensible, tmux-resurrect, tmux-continuum, tmux-pain-control, tmux-open, tmux-copycat, tmux-powerline) work out of the box. Clipboard plugins (tmux-yank) work via `xclip`/`xsel`. `fzf`-based plugins work via the bundled `fzf`.
-
-**Unsupported dependencies are the user's problem.** If your config requires tools not in the image (e.g., `wl-clipboard` for Wayland, nerd fonts, custom status bar binaries), those won't be available inside the container and the relevant config lines will silently fail or error. The fix is to extend the image with your own `Dockerfile` that builds `FROM faradai:latest` and adds what you need.
 
 ## Security model
 
@@ -108,6 +105,8 @@ Credentials are kept out of environment variables and injected as mounted files 
 - Aider: API key in `~/.aider.conf.yml` (`:ro`)
 
 Any secret present as an environment variable is visible to the agent and will appear in tool output if commands like `env` are run. Prefer file-based credential delivery. If a key must be in the environment, scope it to a cost-limited key with a short rotation cycle.
+
+**The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to Anthropic's servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
 
 ## Aider configuration
 
