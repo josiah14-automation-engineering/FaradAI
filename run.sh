@@ -15,4 +15,4 @@ docker run -it --rm \
   -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
   -w "/home/${USER}/Development/personal" \
   faradai:latest \
-  "${@:-claude}"
+  "$@"
