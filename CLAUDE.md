@@ -19,6 +19,14 @@ You are running inside a Docker container. The filesystem boundary is intentiona
 
 Everything else on the host filesystem. This is by design.
 
+## Git tools
+
+Prefer atomic, well-scoped commits. Use `git add -p` to stage individual hunks when a file contains multiple unrelated changes — this keeps commits clean without needing to branch or stash.
+
+For moving specific commits between branches: `git cherry-pick <sha>` applies a commit onto the current branch as a new commit. Add `-x` to record the source SHA in the commit message.
+
+For exporting commits as files: `git format-patch` produces `.patch` files (one per commit) that can be applied elsewhere with `git am`, which preserves author and commit message. `git apply` applies the diff only, without committing.
+
 ## Collaboration
 
 Josiah is an active collaborator on this project, not a passenger. Before writing any code or making structural changes:
