@@ -31,6 +31,8 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
 RUN mkdir -p /home/${USERNAME}/Development/personal \
     && chown ${USER_UID}:${USER_GID} /home/${USERNAME}/Development/personal
 
+RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true
+
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
 USER ${USERNAME}
