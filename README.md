@@ -53,7 +53,7 @@ The working directory is `~/Development/personal`, matching the host path exactl
 - Node.js + npm
 - Claude Code CLI (`claude`)
 - aider (via pipx)
-- Python 3 + pip + venv
+- Python 3 + pip + venv — available for intermediate scripting tasks Claude Code may invoke
 - git, curl
 - tmux (for backgrounding aider sessions alongside Claude Code)
 
@@ -79,12 +79,3 @@ api-key: openrouter=<your-key>
 
 The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
 
-## Open items
-
-| # | Severity | Issue |
-|---|----------|-------|
-| 1 | Medium | No `.dockerignore` — build context may include `~/.claude/` and other sensitive dirs |
-| 2 | Medium | No version pinning on `claude-code` and `aider-chat` — rebuild results may drift |
-| 3 | Low | SSH key not mounted — SSH-based git remotes will fail |
-| 4 | Low | No `ENTRYPOINT` in Dockerfile — runtime command supplied entirely by `run.sh` |
-| 5 | Low | `sudo` not explicitly removed from the image |
