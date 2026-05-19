@@ -369,4 +369,39 @@ The tmux conf and plugin mounts were removed from `run.sh` (and are absent from 
 
 ### Image Cleanup — tmux and zsh Removed
 
-With tmux no longer used, **Josiah directed** removing it and all packages that existed solely to support it: `tmux`, `xclip`, `xsel`, `fzf`, and `zsh`. The container shell reverts to `/bin/bash`. README and BUILDLOG updated to reflect the new `faradai` executable pattern, the removed mounts, and the trimmed image contents.
+With tmux no longer used for the user-facing split-pane mode, **Josiah directed** removing it and all packages that existed solely to support it: `tmux`, `xclip`, `xsel`, `fzf`, and `zsh`. The container shell reverts to `/bin/bash`. README and BUILDLOG updated to reflect the new `faradai` executable pattern, the removed mounts, and the trimmed image contents.
+
+### tmux Re-added — Internal Use Only
+
+`tmux` was added back to the final-stage image. Rationale: Anansi (Claude Code) uses tmux internally to background aider sessions and communicate with Ring via `tmux send-keys` / `tmux capture-pane`. This is not user-facing UX — it's a tool-use pattern for running a second AI agent alongside Claude Code without needing a separate terminal.
+
+The distinction from the removed tmux mode: no user config mounts, no split-pane entrypoint, no keybinding conflicts. tmux is simply a binary available inside the container for programmatic use.
+
+---
+
+## Session 12 — 2026-05-19
+
+### Ring Code Review — Second Pass
+
+Ring-2.6-1T reviewed the post-Session-11 state of FaradAI via a non-interactive aider session backgrounded in tmux. Full findings in the pane capture; summary of decisions:
+
+**GPL3 License chosen.** Josiah decided on GPL3 to ensure FaradAI remains FOSS — derivative works must remain open-source. GPL3 closes the "use our work, give nothing back" loophole without restricting non-commercial or community use. LICENSE file added.
+
+**P0 — Network access:** Container has unrestricted outbound network access. Acknowledged as a known limitation of the current architecture; documented in the security model rather than technically restricted at this stage.
+
+**P1 items addressed:**
+- `--no-install-recommends` added to final-stage `apt-get install` to reduce image size
+- Container detection switched from `docker ps | grep` to `docker inspect --format '{{.State.Running}}'` — more precise, no substring collision risk
+- Orphaned container cleanup: `docker rm -f faradai 2>/dev/null || true` added before `docker run` in the `faradai` script. `--rm` handles normal exits but not OOM kills or host crashes; this covers the residual case where a stopped container's name blocks a new start
+
+**P1 items deferred:**
+- CONTRIBUTING.md, issue/PR templates, CI pipeline, test suite — premature for a personal tool at this stage
+
+**P2 items addressed:**
+- SSH mount clarified in README: `:ro` key files are mounted but SSH agent forwarding (`SSH_AUTH_SOCK`) is not set up; documented so users understand why agent-based git over SSH won't work inside the container
+
+**P2 items skipped:**
+- seccomp/AppArmor profiles — Docker's default seccomp profile is sufficient for a dev tool at this stage
+- Code of conduct — premature; add if a community grows around the project
+
+**Naming settled:** FaradAI is the canonical project name in prose and branding; `faradai` is used for commands, image names, and code. Already consistent across the codebase — no changes needed.

@@ -77,7 +77,7 @@ export FARADAI_PIDS=512
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
-| `~/.ssh/` | `~/.ssh/` | read-only | SSH-based git remotes (optional if you only use HTTPS) |
+| `~/.ssh/` | `~/.ssh/` | read-only | SSH key files — required for SSH-based git remotes. Note: SSH agent forwarding (`SSH_AUTH_SOCK`) is not set up; if you rely on an agent rather than key files, git over SSH will not work inside the container. HTTPS remotes are unaffected. |
 | `~/Development/personal` | `~/Development/personal` | read-write | Your project files — the primary work surface |
 
 The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references, memory files, and tooling behave identically inside and outside the container.
