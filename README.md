@@ -69,25 +69,34 @@ export FARADAI_PIDS=512
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH-based git remotes (optional if you only use HTTPS) |
+| `~/.tmux.conf` | `~/.tmux.conf` | read-only | tmux — user config (skipped if file does not exist on host) |
+| `~/.tmux/plugins/` | `~/.tmux/plugins/` | read-write | tmux — TPM plugin installations; read-write so TPM can install plugins (skipped if directory does not exist on host) |
 | `~/Development/personal` | `~/Development/personal` | read-write | Your project files — the primary work surface |
 
 The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references, memory files, and tooling behave identically inside and outside the container.
 
 Credentials are delivered as mounted files rather than environment variables — any secret in the environment will appear in tool output if `env` is inspected. See [Security model](#security-model).
 
-### Resource limits
-
-`run.sh` applies `--memory=4g`, `--cpus=4`, and `--pids-limit=512` to bound what the container can consume.
-
 ## What's in the image
 
 - Ubuntu 24.04
-- Node.js + npm
+- Node.js — runtime for Claude Code (npm not included; tools are pre-installed in the image)
 - Claude Code CLI (`claude`)
-- aider (via pipx)
-- Python 3 + pip + venv — available for intermediate scripting tasks Claude Code may invoke
+- aider (via pipx venv, pre-installed)
+- Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
 - tmux (for backgrounding aider sessions alongside Claude Code)
+- vim — available when shelling in for manual edits or troubleshooting
+- Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
+- tmux plugin dependencies: `xclip`, `xsel` (X11 clipboard — used by tmux-yank and clipboard keybindings), `fzf` (fuzzy finder — used by session switcher plugins)
+
+### tmux plugin support
+
+`~/.tmux.conf` and `~/.tmux/plugins/` are mounted from the host if they exist, so your tmux config and TPM plugin state carry over into the container. The image includes the system dependencies needed by the most common TPM plugins.
+
+Plugins with no system dependencies (tmux-sensible, tmux-resurrect, tmux-continuum, tmux-pain-control, tmux-open, tmux-copycat, tmux-powerline) work out of the box. Clipboard plugins (tmux-yank) work via `xclip`/`xsel`. `fzf`-based plugins work via the bundled `fzf`.
+
+**Unsupported dependencies are the user's problem.** If your config requires tools not in the image (e.g., `wl-clipboard` for Wayland, nerd fonts, custom status bar binaries), those won't be available inside the container and the relevant config lines will silently fail or error. The fix is to extend the image with your own `Dockerfile` that builds `FROM faradai:latest` and adds what you need.
 
 ## Security model
 

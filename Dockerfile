@@ -1,4 +1,28 @@
-FROM ubuntu:24.04
+FROM ubuntu:24.04 AS builder
+
+ARG USERNAME
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/home/${USERNAME}
+ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
+ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
+
+RUN apt-get update -y && apt-get install -y \
+    nodejs \
+    npm \
+    python3 \
+    python3-pip \
+    python3-venv \
+    pipx \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /home/${USERNAME}
+
+RUN npm config set prefix "/home/${USERNAME}/.local" \
+ && npm install -g @anthropic-ai/claude-code@2.1.143 \
+ && pipx install aider-chat==0.86.2
+
+
+FROM ubuntu:24.04 AS final
 
 ARG USERNAME
 ARG USER_UID
@@ -6,42 +30,44 @@ ARG USER_GID
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
+# with the host user if they share that UID/GID
 RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true \
  && apt-get update -y && apt-get install -y \
     curl \
+    dnsutils \
     git \
+    iproute2 \
+    iputils-ping \
+    fzf \
+    net-tools \
+    netcat-openbsd \
     nodejs \
-    npm \
     openssh-client \
     python3 \
     python3-pip \
     python3-venv \
-    pipx \
     tmux \
-    && rm -rf /var/lib/apt/lists/*
-
-# Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
-# with the host user if they share that UID/GID
-RUN userdel -r ubuntu 2>/dev/null || true \
+    vim \
+    xclip \
+    xsel \
+ && rm -rf /var/lib/apt/lists/* \
+ && userdel -r ubuntu 2>/dev/null || true \
  && groupdel ubuntu 2>/dev/null || true \
  && groupadd --gid ${USER_GID} ${USERNAME} \
  && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home ${USERNAME} \
  && mkdir -p /home/${USERNAME}/Development/personal \
  && chown ${USER_UID}:${USER_GID} /home/${USERNAME}/Development/personal
 
-
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
-COPY entrypoint.sh "/usr/local/bin/entrypoint.sh"
-RUN chown ${USER_UID}:${USER_GID} "/usr/local/bin/entrypoint.sh" \
- && chmod +x "/usr/local/bin/entrypoint.sh"
+COPY --from=builder --chown=${USER_UID}:${USER_GID} \
+    /home/${USERNAME}/.local \
+    /home/${USERNAME}/.local
+
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER ${USERNAME}
-
-# Keep the below as separate RUN commands to make updating versions quick and easy
-RUN npm config set prefix "/home/${USERNAME}/.local"
-RUN npm install -g @anthropic-ai/claude-code@2.1.143
-RUN pipx install aider-chat==0.86.2
 
 WORKDIR /home/${USERNAME}/Development/personal
 

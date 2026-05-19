@@ -218,3 +218,108 @@ The `ENV PATH` line already includes `/home/${USERNAME}/.local/bin`, so both bin
 ### Rebuild Confirmed
 
 Rebuild succeeded. Both tools reachable at runtime. Current session is running from inside this image.
+
+---
+
+## Session 8 — 2026-05-19
+
+### Multi-Stage Build
+
+Converted the Dockerfile to a two-stage build to achieve clean layer separation between build-time and runtime concerns.
+
+**Builder stage** runs as root throughout. Rather than creating a user, `HOME`, `PIPX_HOME`, and `PIPX_BIN_DIR` are set explicitly so that `npm` and `pipx` install into `/home/${USERNAME}/.local` without requiring a `USER` directive. No UID/GID args needed in this stage. Packages: only what's needed to run the installs (`nodejs`, `npm`, `python3`, `python3-pip`, `python3-venv`, `pipx`). The three install commands (`npm config set prefix`, `npm install -g`, `pipx install`) are combined into a single `RUN` layer.
+
+**Final stage** starts from a fresh `ubuntu:24.04`. All root operations — apt install, sudo purge, user creation, directory setup — are combined into a single `RUN`. `npm` and `pipx` are excluded; only the runtimes are needed (`nodejs` for claude, `python3` for the aider venv). Tools are brought in via `COPY --from=builder --chown`. Entrypoint is copied with `--chmod=755`, eliminating a separate chown/chmod layer.
+
+**Honest note on sudo:** `ubuntu:24.04` the Docker image does not actually ship with sudo — it's a minimal rootfs. The `apt-get purge sudo || true` has always been defensive; sudo was never present in any layer. The real value of the multi-stage build is layer hygiene and clean build/runtime separation for open-sourcing, not eliminating an active sudo threat. This was surfaced during design and is documented in TODO.md.
+
+**Trade-off:** apt runs twice (once per stage), so builds take longer. Acceptable given that version updates already require a full rebuild.
+
+### Debugging Tools Added
+
+**Josiah directed** adding vim and a standard set of networking tools to the final image for use when shelling in to troubleshoot:
+
+- `vim`
+- `iputils-ping` — `ping`
+- `net-tools` — `netstat`, `ifconfig`
+- `iproute2` — `ip`, `ss`
+- `dnsutils` — `dig`, `nslookup`
+- `netcat-openbsd` — `nc`
+
+These are final-stage only; no reason to include them in the builder.
+
+### Build Failure: DNS Resolution in Builder Stage
+
+First build attempt failed with `Could not resolve 'archive.ubuntu.com'` during the builder stage's `apt-get install`. Root cause: Docker's isolated build network doesn't inherit the host's DNS configuration by default. The previous single-stage build had never triggered this because the apt layer was cached — the new builder stage had no cache and needed to actually reach the network.
+
+Fix: added `--network=host` to `build.sh`. This makes the build container share the host's network stack directly, bypassing Docker's virtual network. Both stages now resolve external hostnames correctly during build.
+
+### Package List Decisions
+
+**Josiah raised** whether Node.js and Python were still needed in the final stage given that the tools are pre-installed by the builder. Conclusion:
+
+- `nodejs` — required. The `claude` binary is a Node.js script; the runtime must be present for it to execute.
+- `python3` — kept. Useful for agent scripting tasks independent of aider. The aider venv's Python is isolated and not available for general use.
+- `npm`, `pipx` — excluded from final stage. Package managers are build-time only; the binaries and venvs are already in place via the builder copy.
+
+---
+
+## Session 9 — 2026-05-19
+
+### Session 8 Smoke Tests
+
+First launch of the Session 8 multi-stage image confirmed all tools reachable at correct versions:
+
+- Claude Code v2.1.143 at `/home/josiah/.local/bin/claude` ✓
+- aider v0.86.2 at `/home/josiah/.local/bin/aider` ✓
+- All Session 6/8 additions present: `vim`, `tmux`, `ssh`, `ping`, `dig`, `nc`, `ip`, `netstat` ✓
+- Memory persistence confirmed via `~/.claude` mount ✓
+
+### `~/.aider.conf.yml` Slug Fix — Inconclusive
+
+The model slug fix (`inclusionai/ring-2.6-1t` → `openrouter/inclusionai/ring-2.6-1t`) was attempted via host-side `sed -i`. The file is mounted `:ro` so it cannot be edited from inside the container. After Josiah applied the change on the host, the running container still showed the old slug at aider startup. Root cause unclear — `sed -i` replaces the file via inode swap; Docker `:ro` bind mounts should follow the path rather than the inode, but the update did not propagate. Alternatively, the sed pattern may not have matched the file's actual format.
+
+Workaround: `/model openrouter/inclusionai/ring-2.6-1t` override inside aider continues to work. The issue only affects the startup default.
+
+---
+
+## Session 10 — 2026-05-19
+
+### tmux Config Passthrough
+
+Added support for mounting the user's `~/.tmux.conf` and `~/.tmux/plugins/` into the container.
+
+**Motivation:** The container already runs tmux for the split-pane mode, but users arriving with their own tmux configs were getting bare tmux with no keybindings or plugins. The goal was to make the user's tmux environment carry over without requiring unpredictable image changes for every possible plugin dependency.
+
+**Approach:** mount both, add common deps to the image, document the rest as the user's problem.
+
+**Mounts added to `run.sh`** (both conditional — skipped if the path doesn't exist on host):
+- `~/.tmux.conf` → read-only
+- `~/.tmux/plugins/` → read-write (so TPM can install plugins into it)
+
+The read-write mount on `~/.tmux/plugins/` means plugin installations persist on the host across container restarts — TPM doesn't need to re-clone on every launch.
+
+**System packages added to the final stage:**
+- `xclip` — X11 clipboard; used by tmux-yank and common clipboard keybindings
+- `xsel` — X11 clipboard alternative; preferred by tmux-yank
+- `fzf` — common companion tool for session/window switcher plugins
+
+**Intentionally omitted:**
+- `wl-clipboard` — Wayland clipboard; not useful in a container without a display server
+- `powerline` (Python package) — not needed by `tmux-powerline` (the TPM plugin), which is pure bash
+- `fonts-powerline` / nerd fonts — font rendering happens in the host terminal, not the container
+
+**README updated** with the two new mount rows and a tmux plugin support section explaining what's covered and explicitly setting expectations that unsupported deps are the user's responsibility.
+
+### Deep Aider Smoke Test — tmux
+
+Deeper smoke test exercised the full tmux→aider→OpenRouter→Ring path:
+
+1. Created a detached tmux session (`aider-smoke`)
+2. Launched aider in it via `tmux send-keys`
+3. Switched model via `/model openrouter/inclusionai/ring-2.6-1t`
+4. Sent a live prompt; captured response via `tmux capture-pane`
+
+Ring responded correctly — thinking block, answer, token/cost breakdown ($0.00012). The `tmux send-keys` / `tmux capture-pane` round-trip works as an async communication channel between the Claude Code session and the aider pane.
+
+**Josiah confirmed** the `./run.sh tmux` split-pane mode (claude left / aider right) works as well. Session kept live after smoke test at Josiah's direction.
