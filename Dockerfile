@@ -37,8 +37,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
-RUN apt-get purge -y --auto-remove sudo 2>/dev/null || true \
- && apt-get update -y && apt-get install -y --no-install-recommends \
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
     curl \
     dnsutils \
     git \

@@ -144,3 +144,4 @@ README mentions "Contributions welcome if there is demand" but no `CONTRIBUTING.
 | 12 | Resolved — 2026-05-20 | `FARADAI_DOCKER_ARGS` env var word-split into `EXTRA_DOCKER_ARGS` array and appended to `docker run`. Paths with spaces not supported. |
 | 3 | Resolved — 2026-05-20 | Validation added for `FARADAI_MEMORY` (m/g units, 512g ceiling), `FARADAI_CPUS` (decimal-aware, 128-core ceiling), and `FARADAI_PIDS` (positive integer). k-unit excluded as unrealistic. |
 | 19 | Stale — 2026-05-20 | `install.sh` already had `set -euo pipefail`. Finding was incorrect. |
+| 9 | Resolved — 2026-05-20 | `apt-get purge sudo \|\| true` removed from Dockerfile — sudo is never present in the ubuntu:24.04 Docker image (documented in BUILDLOG Session 8), making this a no-op that could mask real dpkg failures. `userdel`/`groupdel` `\|\| true` retained — genuinely conditional on whether the ubuntu user exists in a given base image version. |
