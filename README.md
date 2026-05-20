@@ -151,6 +151,9 @@ The image predates the least-privilege install fix (Session 7). Rebuild: `./buil
 **Wrong model slug in `~/.aider.conf.yml`**
 aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
 
+**`gh` not authenticated inside the container**
+`gh` requires manual login after each fresh install. Run `gh auth login` from inside the container (or via `faradai bash`) and follow the device-code flow. This is a known gap — credential passthrough for `gh` is not yet implemented.
+
 ---
 
 ## Upgrading
