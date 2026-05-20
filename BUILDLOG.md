@@ -738,3 +738,9 @@ Closed ring-feedback assessment 1 finding #2 (HIGH). The original two-step valid
 Replaced with a single anchored regex `^([0-9]+(\.[0-9]+)?)([mgMG])$` using `BASH_REMATCH`, which validates the entire string in one shot. A zero check follows: if the integer part is 0 and there is no meaningful decimal (e.g. `0`, `0.0`, `0.00`), the value is rejected; `0.5g` passes. The existing 512g bounds check is retained, using the integer part for the comparison.
 
 Smoke-tested across 14 cases covering valid values, double-unit inputs, zero variants, missing units, and bounds limits — all correct.
+
+### Ring #3: Dockerfile Base Image Digest Pinning
+
+Closed ring-feedback assessment 1 finding #3 (HIGH). Both `FROM ubuntu:24.04` stages in the Dockerfile were using a floating tag — a re-published tag would silently change the base image on the next rebuild.
+
+Both stages pinned to `ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b`. Digest fetched from the Docker Hub registry API (`docker-content-digest` response header). The tag is retained alongside the digest for readability — Docker resolves via the digest; the tag is ignored at pull time.
