@@ -536,3 +536,15 @@ Added a GitHub Actions CI pipeline preceded by web research into Actions best pr
 `--network=host` is passed through via `driver-opts: network=host` on `setup-buildx-action@v3`, matching what `build.sh` does locally to ensure `apt-get` can resolve external hostnames during build.
 
 Smoke test uses `--entrypoint /bin/bash` so it runs without triggering claude authentication.
+
+---
+
+## Session 15 — 2026-05-20
+
+### Build retry — IPv6 ETIMEDOUT resolved
+
+The npm ETIMEDOUT build failure from Session 14 was transient. A second build attempt succeeded without changes. IPv6 flakiness was the cause; no Dockerfile fix was needed.
+
+### Bug: `faradai` with no args drops into bash when container is already running
+
+`faradai` with no arguments launches claude when starting a fresh container (the `docker run` branch defers to `entrypoint.sh`, which defaults to `claude`). But when the container was already running, the `docker exec` branch used `"${@:-bash}"` — a different default. One-character fix: changed to `"${@:-claude}"` so both paths agree.

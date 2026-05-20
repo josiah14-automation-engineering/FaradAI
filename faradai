@@ -3,7 +3,7 @@ set -euo pipefail
 
 if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
   # exec replaces this process on success; set -e exits on failure — no exit needed
-  exec docker exec -it faradai "${@:-bash}"
+  exec docker exec -it faradai "${@:-claude}"
 fi
 
 # Remove any stopped container with this name so --name faradai doesn't conflict
