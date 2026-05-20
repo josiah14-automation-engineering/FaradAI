@@ -1,5 +1,9 @@
 # FaradAI — Open Items
 
-## Pre-open-source: CI pipeline
+All planned items complete. See Pre-open-source scaffolding below if the project grows.
 
-A basic CI pipeline (shellcheck, hadolint, docker build smoke test). Deferred until the project is closer to publishing.
+---
+
+## Pre-open-source (deferred)
+
+CONTRIBUTING.md ✓, GitHub issue/PR templates ✓, CI pipeline ✓. Future considerations if a community grows: code of conduct enforcement process, security disclosure policy, release tagging strategy.

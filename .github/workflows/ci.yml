@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-shell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck faradai install.sh build.sh entrypoint.sh
+
+  lint-dockerfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+  build:
+    needs: [lint-shell, lint-dockerfile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          # build.sh uses --network=host so apt-get can resolve external hostnames;
+          # this passes the same setting through to the BuildKit daemon.
+          driver-opts: network=host
+
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: faradai:ci
+          build-args: |
+            USERNAME=testuser
+            USER_UID=1001
+            USER_GID=1001
+            WORKDIR_PATH=/home/testuser/workspace
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          docker run --rm --entrypoint /bin/bash faradai:ci -c "
+            which claude &&
+            aider --version &&
+            gh --version
+          "

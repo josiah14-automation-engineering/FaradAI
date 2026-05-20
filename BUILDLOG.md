@@ -524,3 +524,15 @@ Added pre-open-source community scaffolding. Both items were preceded by web res
 - `PULL_REQUEST_TEMPLATE.md` — description, related issue, changes list, testing notes, checklist (shellcheck, hadolint, smoke test, docs).
 
 YAML issue forms chosen over markdown templates: Docker failure modes are systematic (platform dropdown is high-value), required fields prevent vague reports, auto-labeling reduces solo-maintainer triage burden.
+
+### CI pipeline — `.github/workflows/ci.yml`
+
+Added a GitHub Actions CI pipeline preceded by web research into Actions best practices (2025/2026). Three jobs:
+
+- **`lint-shell`** — `shellcheck` on all four shell scripts; runs in parallel with lint-dockerfile
+- **`lint-dockerfile`** — `hadolint/hadolint-action@v3.1.0` on the Dockerfile; runs in parallel with lint-shell
+- **`build`** — depends on both lint jobs; builds the image via `docker/build-push-action@v5` with GHA layer cache (`type=gha,mode=max` captures all stages including builder); runs a smoke test verifying `claude`, `aider`, and `gh` are reachable inside the container
+
+`--network=host` is passed through via `driver-opts: network=host` on `setup-buildx-action@v3`, matching what `build.sh` does locally to ensure `apt-get` can resolve external hostnames during build.
+
+Smoke test uses `--entrypoint /bin/bash` so it runs without triggering claude authentication.
