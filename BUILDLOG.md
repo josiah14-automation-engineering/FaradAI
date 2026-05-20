@@ -467,3 +467,7 @@ Added input validation for `FARADAI_MEMORY`, `FARADAI_CPUS`, and `FARADAI_PIDS` 
 ### Task 3: `--cap-drop ALL` and `--security-opt no-new-privileges`
 
 Added both flags to the `docker run` invocation in the `faradai` script. A README section was added to the Security model explaining what each flag does and why both are needed together. Closes ring-feedback-0 finding #1.
+
+### Task 4: Lifecycle trap for non-atomic container start
+
+Added `trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT` immediately after the `docker rm -f` line. The trap is only active in the narrow window between removing the old container and `exec docker run` replacing the shell process — after a successful exec the shell is gone and the handler never fires. Closes ring-feedback-0 finding #2.

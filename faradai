@@ -8,6 +8,9 @@ fi
 
 # Remove any stopped container with this name so --name faradai doesn't conflict
 docker rm -f faradai 2>/dev/null || true
+# exec replaces this process on success, so this trap only fires if the script is
+# interrupted or errors out before docker run fully starts.
+trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT
 
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"

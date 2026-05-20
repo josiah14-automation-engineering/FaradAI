@@ -2,9 +2,6 @@
 
 ## Design
 
-**Non-atomic container lifecycle in `faradai`** [HIGH]
-`docker rm -f` followed by `docker run` is not atomic. If the script is killed between steps, a stale or missing container remains with no cleanup. Add a `trap` to handle interrupts and ensure the container is always in a known state.
-
 **Configurable project path** [MEDIUM]
 `~/Development/personal` is hardcoded in `faradai`, `Dockerfile`, and `entrypoint.sh`. Replace with a `FARADAI_WORKDIR` environment variable so users can point the container at a different directory without editing scripts.
 
