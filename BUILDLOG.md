@@ -649,9 +649,44 @@ Closed ring-feedback finding #1. Added a `HEALTHCHECK` directive to the final st
 
 Closed ring-feedback-0 finding #11. Added `FARADAI_DEBUG` support to the `faradai` script. When set to `1`, prints the resolved config (workdir, memory, cpus, pids) to stderr and enables `set -x`, causing bash to print the full `exec docker run ...` invocation with all arguments before executing. Follows the existing env-var-driven config pattern rather than introducing a positional `--debug` flag. Help text and README env vars table updated.
 
+### Ring Assessment 1 Triage
+
+Ring-2.6-1T assessment 1 (2026-05-20) produced 18 findings. Josiah triaged all 18:
+
+- 12 findings carried forward to TODO (ordered by severity)
+- 4 flagged won't-fix: `--network=host` during build (required for DNS), `--pull` flag (accepted; later reconsidered and added to TODO), credentials readable inside container (inherent tradeoff, documented), `docker rm -f` multi-user risk (single-user host assumption)
+- 1 disputed: Ring flagged no `.dockerignore` but one exists — stale context
+- 1 previously accepted as won't-fix, reconsidered
+
+`ring-feedback-0.md` deleted; `ring-feedback.md` replaced with the fresh assessment.
+
+---
+
 ### `install.sh` sudo Availability Check
 
 Closed ring-feedback-0 finding #15. Added a `command -v sudo` guard at the top of `install.sh` that exits with a clear error message if sudo is not available, rather than failing mid-install with an unhelpful `command not found`. Troubleshooting entry added to README with the manual fallback for root-capable environments without sudo.
+
+---
+
+## Session 19 — Lesson: Don't Send Keystrokes Before the `>` Prompt Is Live
+
+During a Ring review session, a pre-emptive `n` keystroke (intended to dismiss aider's "Would you like to see what's new?" prompt before it appeared) was sent while aider was still in its pager view scrolling through the loaded files. By the time aider finished initializing and reached the `>` input prompt, the queued `n` was submitted as the actual user prompt to Ring. Ring received a single character, had all project files in context, and rewrote CLAUDE.md in a friendlier tone. The change was reverted via `git checkout`.
+
+**Rule:** never send keystrokes to an aider tmux session until `tmux capture-pane` confirms the bare `>` prompt is live. The "What's new?" prompt appears *after* the `>` prompt, not before it — so there is no race to win by sending early. The correct sequence is: wait for `>`, then optionally dismiss the prompt if it appears, then send the actual prompt.
+
+---
+
+## Session 21 — 2026-05-20
+
+### Ring #1: FARADAI_DOCKER_ARGS Allowlist
+
+Closed ring-feedback assessment 1 finding #1 (CRITICAL). `FARADAI_DOCKER_ARGS` was word-split and appended to `docker run` with no validation, allowing injection of `--privileged`, `-v`, `--cap-add`, `--network=host`, etc. — completely defeating the `--cap-drop ALL` and `no-new-privileges` hardening.
+
+Fix: added per-flag validation loop after the `read -ra` word-split. Tokens not starting with `-` (values following a flag) pass through. Tokens starting with `-` are checked against an allowlist: `--env`/`-e`, `--label`/`-l`, `--device`, `--publish`/`-p`, `--hostname`. Any flag not on the list exits with a clear error and the permitted list.
+
+Smoke-tested against safe flags (pass) and dangerous flags (`--privileged`, `--cap-add=SYS_ADMIN`, `-v`, `--network=host`, `--pid=host`) — all blocked correctly.
+
+Help text, resource limits table in README, and capabilities section updated to document the allowlist and remove the misleading `--cap-add` suggestion.
 
 ---
 

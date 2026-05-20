@@ -20,7 +20,7 @@ Environment variables:
   FARADAI_MEMORY       Container RAM limit (default: 4g)
   FARADAI_CPUS         Container CPU limit (default: 4)
   FARADAI_PIDS         Container PID limit (default: 512)
-  FARADAI_DOCKER_ARGS  Extra flags appended to docker run
+  FARADAI_DOCKER_ARGS  Extra flags appended to docker run (allowlist: --env/-e, --label/-l, --device, --publish/-p, --hostname)
   FARADAI_DEBUG        Set to 1 to print resolved config and docker command before running
 EOF
     exit 0
@@ -86,10 +86,26 @@ if [ -f "${HOME}/.aider.conf.yml" ]; then
   AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
 fi
 
-# Paths with spaces are not supported — word-split only.
+# Word-split only — paths with spaces are not supported.
+# Flag tokens (starting with -) are validated against an allowlist; value tokens pass through.
 EXTRA_DOCKER_ARGS=()
 if [[ -n "${FARADAI_DOCKER_ARGS:-}" ]]; then
   read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
+  _permitted=(--env -e --label -l --device --publish -p --hostname)
+  for _arg in "${EXTRA_DOCKER_ARGS[@]}"; do
+    [[ "${_arg}" != -* ]] && continue
+    _ok=0
+    for _flag in "${_permitted[@]}"; do
+      if [[ "${_arg}" == "${_flag}" || "${_arg}" == "${_flag}="* ]]; then
+        _ok=1; break
+      fi
+    done
+    if (( _ok == 0 )); then
+      echo "faradai: FARADAI_DOCKER_ARGS flag '${_arg}' is not in the allowlist" >&2
+      echo "faradai: permitted: --env/-e, --label/-l, --device, --publish/-p, --hostname" >&2
+      exit 1
+    fi
+  done
 fi
 
 if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then

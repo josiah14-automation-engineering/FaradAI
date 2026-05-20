@@ -62,7 +62,7 @@ An optional argument selects which tool to launch (or attach to):
 | `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
 | `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
 | `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
-| `FARADAI_DOCKER_ARGS` | _(unset)_ | extra flags word-split and appended to `docker run` |
+| `FARADAI_DOCKER_ARGS` | _(unset)_ | extra flags appended to `docker run` — allowlisted: `--env`/`-e`, `--label`/`-l`, `--device`, `--publish`/`-p`, `--hostname` |
 | `FARADAI_DEBUG` | `0` | set to `1` to print resolved config and the `docker run` invocation before launching |
 
 Override inline:
@@ -134,7 +134,7 @@ The meaningful protection is the absence of the Docker socket. Without `/var/run
 
 ### Capabilities and privilege escalation
 
-`--cap-drop ALL` removes Docker's default capability set (~14 caps, including `NET_RAW` and `SYS_CHROOT`). `--security-opt no-new-privileges` sets `prctl PR_SET_NO_NEW_PRIVS`, preventing any process in the container from gaining privileges via setuid binaries or filesystem capabilities. Use `--cap-add` if a specific tool needs a capability back.
+`--cap-drop ALL` removes Docker's default capability set (~14 caps, including `NET_RAW` and `SYS_CHROOT`). `--security-opt no-new-privileges` sets `prctl PR_SET_NO_NEW_PRIVS`, preventing any process in the container from gaining privileges via setuid binaries or filesystem capabilities. `FARADAI_DOCKER_ARGS` does not allow `--cap-add` or `--privileged` — capability restoration requires editing the `faradai` script directly.
 
 ## Troubleshooting
 
