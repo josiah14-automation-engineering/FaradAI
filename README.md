@@ -20,23 +20,15 @@ A Docker container for running Claude Code and aider. Named after the Faraday ca
 - A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
 - An `~/.aider.conf.yml` on the host with your OpenRouter API key (optional — for aider; skipped if the file does not exist)
 
-## Build
-
-```bash
-./build.sh
-```
-
-Builds `faradai:latest` using your host user's username, UID, and GID — derived at runtime, nothing hardcoded.
-
-`build.sh` uses `--network=host` so the build container can resolve external hostnames during `apt-get` and package installs. This applies to the build only — the runtime container has its own network namespace.
-
 ## Install
 
 ```bash
 ./install.sh
 ```
 
-Makes `faradai` executable and copies it to `/usr/local/bin/faradai`. After this, `faradai` is available as a system command.
+Builds the image and copies the `faradai` CLI script to `/usr/local/bin/faradai`. After this, `faradai` is available as a system command.
+
+`build.sh` (called by `install.sh`) uses `--network=host` so the build container can resolve external hostnames during `apt-get` and package installs. This applies to the build only — the runtime container has its own network namespace.
 
 ## Run
 
@@ -166,8 +158,7 @@ To update an existing installation:
 
 ```bash
 git pull
-./build.sh      # rebuild the image with latest Dockerfile
-./install.sh    # update the faradai CLI binary at /usr/local/bin/faradai
+./install.sh    # rebuilds the image and updates the CLI binary
 ```
 
 The running container is not affected until the next launch — the new image is only used when `faradai` starts a fresh container.
