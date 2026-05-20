@@ -1,12 +1,5 @@
 # FaradAI — Open Items
 
-## Design
-
-**Builder stage cache left in final image** [MEDIUM]
-`pipx install` leaves pip, setuptools, and wheel in the venv. The final image copies the entire `~/.local` tree including cache. Clean up the builder's pipx cache before the `COPY --from=builder` step.
-
----
-
 ## Documentation
 
 **Troubleshooting section in README** [MEDIUM]

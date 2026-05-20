@@ -19,7 +19,11 @@ RUN apt-get update -y && apt-get install -y \
 
 RUN npm config set prefix "/home/${USERNAME}/.local" \
  && npm install -g @anthropic-ai/claude-code@2.1.143 \
- && pipx install aider-chat==0.86.2
+ && pipx install aider-chat==0.86.2 \
+ && pipx runpip aider-chat cache purge \
+ && npm cache clean --force \
+ && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} + \
+ && rm -rf /home/${USERNAME}/.cache
 
 
 FROM ubuntu:24.04 AS final

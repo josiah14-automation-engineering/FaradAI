@@ -485,3 +485,14 @@ Replaced the hardcoded `~/Development/personal` path across three files:
 - **`build.sh`**: passes `--build-arg WORKDIR_PATH` derived from `FARADAI_WORKDIR` so image and script stay in sync.
 
 `entrypoint.sh` had no hardcoded paths — no changes needed. Closes ring-feedback-0 finding #7.
+
+### Task 7: Builder stage cache cleanup
+
+Added four cleanup steps at the end of the builder's `RUN` block, before `COPY --from=builder` pulls `~/.local` into the final image:
+
+- `pipx runpip aider-chat cache purge` — clears pip's HTTP cache within the aider venv
+- `npm cache clean --force` — removes npm's download cache
+- `find ... -name "__pycache__" ... -exec rm -rf {} +` — removes compiled Python bytecode
+- `rm -rf /home/${USERNAME}/.cache` — removes pip's global cache directory
+
+pip, setuptools, and wheel remain inside the venv intentionally — removing them could break aider if it attempts to install packages at runtime. Closes ring-feedback-0 finding #8.
