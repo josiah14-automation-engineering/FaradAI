@@ -36,6 +36,8 @@ EOF
     ;;
 esac
 
+command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
+
 if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
   # exec replaces this process on success; set -e exits on failure — no exit needed
   exec docker exec -it faradai "${@:-claude}"

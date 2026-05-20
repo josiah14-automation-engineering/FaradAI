@@ -744,3 +744,13 @@ Smoke-tested across 14 cases covering valid values, double-unit inputs, zero var
 Closed ring-feedback assessment 1 finding #3 (HIGH). Both `FROM ubuntu:24.04` stages in the Dockerfile were using a floating tag — a re-published tag would silently change the base image on the next rebuild.
 
 Both stages pinned to `ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b`. Digest fetched from the Docker Hub registry API (`docker-content-digest` response header). The tag is retained alongside the digest for readability — Docker resolves via the digest; the tag is ignored at pull time.
+
+### Ring #7 / #8 / #18: Pre-flight, Entrypoint Help, Uninstall Cleanup
+
+Three polish fixes done together as pre-public-release prep.
+
+**#7 — Docker binary pre-flight check (`faradai`):** Added `command -v docker` guard immediately before the first `docker inspect` call. `--help`, `update`, and `uninstall` still work without Docker present; any path that reaches the container lifecycle code now fails cleanly with `faradai: docker is not installed or not in PATH`.
+
+**#8 — `entrypoint.sh` help consistency:** Extracted usage text into a `_usage()` function. Added `--help|-h|help)` case that prints usage and exits 0. The `*` catch-all now prefixes the unrecognised command before printing usage and exiting 1 — matching the pattern of the host-side `faradai --help`.
+
+**#18 — `uninstall` removed from in-container help:** `uninstall` was listed in `entrypoint.sh`'s help output despite being a host-only command. Removed. The host-side `faradai --help` still documents it.
