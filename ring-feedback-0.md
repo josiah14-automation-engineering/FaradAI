@@ -128,3 +128,12 @@ README mentions "Contributions welcome if there is demand" but no `CONTRIBUTING.
 ---
 
 *Tokens: 4.5k sent, 3.6k received. Cost: $0.0026.*
+
+---
+
+## Resolutions
+
+| # | Status | Notes |
+|---|--------|-------|
+| 3 | Resolved — 2026-05-20 | Validation added for `FARADAI_MEMORY` (m/g units, 512g ceiling), `FARADAI_CPUS` (decimal-aware, 128-core ceiling), and `FARADAI_PIDS` (positive integer). k-unit excluded as unrealistic. |
+| 19 | Stale — 2026-05-20 | `install.sh` already had `set -euo pipefail`. Finding was incorrect. |

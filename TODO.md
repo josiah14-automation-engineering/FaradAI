@@ -5,9 +5,6 @@
 **`--cap-drop ALL` + `--security-opt no-new-privileges`** [HIGH]
 The `docker run` in `faradai` uses default Docker capabilities (~14 Linux caps including `NET_RAW`, `SYS_CHROOT`). Adding `--cap-drop ALL` and `--security-opt no-new-privileges` would remove all capabilities the container doesn't need. Low-friction fix; high security value before open-sourcing.
 
-**Env variable validation in `faradai` script** [MEDIUM]
-`FARADAI_MEMORY`, `FARADAI_CPUS`, and `FARADAI_PIDS` are interpolated into `docker run` flags without validation. Add a regex check (e.g., `[0-9]+[kmg]?` for memory) to catch misconfiguration early and give the user a clear error.
-
 ---
 
 ## Design
@@ -38,8 +35,8 @@ Users with an existing installation have no documented path to update the image 
 
 ## Code quality
 
-**`install.sh` missing `set -euo pipefail`** [LOW]
-Every other script in the project has strict mode. `install.sh` alone does not — a failure mid-install could leave a corrupt binary at `/usr/local/bin/faradai`.
+**Add `gh` (GitHub CLI) to the image** [LOW]
+`gh` is not present in the container, requiring GitHub operations (e.g. creating issues) to be run from the host. Add `gh` to the final-stage apt install block.
 
 ---
 

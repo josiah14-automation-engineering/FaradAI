@@ -13,6 +13,33 @@ FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
 FARADAI_PIDS="${FARADAI_PIDS:-512}"
 
+# Split FARADAI_MEMORY into numeric part and unit for separate format and bounds checks.
+# k (kilobytes) intentionally omitted — container memory in kilobytes is not a realistic
+# use case, and the equivalent ceiling (536870912k) is unreadable.
+_mem_val="${FARADAI_MEMORY%[mgMG]}"  # strips the trailing unit character
+_mem_unit="${FARADAI_MEMORY: -1}"    # extracts the last character (the unit)
+_mem_unit="${_mem_unit,,}"           # normalize to lowercase (M→m, G→g)
+if ! [[ "${_mem_val}" =~ ^[0-9]+$ ]] || [[ "${_mem_unit}" != "m" && "${_mem_unit}" != "g" ]]; then
+  echo "faradai: invalid FARADAI_MEMORY '${FARADAI_MEMORY}' (expected e.g. 4g or 512m)" >&2
+  exit 1
+fi
+if ( [[ "${_mem_unit}" == "g" ]] && (( _mem_val > 512 )) ) || \
+   ( [[ "${_mem_unit}" == "m" ]] && (( _mem_val > 524288 )) ); then  # 524288m == 512g
+  echo "faradai: FARADAI_MEMORY '${FARADAI_MEMORY}' exceeds the 512g sanity limit" >&2
+  exit 1
+fi
+
+# %.*  strips the decimal so bash (( )) can do an integer comparison on the CPU count.
+if ! [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || (( ${FARADAI_CPUS%.*} > 128 )); then
+  echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
+  exit 1
+fi
+
+if ! [[ "${FARADAI_PIDS}" =~ ^[0-9]+$ ]]; then
+  echo "faradai: invalid FARADAI_PIDS '${FARADAI_PIDS}' (expected a positive integer)" >&2
+  exit 1
+fi
+
 USER="$(whoami)"
 
 AIDER_CONF_MOUNT=()
