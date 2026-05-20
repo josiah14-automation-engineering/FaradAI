@@ -63,7 +63,7 @@ exec docker run -it --rm \
   --cpus="${FARADAI_CPUS}" \
   --pids-limit="${FARADAI_PIDS}" \
   --cap-drop ALL \
-  --security-opt no-new-privileges \
+  --security-opt no-new-privileges:true \
   -v "${HOME}/.claude:/home/${USER}/.claude" \
   -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro" \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \

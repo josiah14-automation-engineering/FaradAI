@@ -548,3 +548,29 @@ The npm ETIMEDOUT build failure from Session 14 was transient. A second build at
 ### Bug: `faradai` with no args drops into bash when container is already running
 
 `faradai` with no arguments launches claude when starting a fresh container (the `docker run` branch defers to `entrypoint.sh`, which defaults to `claude`). But when the container was already running, the `docker exec` branch used `"${@:-bash}"` — a different default. One-character fix: changed to `"${@:-claude}"` so both paths agree.
+
+### Full smoke test — first run against Session 14 image
+
+Smoke test run against the newly built image. Results:
+
+- `claude`, `aider`, `python3`, `git` — correct versions ✅
+- `gh` — not found ❌ (see below)
+- Mounts — all present and correct ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 0` ❌ (see below)
+- Memory limit active at 16 GiB ✅
+
+**`gh` not found** — root cause: the smoke test ran against the *old* container, which had been started before the Session 14 rebuild. The `faradai` script attaches to a running container rather than starting a new one, so the new image wasn't picked up. Fix: `docker rm -f faradai && faradai` to restart against the new image. The Dockerfile is correct; no code change needed.
+
+**`NoNewPrivs: 0`** — `--security-opt no-new-privileges` (without `:true`) is silently ignored by Docker. The correct form is `--security-opt no-new-privileges:true`. Fixed in `faradai`.
+
+### tmux → aider round-trip smoke test — PASS
+
+Full path exercised: tmux session → aider → OpenRouter → Ring-2.6-1T.
+
+- Model loaded from `~/.aider.conf.yml` without slug mismatch ✅
+- Response received ✅
+- Token/cost line present (`$0.00018`) ✅
+- No credential errors ✅
+
+Two interactive one-time prompts fired during the session: an analytics opt-in and a release notes notice. These are benign for interactive use but would block a fully non-interactive invocation. Known workarounds: `--no-check-update` suppresses the release notes check; `AIDER_ANALYTICS_DISABLE=true` suppresses the analytics prompt without requiring a per-user config file. Not addressed at this stage — noted as a known issue.
