@@ -77,10 +77,10 @@ COPY --from=builder --chown=${USER_UID}:${USER_GID} \
 
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
+USER ${USERNAME}
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD claude --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
-
-USER ${USERNAME}
 
 WORKDIR ${WORKDIR_PATH}
 

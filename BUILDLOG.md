@@ -641,11 +641,13 @@ Closed ring-feedback-0 finding #10. Added a `faradai update` subcommand. On invo
 
 ### `HEALTHCHECK` Added to Dockerfile
 
-Closed ring-feedback finding #1. Added a `HEALTHCHECK` directive to the final stage: checks that both `claude --version` and `aider --version` exit cleanly every 30 seconds, with a 15-second start period and 3 retries before marking unhealthy. The check is placed before the `USER` directive so it runs as the correct user context. Primarily useful for orchestration environments; has no effect on interactive `faradai` usage.
+Closed ring-feedback finding #1. Added a `HEALTHCHECK` directive to the final stage: checks that both `claude --version` and `aider --version` exit cleanly every 30 seconds, with a 15-second start period and 3 retries before marking unhealthy. Placed after the `USER` directive so it runs as `${USERNAME}` rather than root — the tools are installed under that user's home directory and should be verified in that context. Primarily useful for orchestration environments; has no effect on interactive `faradai` usage.
+
+**Post-commit correction:** initial placement was before `USER ${USERNAME}`, which would have run the check as root. Caught on review and moved after the `USER` directive.
 
 ### `FARADAI_DEBUG` Env Var
 
-Closed ring-feedback-0 finding #11. Added `FARADAI_DEBUG` support to the `faradai` script. When set to `1`, prints the resolved config (workdir, memory, cpus, pids) and the `docker run` invocation to stderr before executing. Follows the existing env-var-driven config pattern rather than introducing a positional `--debug` flag. Help text and README env vars table updated.
+Closed ring-feedback-0 finding #11. Added `FARADAI_DEBUG` support to the `faradai` script. When set to `1`, prints the resolved config (workdir, memory, cpus, pids) to stderr and enables `set -x`, causing bash to print the full `exec docker run ...` invocation with all arguments before executing. Follows the existing env-var-driven config pattern rather than introducing a positional `--debug` flag. Help text and README env vars table updated.
 
 ### `install.sh` sudo Availability Check
 

@@ -94,7 +94,7 @@ fi
 
 if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
   echo "faradai: WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
-  echo "faradai: docker run -it --rm --name faradai --memory=${FARADAI_MEMORY} --cpus=${FARADAI_CPUS} --pids-limit=${FARADAI_PIDS} ..." >&2
+  set -x
 fi
 
 exec docker run -it --rm \
