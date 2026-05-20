@@ -2,9 +2,6 @@
 
 ## Design
 
-**Configurable project path** [MEDIUM]
-`~/Development/personal` is hardcoded in `faradai`, `Dockerfile`, and `entrypoint.sh`. Replace with a `FARADAI_WORKDIR` environment variable so users can point the container at a different directory without editing scripts.
-
 **Builder stage cache left in final image** [MEDIUM]
 `pipx install` leaves pip, setuptools, and wheel in the venv. The final image copies the entire `~/.local` tree including cache. Clean up the builder's pipx cache before the `COPY --from=builder` step.
 

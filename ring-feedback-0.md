@@ -137,6 +137,7 @@ README mentions "Contributions welcome if there is demand" but no `CONTRIBUTING.
 |---|--------|-------|
 | 1 | Resolved — 2026-05-20 | `--cap-drop ALL` and `--security-opt no-new-privileges` added to `docker run` in `faradai`. |
 | 2 | Resolved — 2026-05-20 | `trap 'docker rm -f faradai ...' INT TERM EXIT` added after the `docker rm -f` line; only active in the window before `exec docker run` replaces the shell. |
+| 7 | Resolved — 2026-05-20 | `FARADAI_WORKDIR` env var (default `${HOME}/Development/personal`) threads through `faradai`, `Dockerfile` (`ARG WORKDIR_PATH`), and `build.sh`. `entrypoint.sh` had no hardcoded paths. |
 | 12 | Resolved — 2026-05-20 | `FARADAI_DOCKER_ARGS` env var word-split into `EXTRA_DOCKER_ARGS` array and appended to `docker run`. Paths with spaces not supported. |
 | 3 | Resolved — 2026-05-20 | Validation added for `FARADAI_MEMORY` (m/g units, 512g ceiling), `FARADAI_CPUS` (decimal-aware, 128-core ceiling), and `FARADAI_PIDS` (positive integer). k-unit excluded as unrealistic. |
 | 19 | Stale — 2026-05-20 | `install.sh` already had `set -euo pipefail`. Finding was incorrect. |

@@ -475,3 +475,13 @@ Added `trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT` immediatel
 ### Task 5: `FARADAI_DOCKER_ARGS` passthrough
 
 Added `EXTRA_DOCKER_ARGS` array populated via `read -ra` word-split on `FARADAI_DOCKER_ARGS`, appended to `docker run` between the conditional mounts and the `-w` workdir flag. Paths with spaces in the variable are not supported (word-split only). Closes ring-feedback-0 finding #12.
+
+### Task 6: Configurable project path via `FARADAI_WORKDIR`
+
+Replaced the hardcoded `~/Development/personal` path across three files:
+
+- **`faradai`**: added `FARADAI_WORKDIR` env var (default `${HOME}/Development/personal`); mount and `-w` flag now use it directly — same path both sides, preserving the mirror-layout design.
+- **`Dockerfile`**: added `ARG WORKDIR_PATH=/home/${USERNAME}/Development/personal` in the final stage; `mkdir`, `chown`, and `WORKDIR` all thread through it.
+- **`build.sh`**: passes `--build-arg WORKDIR_PATH` derived from `FARADAI_WORKDIR` so image and script stay in sync.
+
+`entrypoint.sh` had no hardcoded paths — no changes needed. Closes ring-feedback-0 finding #7.

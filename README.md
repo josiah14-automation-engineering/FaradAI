@@ -64,17 +64,19 @@ An optional argument selects which tool to launch (or attach to):
 
 | Variable | Default | Controls |
 |----------|---------|----------|
+| `FARADAI_WORKDIR` | `~/Development/personal` | project directory mounted and used as working dir |
 | `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
 | `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
 | `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
 
 Override inline:
 ```bash
-FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
+FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 ```
 
 Or set permanently in your shell rc file (`~/.bashrc`, `~/.zshrc`, etc.):
 ```sh
+export FARADAI_WORKDIR=~/Development/personal
 export FARADAI_MEMORY=4g
 export FARADAI_CPUS=4
 export FARADAI_PIDS=512
@@ -92,9 +94,9 @@ export FARADAI_PIDS=512
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH key files for SSH-based git remotes |
-| `~/Development/personal` | `~/Development/personal` | read-write | Your project files — the primary work surface |
+| `$FARADAI_WORKDIR` | `$FARADAI_WORKDIR` | read-write | Your project files — the primary work surface |
 
-The working directory is `~/Development/personal`, matching the host path exactly so all project-relative references, memory files, and tooling behave identically inside and outside the container.
+The working directory defaults to `~/Development/personal`, mounted at the same path inside the container so all project-relative references, memory files, and tooling behave identically inside and outside.
 
 > **SSH agent forwarding:** `SSH_AUTH_SOCK` is not forwarded into the container. If you rely on an ssh-agent rather than key files directly, git over SSH will not work inside the container. HTTPS remotes are unaffected.
 

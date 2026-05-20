@@ -12,6 +12,7 @@ docker rm -f faradai 2>/dev/null || true
 # interrupted or errors out before docker run fully starts.
 trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT
 
+FARADAI_WORKDIR="${FARADAI_WORKDIR:-${HOME}/Development/personal}"
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
 FARADAI_PIDS="${FARADAI_PIDS:-512}"
@@ -68,9 +69,9 @@ exec docker run -it --rm \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
   -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
   -v "${HOME}/.ssh:/home/${USER}/.ssh:ro" \
-  -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
+  -v "${FARADAI_WORKDIR}:${FARADAI_WORKDIR}" \
   "${AIDER_CONF_MOUNT[@]}" \
   "${EXTRA_DOCKER_ARGS[@]}" \
-  -w "/home/${USER}/Development/personal" \
+  -w "${FARADAI_WORKDIR}" \
   faradai:latest \
   "$@"
