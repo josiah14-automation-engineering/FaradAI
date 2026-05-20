@@ -1,6 +1,6 @@
 # Ring Feedback — FaradAI Project
 
-Updated assessment — 2026-05-19. Previous review entries archived below.
+Updated assessment — 2026-05-20. Previous review entries archived below.
 
 ---
 
@@ -38,17 +38,22 @@ Additional fixes observed in the current codebase not in the original open items
 
 ---
 
+### Resolved Since Prior Review (continued)
+
+| # | Prior Finding | Resolution |
+|---|---------------|------------|
+| 11 | No multi-stage build — `sudo` present in layer history | Multi-stage build implemented (Session 8). Builder stage handles installs; final stage starts from a clean `ubuntu:24.04`. |
+| 12 | No `--pids-limit` | Added to `faradai` script as `--pids-limit="${FARADAI_PIDS:-512}"`, env-variable-configurable. |
+| 13 | README open items table stale | README fully rewritten (Session 6, Session 13). Stale table removed; all sections brought current. |
+| 14 | Python inclusion not justified in README | README "What's in the image" section now includes justification ("available for intermediate scripting tasks"). |
+
 ### Remaining Open Items
 
 | # | Severity | Issue | File(s) |
 |---|----------|-------|---------|
-| 1 | High | No multi-stage build. The `sudo` binary is purged in a later layer but still exists in the base image layer history. Anyone who extracts the image tarball and mounts a pre-purge layer can access it. A multi-stage build (builder stage → clean minimal base) is the only way to produce a final image whose layer history never includes `sudo`. Flagged as a pre-open-source priority in `TODO.md`. | `Dockerfile` |
-| 2 | Medium | No `--pids-limit` in `run.sh`. `--memory` and `--cpus` were added, but process count is unbounded. An AI agent running shell commands that fork heavily (parallel tool calls, recursive find, etc.) could exhaust the container's process table. A conservative value like `--pids-limit 512` would bound this. | `run.sh` |
-| 3 | Medium | README open items table is stale. The table at the bottom of `README.md` lists five issues that are all resolved per `TODO.md` and the current codebase. This creates confusion for anyone reading the README. The table should be removed or replaced with current state. | `README.md` |
-| 4 | Low | Python inclusion not explicitly justified in README. `CLAUDE.md` mentions Python is "available for intermediate scripting tasks," but the README's "What's in the image" section doesn't explain why it's there. A one-line justification would preempt questions, especially given the ~150MB cost. | `README.md` |
-| 5 | Low | No `HEALTHCHECK` in Dockerfile. Not critical for an interactive session container, but a basic health check (e.g., verifying `claude --version` runs) would improve robustness for orchestration environments. | `Dockerfile` |
-| 6 | Low | No `--pull` in `docker run` or `docker build`. The container will run a cached image even if a newer one exists. Adding `--pull always` to `run.sh` (or `--pull missing` to `build.sh`) would ensure freshness. | `run.sh`, `build.sh` |
-| 7 | Low | No SSH agent forwarding. `~/.ssh` is mounted read-only, but `SSH_AUTH_SOCK` is not forwarded. Any git operations requiring SSH agent-based authentication (e.g., GitHub with SSH keys managed by `ssh-agent`) will fail inside the container. | `run.sh` |
+| 1 | Low | No `HEALTHCHECK` in Dockerfile. Not critical for an interactive session container, but a basic health check (e.g., verifying `claude --version` runs) would improve robustness for orchestration environments. | `Dockerfile` |
+| 2 | Low | No `--pull` in `docker run` or `docker build`. The container will run a cached image even if a newer one exists. Adding `--pull always` to `run.sh` (or `--pull missing` to `build.sh`) would ensure freshness. | `faradai`, `build.sh` |
+| 3 | Low | No SSH agent forwarding. `~/.ssh` is mounted read-only, but `SSH_AUTH_SOCK` is not forwarded. Any git operations requiring SSH agent-based authentication (e.g., GitHub with SSH keys managed by `ssh-agent`) will fail inside the container. Documented in README as a known limitation. | `faradai` |
 
 ---
 
@@ -76,7 +81,7 @@ The decision log is thorough and honest — documenting not just what was done b
 
 ### Summary
 
-The two highest-priority items for future work are the multi-stage build (to eliminate `sudo` from layer history before open-sourcing) and adding `--pids-limit` to `run.sh`. Everything else is low-severity polish.
+All high and medium severity items are resolved. The three remaining open items are low-severity polish — none are blockers for current use or open-sourcing.
 
 ---
 
