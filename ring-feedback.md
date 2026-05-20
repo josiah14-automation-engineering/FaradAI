@@ -51,9 +51,9 @@ Additional fixes observed in the current codebase not in the original open items
 
 | # | Severity | Issue | File(s) |
 |---|----------|-------|---------|
-| 1 | Low | No `HEALTHCHECK` in Dockerfile. Not critical for an interactive session container, but a basic health check (e.g., verifying `claude --version` runs) would improve robustness for orchestration environments. | `Dockerfile` |
-| 2 | Low | No `--pull` in `docker run` or `docker build`. The container will run a cached image even if a newer one exists. Adding `--pull always` to `run.sh` (or `--pull missing` to `build.sh`) would ensure freshness. | `faradai`, `build.sh` |
-| 3 | Low | No SSH agent forwarding. `~/.ssh` is mounted read-only, but `SSH_AUTH_SOCK` is not forwarded. Any git operations requiring SSH agent-based authentication (e.g., GitHub with SSH keys managed by `ssh-agent`) will fail inside the container. Documented in README as a known limitation. | `faradai` |
+| 1 | Low | ~~No `HEALTHCHECK` in Dockerfile.~~ Resolved 2026-05-20 — checks `claude --version && aider --version` every 30s. | `Dockerfile` |
+| 2 | Low | No `--pull` in `docker run` or `docker build`. Accepted — `--pull` on `docker run` would fight the design intent (run the image you built); `--pull` on `docker build` is a rebuild hygiene nicety not worth the cost. | `faradai`, `build.sh` |
+| 3 | Low | No SSH agent forwarding. Documented in README as a known limitation. Not addressed. | `faradai` |
 
 ---
 

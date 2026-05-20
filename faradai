@@ -14,6 +14,14 @@ Commands:
   update     Pull the latest release and reinstall
   uninstall  Remove the faradai container, image, and installed binaries
   help       Show this help message
+
+Environment variables:
+  FARADAI_WORKDIR      Project directory (default: ~/Development/personal)
+  FARADAI_MEMORY       Container RAM limit (default: 4g)
+  FARADAI_CPUS         Container CPU limit (default: 4)
+  FARADAI_PIDS         Container PID limit (default: 512)
+  FARADAI_DOCKER_ARGS  Extra flags appended to docker run
+  FARADAI_DEBUG        Set to 1 to print resolved config and docker command before running
 EOF
     exit 0
     ;;
@@ -82,6 +90,11 @@ fi
 EXTRA_DOCKER_ARGS=()
 if [[ -n "${FARADAI_DOCKER_ARGS:-}" ]]; then
   read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
+fi
+
+if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
+  echo "faradai: WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
+  echo "faradai: docker run -it --rm --name faradai --memory=${FARADAI_MEMORY} --cpus=${FARADAI_CPUS} --pids-limit=${FARADAI_PIDS} ..." >&2
 fi
 
 exec docker run -it --rm \

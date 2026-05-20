@@ -146,3 +146,5 @@ README mentions "Contributions welcome if there is demand" but no `CONTRIBUTING.
 | 19 | Stale — 2026-05-20 | `install.sh` already had `set -euo pipefail`. Finding was incorrect. |
 | 9 | Resolved — 2026-05-20 | `apt-get purge sudo \|\| true` removed from Dockerfile — sudo is never present in the ubuntu:24.04 Docker image (documented in BUILDLOG Session 8), making this a no-op that could mask real dpkg failures. `userdel`/`groupdel` `\|\| true` retained — genuinely conditional on whether the ubuntu user exists in a given base image version. |
 | 10 | Resolved — 2026-05-20 | `faradai update` subcommand added. Clones the repo from GitHub into a `mktemp` dir under `/tmp`, runs `install.sh` (which rebuilds the image and reinstalls the binary), then removes the temp dir via `trap ... EXIT`. |
+| 11 | Resolved — 2026-05-20 | `FARADAI_DEBUG=1` prints resolved config and the `docker run` invocation to stderr before executing. Follows existing env-var config pattern; no positional flag needed. |
+| 15 | Resolved — 2026-05-20 | `command -v sudo` guard added at top of `install.sh`; exits with a clear error rather than failing mid-install with `command not found`. |

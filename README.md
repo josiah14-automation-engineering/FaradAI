@@ -54,7 +54,7 @@ An optional argument selects which tool to launch (or attach to):
 
 ### Resource limits
 
-`faradai` reads three environment variables to set container resource limits, with sensible defaults if unset:
+`faradai` reads environment variables to configure the container, with sensible defaults if unset:
 
 | Variable | Default | Controls |
 |----------|---------|----------|
@@ -62,6 +62,8 @@ An optional argument selects which tool to launch (or attach to):
 | `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
 | `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
 | `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
+| `FARADAI_DOCKER_ARGS` | _(unset)_ | extra flags word-split and appended to `docker run` |
+| `FARADAI_DEBUG` | `0` | set to `1` to print resolved config and the `docker run` invocation before launching |
 
 Override inline:
 ```bash
@@ -106,6 +108,7 @@ Credentials are delivered as mounted files rather than environment variables —
 - git, curl
 - gh (GitHub CLI) — installed from GitHub's official apt repository
 - vim — available when shelling in for manual edits or troubleshooting
+- `HEALTHCHECK` — verifies `claude` and `aider` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
 
 ## Security model
@@ -155,6 +158,9 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 
 **`gh` not authenticated inside the container**
 `gh` requires manual login after each fresh install. Run `gh auth login` from inside the container (or via `faradai bash`) and follow the device-code flow. This is a known gap — credential passthrough for `gh` is not yet implemented.
+
+**`install.sh` fails with "sudo is required but not available"**
+`install.sh` needs `sudo` to copy the `faradai` binary to `/usr/local/bin`. Install sudo (`apt-get install sudo` on Debian/Ubuntu) or copy the binary manually: `cp faradai /usr/local/bin/faradai && cp uninstall-faradai /usr/local/bin/uninstall-faradai` as root.
 
 ---
 

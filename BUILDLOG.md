@@ -634,3 +634,19 @@ Closed ring-feedback-0 finding #9. The `apt-get purge sudo 2>/dev/null || true` 
 ### `faradai update` Subcommand
 
 Closed ring-feedback-0 finding #10. Added a `faradai update` subcommand. On invocation it creates a temp directory under `/tmp` via `mktemp`, registers a `trap ... EXIT` to remove it, clones the repo from GitHub into it, and runs `install.sh`. Cleanup happens whether the install succeeds or fails. The Upgrading section of the README was rewritten to lead with `faradai update` rather than the manual `git pull && ./install.sh` workflow. Modes table updated to include `update` and `uninstall`.
+
+---
+
+## Session 19 — 2026-05-20
+
+### `HEALTHCHECK` Added to Dockerfile
+
+Closed ring-feedback finding #1. Added a `HEALTHCHECK` directive to the final stage: checks that both `claude --version` and `aider --version` exit cleanly every 30 seconds, with a 15-second start period and 3 retries before marking unhealthy. The check is placed before the `USER` directive so it runs as the correct user context. Primarily useful for orchestration environments; has no effect on interactive `faradai` usage.
+
+### `FARADAI_DEBUG` Env Var
+
+Closed ring-feedback-0 finding #11. Added `FARADAI_DEBUG` support to the `faradai` script. When set to `1`, prints the resolved config (workdir, memory, cpus, pids) and the `docker run` invocation to stderr before executing. Follows the existing env-var-driven config pattern rather than introducing a positional `--debug` flag. Help text and README env vars table updated.
+
+### `install.sh` sudo Availability Check
+
+Closed ring-feedback-0 finding #15. Added a `command -v sudo` guard at the top of `install.sh` that exits with a clear error message if sudo is not available, rather than failing mid-install with an unhelpful `command not found`. Troubleshooting entry added to README with the manual fallback for root-capable environments without sudo.
