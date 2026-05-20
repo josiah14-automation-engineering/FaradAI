@@ -1,0 +1,58 @@
+name: Bug Report
+description: Something is broken or behaving unexpectedly
+labels: ["bug", "triage"]
+title: "[Bug]: "
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Container platform
+      options:
+        - Docker on Linux
+        - Docker Desktop (Mac)
+        - Docker Desktop (Windows)
+        - OrbStack
+        - Podman
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: host-os
+    attributes:
+      label: Host OS and version
+      placeholder: "e.g. Ubuntu 24.04, macOS 14.5"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / error output
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Relevant env vars (FARADAI_WORKDIR, FARADAI_MEMORY, etc.), custom FARADAI_DOCKER_ARGS, credential setup, or anything else that might be relevant. Do not include API keys or secrets.

@@ -510,3 +510,17 @@ Added the GitHub CLI (`gh`) to the final stage. `gh` is not in Ubuntu's default 
 Added a **Troubleshooting** section covering: Docker permission denied, expired credentials, container name conflict, SSH key permissions, aider not found (pre-fix image), and wrong model slug format.
 
 Added an **Upgrading** section covering: `git pull` → `build.sh` → `install.sh` workflow, note that a running container is not affected until the next launch, and how to update pinned tool versions in the Dockerfile.
+
+### Community scaffolding — CONTRIBUTING.md and GitHub templates
+
+Added pre-open-source community scaffolding. Both items were preceded by web research into FOSS standards (Contributor Covenant, GitHub issue forms docs, curl/Podman patterns).
+
+**`CONTRIBUTING.md`** — ~600 words. Covers: code of conduct (Contributor Covenant v2.1 link), ways to contribute, environment setup, making changes (shellcheck/hadolint), manual smoke test, PR process, and contact. Solo-maintainer caveat included. Explicitly calls out what doesn't fit (large refactors, opinionated style changes).
+
+**GitHub templates** (`.github/`)
+- `ISSUE_TEMPLATE/config.yml` — disables blank issues, links to Discussions for questions
+- `ISSUE_TEMPLATE/01-bug-report.yml` — YAML form with required fields: container platform (dropdown), host OS, steps to reproduce, expected/actual behavior, error output (rendered as shell). `Additional context` field prompts for env vars without requesting secrets.
+- `ISSUE_TEMPLATE/02-feature-request.yml` — YAML form: desired behavior, motivation, alternatives considered.
+- `PULL_REQUEST_TEMPLATE.md` — description, related issue, changes list, testing notes, checklist (shellcheck, hadolint, smoke test, docs).
+
+YAML issue forms chosen over markdown templates: Docker failure modes are systematic (platform dropdown is high-value), required fields prevent vague reports, auto-labeling reduces solo-maintainer triage burden.

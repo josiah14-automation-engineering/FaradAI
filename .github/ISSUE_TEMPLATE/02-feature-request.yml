@@ -1,0 +1,26 @@
+name: Feature Request
+description: Suggest a feature or improvement
+labels: ["enhancement"]
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: What would you like FaradAI to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why is this useful?
+      description: Use case, pain point, or motivation. Concrete examples help.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you've tried, or other approaches that could work.
