@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# If a container is currently running, ask before force-removing it.
+if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
+  echo "A faradai container is currently running."
+  read -r -p "Kill it and proceed with uninstall? [y/N] " _confirm_kill
+  case "${_confirm_kill}" in
+    [yY]) docker rm -f faradai ;;
+    *) echo "Aborted."; exit 0 ;;
+  esac
+fi
+
+# Build a list of everything that will be removed.
+_items=()
+if docker inspect faradai 2>/dev/null >/dev/null; then
+  _items+=("  container: faradai (stopped)")
+fi
+if docker image inspect faradai:latest 2>/dev/null >/dev/null; then
+  _items+=("  image:     faradai:latest")
+fi
+if [ -f /usr/local/bin/faradai ]; then
+  _items+=("  binary:    /usr/local/bin/faradai")
+fi
+if [ -f /usr/local/bin/uninstall-faradai ]; then
+  _items+=("  binary:    /usr/local/bin/uninstall-faradai")
+fi
+
+if [ "${#_items[@]}" -eq 0 ]; then
+  echo "Nothing to remove."
+  exit 0
+fi
+
+echo "The following will be removed:"
+printf '%s\n' "${_items[@]}"
+read -r -p "Proceed? [y/N] " _confirm
+case "${_confirm}" in
+  [yY]) ;;
+  *) echo "Aborted."; exit 0 ;;
+esac
+
+docker rm -f faradai 2>/dev/null || true
+docker rmi faradai:latest 2>/dev/null || true
+sudo rm -f /usr/local/bin/faradai
+
+echo "Done."
+sudo rm -f /usr/local/bin/uninstall-faradai

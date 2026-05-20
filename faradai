@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+case "${1:-}" in
+  --help|-h|help)
+    cat <<'EOF'
+Usage: faradai [COMMAND]
+
+Commands:
+  (none)     Launch Claude Code (default)
+  claude     Launch Claude Code
+  aider      Launch aider
+  bash       Open a bash shell inside the container
+  uninstall  Remove the faradai container, image, and installed binaries
+  help       Show this help message
+EOF
+    exit 0
+    ;;
+  uninstall)
+    exec /usr/local/bin/uninstall-faradai
+    ;;
+esac
+
 if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
   # exec replaces this process on success; set -e exits on failure — no exit needed
   exec docker exec -it faradai "${@:-claude}"

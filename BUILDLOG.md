@@ -574,3 +574,51 @@ Full path exercised: tmux session → aider → OpenRouter → Ring-2.6-1T.
 - No credential errors ✅
 
 Two interactive one-time prompts fired during the session: an analytics opt-in and a release notes notice. These are benign for interactive use but would block a fully non-interactive invocation. Known workarounds: `--no-check-update` suppresses the release notes check; `AIDER_ANALYTICS_DISABLE=true` suppresses the analytics prompt without requiring a per-user config file. Not addressed at this stage — noted as a known issue.
+
+---
+
+## Session 16 — 2026-05-20
+
+### Full Smoke Test — All Green
+
+Ran all SMOKETEST.md sections against the current image. Results:
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — `~/Development/personal` mounted, credentials file present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- `gh auth` — initially not logged in; Josiah ran `gh auth login` from the host terminal and authenticated as `josiah14` (scopes: `repo`, `read:org`, `gist`); re-test passed ✅
+- tmux → aider round-trip ✅ (see below)
+
+### tmux → aider Round-Trip — "What's New?" Prompt Workaround
+
+The smoke test script sends `/model` and the test prompt immediately after launching aider. Aider's interactive "Would you like to see what's new in this version?" prompt fired before aider reached its `>` prompt, intercepting both commands as invalid Y/N answers. Recovery: sent `n` to dismiss the prompt; aider reached `>` and accepted subsequent commands normally.
+
+Ring-2.6-1T responded with "hello" and a cost line (`$0.00018`). Round-trip confirmed working.
+
+This is the same one-time-prompt issue noted in Session 15. Fully non-interactive scripts driving aider via tmux need to account for this prompt — either by dismissing it first or by suppressing it via `--no-check-update`. Not addressed at this stage.
+
+---
+
+## Session 17 — 2026-05-20
+
+### Uninstall and Reinstall Confirmed
+
+**Josiah confirmed** that a clean uninstall followed by `./install.sh` produces a working container. Full smoke test run against the freshly installed image.
+
+### Full Smoke Test — All Green
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — `~/Development/personal` mounted, `.credentials.json` present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- `gh auth` — logged in as `josiah14` (scopes: `repo`, `read:org`, `gist`) ✅
+- tmux → aider round-trip ✅
+
+### tmux → aider Round-Trip — Prompt Caveat Documented
+
+The "Would you like to see what's new in this version?" prompt intercepted the first round-trip attempt, swallowing the `/model` command and test message as invalid Y/N answers. **Josiah directed** retrying with an explicit `n` to dismiss the prompt before sending further input — round-trip succeeded on the second attempt. Ring responded with "hello" and a cost line.
+
+SMOKETEST.md updated: added a caveat block before the round-trip script explaining the prompt behaviour, and updated the script to send `n` and extend the initial sleep to 6 seconds to give aider time to show the prompt before the dismissal keystroke fires.

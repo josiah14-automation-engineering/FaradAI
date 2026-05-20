@@ -45,13 +45,19 @@ gh auth status
 
 Verifies that Claude Code can start an aider session in a background tmux pane, send a prompt, and capture the response — the internal pattern used for running Ring alongside Claude.
 
+> **Caveat:** Aider may show a "Would you like to see what's new in this version?" interactive prompt on startup. If it does, it will intercept subsequent commands as invalid Y/N answers. Send `n` to dismiss it before the `/model` command.
+
 ```bash
 # Start a detached tmux session and launch aider in it
 tmux new-session -d -s smoke-aider
 tmux send-keys -t smoke-aider "aider --no-git" Enter
 
 # Give aider time to initialize
-sleep 5
+sleep 6
+
+# Dismiss the "What's new?" prompt if it appears
+tmux send-keys -t smoke-aider "n" Enter
+sleep 2
 
 # Set the model explicitly (works around any slug mismatch in ~/.aider.conf.yml)
 tmux send-keys -t smoke-aider "/model openrouter/inclusionai/ring-2.6-1t" Enter
