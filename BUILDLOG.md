@@ -730,3 +730,11 @@ Fix: added per-flag validation loop after the `read -ra` word-split. Tokens not 
 Smoke-tested against safe flags (pass) and dangerous flags (`--privileged`, `--cap-add=SYS_ADMIN`, `-v`, `--network=host`, `--pid=host`) — all blocked correctly.
 
 Help text, resource limits table in README, and capabilities section updated to document the allowlist and remove the misleading `--cap-add` suggestion.
+
+### Ring #2: Memory Validation Rewrite
+
+Closed ring-feedback assessment 1 finding #2 (HIGH). The original two-step validation (strip one trailing character, then check numeric) was hard to reason about and had two real edge cases: `4.5g` was incorrectly rejected (Docker accepts decimal memory values), and `0g` incorrectly passed.
+
+Replaced with a single anchored regex `^([0-9]+(\.[0-9]+)?)([mgMG])$` using `BASH_REMATCH`, which validates the entire string in one shot. A zero check follows: if the integer part is 0 and there is no meaningful decimal (e.g. `0`, `0.0`, `0.00`), the value is rejected; `0.5g` passes. The existing 512g bounds check is retained, using the integer part for the comparison.
+
+Smoke-tested across 14 cases covering valid values, double-unit inputs, zero variants, missing units, and bounds limits — all correct.
