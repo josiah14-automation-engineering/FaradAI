@@ -11,10 +11,17 @@ Commands:
   claude     Launch Claude Code
   aider      Launch aider
   bash       Open a bash shell inside the container
+  update     Pull the latest release and reinstall
   uninstall  Remove the faradai container, image, and installed binaries
   help       Show this help message
 EOF
     exit 0
+    ;;
+  update)
+    _update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
+    trap 'rm -rf "${_update_dir}"' EXIT
+    git clone git@github.com:josiah14-automation-engineering/faradai.git "${_update_dir}"
+    "${_update_dir}/install.sh"
     ;;
   uninstall)
     exec /usr/local/bin/uninstall-faradai
