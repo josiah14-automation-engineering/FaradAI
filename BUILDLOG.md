@@ -405,3 +405,37 @@ Ring-2.6-1T reviewed the post-Session-11 state of FaradAI via a non-interactive 
 - Code of conduct — premature; add if a community grows around the project
 
 **Naming settled:** FaradAI is the canonical project name in prose and branding; `faradai` is used for commands, image names, and code. Already consistent across the codebase — no changes needed.
+
+---
+
+## Session 13 — 2026-05-20
+
+### Network Restriction — Design Decision
+
+The network access open item (documented in `TODO.md` and the README security model since Session 1) was reviewed and closed as resolved by design.
+
+Three technical approaches were considered:
+
+- **Host-side iptables allowlist** — most thorough, but fragile: Docker manages its own iptables rules aggressively and cloud APIs use CDN IPs that rotate, making domain-based allowlists unreliable.
+- **Forward proxy (tinyproxy/squid)** — domain-level allowlist via `HTTP_PROXY`/`HTTPS_PROXY`; more stable than IP rules, but adds a host-side service to maintain and doesn't stop raw TCP connections that bypass the proxy.
+- **Documentation only** — current approach; accepted risk with honest documentation.
+
+**Unrestricted outbound was affirmed as intentional.** The agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting those in advance, which defeats the purpose of a general-purpose coding assistant.
+
+**Bridge gateway access to host services was also affirmed as intentional.** The container can reach services on the host via the Docker bridge gateway (typically `172.17.0.1`). This is a feature: Josiah may run k3s clusters, local dev servers, or other host-side services he wants the agent to interact with. Restricting this would break legitimate workflows.
+
+**The Docker socket absence is the real protection.** Without `/var/run/docker.sock` mounted, the agent cannot escape the container by spawning new containers with unrestricted host mounts — the primary container escape vector. Network access is not the meaningful boundary; filesystem isolation and socket absence are.
+
+README security model updated with a dedicated network access section reflecting these decisions.
+
+### README Polish
+
+Several readability improvements made to the README:
+
+- **Opening rewritten** to lead with motivation ("AI coding assistants scan broadly by default") before describing what the project is. aider elevated from parenthetical to equal billing alongside Claude Code.
+- **ASCII art added** at the top — waves-and-cage motif (≋ characters surrounding a boxed name) evoking the Faraday cage metaphor.
+- **SSH table row thinned** — three sentences of agent-forwarding caveat moved out of the table cell into a blockquote note below the mounts table.
+- **`--network=host` note relocated** from the Security model's network section to the Build section, where it belongs as a build-time implementation detail.
+- **Bridge gateway IP removed** — "typically `172.17.0.1`" dropped; the IP varies by Docker config and isn't actionable for the reader.
+- **Aider config example generalized** — model slug changed from Ring-2.6-1T to a `openrouter/<provider>/<model>` placeholder with a note to consult OpenRouter's model directory.
+- **Future work section added** at the bottom: the container pattern is not specific to Claude Code or aider; other CLI-based agents (Goose, OpenHands, etc.) are natural candidates if the project grows.
