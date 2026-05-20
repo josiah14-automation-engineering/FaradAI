@@ -496,3 +496,9 @@ Added four cleanup steps at the end of the builder's `RUN` block, before `COPY -
 - `rm -rf /home/${USERNAME}/.cache` — removes pip's global cache directory
 
 pip, setuptools, and wheel remain inside the venv intentionally — removing them could break aider if it attempts to install packages at runtime. Closes ring-feedback-0 finding #8.
+
+### Tasks 8 & 9: README — Troubleshooting and Upgrade sections
+
+Added a **Troubleshooting** section covering: Docker permission denied, expired credentials, container name conflict, SSH key permissions, aider not found (pre-fix image), and wrong model slug format.
+
+Added an **Upgrading** section covering: `git pull` → `build.sh` → `install.sh` workflow, note that a running container is not affected until the next launch, and how to update pinned tool versions in the Dockerfile.

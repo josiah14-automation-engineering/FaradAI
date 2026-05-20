@@ -138,6 +138,44 @@ The meaningful protection is the absence of the Docker socket. Without `/var/run
 
 `--cap-drop ALL` removes Docker's default capability set (~14 caps, including `NET_RAW` and `SYS_CHROOT`). `--security-opt no-new-privileges` sets `prctl PR_SET_NO_NEW_PRIVS`, preventing any process in the container from gaining privileges via setuid binaries or filesystem capabilities. Use `--cap-add` if a specific tool needs a capability back.
 
+## Troubleshooting
+
+**Docker permission denied**
+Your user is not in the `docker` group. Fix: `sudo usermod -aG docker $USER`, then log out and back in.
+
+**Credential errors on first launch**
+`~/.claude/.credentials.json` is missing or expired. Run `claude login` on the host to refresh it, then relaunch.
+
+**Container name conflict (`faradai` already in use)**
+A stopped container is holding the name. The `faradai` script handles this automatically via `docker rm -f faradai` before each new launch. If it persists: `docker rm -f faradai` manually.
+
+**SSH key permissions rejected**
+SSH requires key files to be `600`. Fix: `chmod 600 ~/.ssh/id_*`.
+
+**aider not found inside the container**
+The image predates the least-privilege install fix (Session 7). Rebuild: `./build.sh && ./install.sh`.
+
+**Wrong model slug in `~/.aider.conf.yml`**
+aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
+
+---
+
+## Upgrading
+
+To update an existing installation:
+
+```bash
+git pull
+./build.sh      # rebuild the image with latest Dockerfile
+./install.sh    # update the faradai CLI binary at /usr/local/bin/faradai
+```
+
+The running container is not affected until the next launch — the new image is only used when `faradai` starts a fresh container.
+
+**Updating pinned tool versions:** `@anthropic-ai/claude-code` and `aider-chat` are pinned in the Dockerfile. To update them, edit the version strings in the `RUN npm install` and `pipx install` lines and rebuild.
+
+---
+
 ## Aider configuration
 
 Aider reads `~/.aider.conf.yml` on startup. The relevant section for OpenRouter:

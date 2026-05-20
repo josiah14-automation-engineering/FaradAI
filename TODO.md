@@ -1,15 +1,5 @@
 # FaradAI — Open Items
 
-## Documentation
-
-**Troubleshooting section in README** [MEDIUM]
-Common failure modes — Docker permission denied, credential errors, SSH forwarding limitations, container name conflicts — have no documented resolution path.
-
-**Upgrade/update instructions** [MEDIUM]
-Users with an existing installation have no documented path to update the image or the `faradai` CLI script.
-
----
-
 ## Code quality
 
 **Add `gh` (GitHub CLI) to the image** [LOW]
