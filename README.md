@@ -49,6 +49,8 @@ An optional argument selects which tool to launch (or attach to):
 | `faradai` | Claude Code (default) |
 | `faradai aider` | aider |
 | `faradai bash` | bare shell, useful for debugging |
+| `faradai update` | pull latest release from GitHub and reinstall |
+| `faradai uninstall` | remove the container, image, and installed binaries |
 
 ### Resource limits
 
@@ -158,14 +160,11 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 
 ## Upgrading
 
-To update an existing installation:
-
 ```bash
-git pull
-./install.sh    # rebuilds the image and updates the CLI binary
+faradai update
 ```
 
-The running container is not affected until the next launch — the new image is only used when `faradai` starts a fresh container.
+Clones the latest release from GitHub, rebuilds the image, and reinstalls the CLI binary. The running container is not affected until the next launch.
 
 **Updating pinned tool versions:** `@anthropic-ai/claude-code` and `aider-chat` are pinned in the Dockerfile. To update them, edit the version strings in the `RUN npm install` and `pipx install` lines and rebuild.
 
