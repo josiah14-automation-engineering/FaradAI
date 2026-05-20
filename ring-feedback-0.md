@@ -135,5 +135,6 @@ README mentions "Contributions welcome if there is demand" but no `CONTRIBUTING.
 
 | # | Status | Notes |
 |---|--------|-------|
+| 1 | Resolved — 2026-05-20 | `--cap-drop ALL` and `--security-opt no-new-privileges` added to `docker run` in `faradai`. |
 | 3 | Resolved — 2026-05-20 | Validation added for `FARADAI_MEMORY` (m/g units, 512g ceiling), `FARADAI_CPUS` (decimal-aware, 128-core ceiling), and `FARADAI_PIDS` (positive integer). k-unit excluded as unrealistic. |
 | 19 | Stale — 2026-05-20 | `install.sh` already had `set -euo pipefail`. Finding was incorrect. |

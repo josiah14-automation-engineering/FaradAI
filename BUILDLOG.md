@@ -408,30 +408,6 @@ Ring-2.6-1T reviewed the post-Session-11 state of FaradAI via a non-interactive 
 
 ---
 
-## Session 14 — 2026-05-20
-
-### Work Planning and GitHub Issues
-
-Josiah opened the session by reviewing all open TODO items and ordering them into a priority sequence for the session: strict mode fix, env var validation, cap-drop, lifecycle trap, Docker args passthrough, configurable workdir, builder cache cleanup, then two README documentation items.
-
-**Josiah directed** creating GitHub issues for each task before starting work. `gh` is not installed in the container, so the commands were drafted and run from the host terminal. A low-priority TODO item was added to add `gh` to the image.
-
-### Task 1: `install.sh` strict mode — stale finding
-
-On inspection, `install.sh` already had `set -euo pipefail`. Ring's finding #19 was incorrect. The TODO item and ring-feedback-0.md entry were removed rather than acted on.
-
-### Task 2: Env var validation in `faradai`
-
-Added input validation for `FARADAI_MEMORY`, `FARADAI_CPUS`, and `FARADAI_PIDS` before they are interpolated into the `docker run` call.
-
-- **Memory:** split into numeric part and unit via bash parameter expansion; `m` and `g` units supported; `k` excluded (container memory in kilobytes is not a realistic use case, and the equivalent 512g ceiling in kilobytes is unreadable); 512g sanity limit applied per-unit (512 for `g`, 524288 for `m`).
-- **CPUs:** decimal-aware regex; `%.*` truncation for integer bound check since bash `(( ))` does not handle floats; 128-core sanity ceiling.
-- **PIDs:** positive integer only.
-
-**Josiah directed** compressing the two memory bounds checks into a single `if` with `||`, and breaking the resulting long line at 80 characters.
-
----
-
 ## Session 13 — 2026-05-20
 
 ### Network Restriction — Design Decision
@@ -463,3 +439,31 @@ Several readability improvements made to the README:
 - **Bridge gateway IP removed** — "typically `172.17.0.1`" dropped; the IP varies by Docker config and isn't actionable for the reader.
 - **Aider config example generalized** — model slug changed from Ring-2.6-1T to a `openrouter/<provider>/<model>` placeholder with a note to consult OpenRouter's model directory.
 - **Future work section added** at the bottom: the container pattern is not specific to Claude Code or aider; other CLI-based agents (Goose, OpenHands, etc.) are natural candidates if the project grows.
+
+---
+
+## Session 14 — 2026-05-20
+
+### Work Planning and GitHub Issues
+
+Josiah opened the session by reviewing all open TODO items and ordering them into a priority sequence for the session: strict mode fix, env var validation, cap-drop, lifecycle trap, Docker args passthrough, configurable workdir, builder cache cleanup, then two README documentation items.
+
+**Josiah directed** creating GitHub issues for each task before starting work. `gh` is not installed in the container, so the commands were drafted and run from the host terminal. A low-priority TODO item was added to add `gh` to the image.
+
+### Task 1: `install.sh` strict mode — stale finding
+
+On inspection, `install.sh` already had `set -euo pipefail`. Ring's finding #19 was incorrect. The TODO item and ring-feedback-0.md entry were removed rather than acted on.
+
+### Task 2: Env var validation in `faradai`
+
+Added input validation for `FARADAI_MEMORY`, `FARADAI_CPUS`, and `FARADAI_PIDS` before they are interpolated into the `docker run` call.
+
+- **Memory:** split into numeric part and unit via bash parameter expansion; `m` and `g` units supported; `k` excluded (container memory in kilobytes is not a realistic use case, and the equivalent 512g ceiling in kilobytes is unreadable); 512g sanity limit applied per-unit (512 for `g`, 524288 for `m`).
+- **CPUs:** decimal-aware regex; `%.*` truncation for integer bound check since bash `(( ))` does not handle floats; 128-core sanity ceiling.
+- **PIDs:** positive integer only.
+
+**Josiah directed** compressing the two memory bounds checks into a single `if` with `||`, and breaking the resulting long line at 80 characters.
+
+### Task 3: `--cap-drop ALL` and `--security-opt no-new-privileges`
+
+Added both flags to the `docker run` invocation in the `faradai` script. A README section was added to the Security model explaining what each flag does and why both are needed together. Closes ring-feedback-0 finding #1.

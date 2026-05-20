@@ -1,12 +1,5 @@
 # FaradAI — Open Items
 
-## Security hardening
-
-**`--cap-drop ALL` + `--security-opt no-new-privileges`** [HIGH]
-The `docker run` in `faradai` uses default Docker capabilities (~14 Linux caps including `NET_RAW`, `SYS_CHROOT`). Adding `--cap-drop ALL` and `--security-opt no-new-privileges` would remove all capabilities the container doesn't need. Low-friction fix; high security value before open-sourcing.
-
----
-
 ## Design
 
 **Non-atomic container lifecycle in `faradai`** [HIGH]

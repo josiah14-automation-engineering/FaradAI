@@ -132,6 +132,10 @@ The container can also reach services running on the host via the Docker bridge 
 
 The meaningful protection is the absence of the Docker socket. Without `/var/run/docker.sock` mounted, the agent cannot escape the container by spawning new containers with unrestricted host mounts. That is the primary container escape vector, and it is not present here.
 
+### Capabilities and privilege escalation
+
+`--cap-drop ALL` removes Docker's default capability set (~14 caps, including `NET_RAW` and `SYS_CHROOT`). `--security-opt no-new-privileges` sets `prctl PR_SET_NO_NEW_PRIVS`, preventing any process in the container from gaining privileges via setuid binaries or filesystem capabilities. Use `--cap-add` if a specific tool needs a capability back.
+
 ## Aider configuration
 
 Aider reads `~/.aider.conf.yml` on startup. The relevant section for OpenRouter:
