@@ -5,9 +5,6 @@
 **Configurable project path** [MEDIUM]
 `~/Development/personal` is hardcoded in `faradai`, `Dockerfile`, and `entrypoint.sh`. Replace with a `FARADAI_WORKDIR` environment variable so users can point the container at a different directory without editing scripts.
 
-**Custom Docker flags passthrough** [MEDIUM]
-No escape hatch for users who need extra volume mounts, ports, or env vars. A `FARADAI_DOCKER_ARGS` variable (split into array, appended to `docker run`) would allow customization without forking.
-
 **Builder stage cache left in final image** [MEDIUM]
 `pipx install` leaves pip, setuptools, and wheel in the venv. The final image copies the entire `~/.local` tree including cache. Clean up the builder's pipx cache before the `COPY --from=builder` step.
 

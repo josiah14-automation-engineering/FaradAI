@@ -50,6 +50,12 @@ if [ -f "${HOME}/.aider.conf.yml" ]; then
   AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
 fi
 
+# Paths with spaces are not supported — word-split only.
+EXTRA_DOCKER_ARGS=()
+if [[ -n "${FARADAI_DOCKER_ARGS:-}" ]]; then
+  read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
+fi
+
 exec docker run -it --rm \
   --name faradai \
   --memory="${FARADAI_MEMORY}" \
@@ -64,6 +70,7 @@ exec docker run -it --rm \
   -v "${HOME}/.ssh:/home/${USER}/.ssh:ro" \
   -v "${HOME}/Development/personal:/home/${USER}/Development/personal" \
   "${AIDER_CONF_MOUNT[@]}" \
+  "${EXTRA_DOCKER_ARGS[@]}" \
   -w "/home/${USER}/Development/personal" \
   faradai:latest \
   "$@"

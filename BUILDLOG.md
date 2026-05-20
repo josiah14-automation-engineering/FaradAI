@@ -471,3 +471,7 @@ Added both flags to the `docker run` invocation in the `faradai` script. A READM
 ### Task 4: Lifecycle trap for non-atomic container start
 
 Added `trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT` immediately after the `docker rm -f` line. The trap is only active in the narrow window between removing the old container and `exec docker run` replacing the shell process — after a successful exec the shell is gone and the handler never fires. Closes ring-feedback-0 finding #2.
+
+### Task 5: `FARADAI_DOCKER_ARGS` passthrough
+
+Added `EXTRA_DOCKER_ARGS` array populated via `read -ra` word-split on `FARADAI_DOCKER_ARGS`, appended to `docker run` between the conditional mounts and the `-w` workdir flag. Paths with spaces in the variable are not supported (word-split only). Closes ring-feedback-0 finding #12.
