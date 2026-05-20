@@ -497,6 +497,10 @@ Added four cleanup steps at the end of the builder's `RUN` block, before `COPY -
 
 pip, setuptools, and wheel remain inside the venv intentionally — removing them could break aider if it attempts to install packages at runtime. Closes ring-feedback-0 finding #8.
 
+### `gh` added to the image
+
+Added the GitHub CLI (`gh`) to the final stage. `gh` is not in Ubuntu's default repositories, so the install adds GitHub's official apt source and GPG keyring, installs `gh`, then removes both the keyring and source list entry — they are only needed for installation, not for running the binary, and the container is rebuilt rather than apt-upgraded in place. Closes the LOW TODO item.
+
 ### `install.sh` now builds the image
 
 `install.sh` previously only installed the CLI binary; users had to remember to run `build.sh` first. Josiah identified this as a UX gap and directed combining them: `install.sh` now calls `build.sh` before copying the binary. The `chmod +x` line was removed — the execute bit should already be set in the repo. README updated to collapse the separate Build and Install sections, and upgrade instructions simplified to a single `./install.sh` step.

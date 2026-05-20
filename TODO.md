@@ -2,9 +2,6 @@
 
 ## Code quality
 
-**Add `gh` (GitHub CLI) to the image** [LOW]
-`gh` is not present in the container, requiring GitHub operations (e.g. creating issues) to be run from the host. Add `gh` to the final-stage apt install block.
-
 ---
 
 ## Pre-open-source: community scaffolding
