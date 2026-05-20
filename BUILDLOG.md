@@ -622,3 +622,15 @@ This is the same one-time-prompt issue noted in Session 15. Fully non-interactiv
 The "Would you like to see what's new in this version?" prompt intercepted the first round-trip attempt, swallowing the `/model` command and test message as invalid Y/N answers. **Josiah directed** retrying with an explicit `n` to dismiss the prompt before sending further input — round-trip succeeded on the second attempt. Ring responded with "hello" and a cost line.
 
 SMOKETEST.md updated: added a caveat block before the round-trip script explaining the prompt behaviour, and updated the script to send `n` and extend the initial sleep to 6 seconds to give aider time to show the prompt before the dismissal keystroke fires.
+
+---
+
+## Session 18 — 2026-05-20
+
+### Dockerfile: `apt-get purge sudo || true` Removed
+
+Closed ring-feedback-0 finding #9. The `apt-get purge sudo 2>/dev/null || true` line was removed from the Dockerfile. The BUILDLOG already documented (Session 8) that `ubuntu:24.04` the Docker image does not ship with sudo — making this line a no-op that silently masked potential dpkg failures. The `userdel`/`groupdel` `|| true` patterns were retained; those are genuinely conditional on whether the ubuntu user exists in a given base image version.
+
+### `faradai update` Subcommand
+
+Closed ring-feedback-0 finding #10. Added a `faradai update` subcommand. On invocation it creates a temp directory under `/tmp` via `mktemp`, registers a `trap ... EXIT` to remove it, clones the repo from GitHub into it, and runs `install.sh`. Cleanup happens whether the install succeeds or fails. The Upgrading section of the README was rewritten to lead with `faradai update` rather than the manual `git pull && ./install.sh` workflow. Modes table updated to include `update` and `uninstall`.
