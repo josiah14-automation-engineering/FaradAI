@@ -652,3 +652,50 @@ Closed ring-feedback-0 finding #11. Added `FARADAI_DEBUG` support to the `farada
 ### `install.sh` sudo Availability Check
 
 Closed ring-feedback-0 finding #15. Added a `command -v sudo` guard at the top of `install.sh` that exits with a clear error message if sudo is not available, rather than failing mid-install with an unhelpful `command not found`. Troubleshooting entry added to README with the manual fallback for root-capable environments without sudo.
+
+---
+
+## Session 20 — 2026-05-20
+
+### Smoke Test — All Green
+
+Full SMOKETEST.md run against the current image (gh authenticated as `josiah14` from the previous session):
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — `~/Development/personal` mounted, `.credentials.json` present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- `gh auth` — logged in as `josiah14` ✅
+- tmux → aider round-trip ✅ (Ring responded "hello", cost line present, no credential errors)
+
+### GitHub Issues — All Closed
+
+All 8 open GitHub issues closed with `gh issue close` comments referencing the resolving commits:
+
+| Issue | Commit(s) |
+|-------|-----------|
+| #1 — validate resource env vars | `d681ea2` |
+| #2 — cap-drop + no-new-privileges | `a838909`, `141b260` |
+| #3 — lifecycle interrupt trap | `6cc8610` |
+| #4 — FARADAI_DOCKER_ARGS passthrough | `b97a05a` |
+| #5 — FARADAI_WORKDIR | `1448128` |
+| #6 — builder cache cleanup | `2cc2b9f` |
+| #7 — troubleshooting section | `730ab6f` |
+| #8 — upgrade/update instructions | `730ab6f`, `863895f` |
+
+### Ring Feedback Files — Consolidated and Closed
+
+`ring-feedback-0.md` (Ring-2.6-1T's original 19-finding automated review) and `ring-feedback.md` (the accumulated human-reviewed consolidated assessment) were triaged and retired.
+
+**Josiah reviewed each remaining unresolved item and made the following calls:**
+
+- **#4 (`--network=host` during build)** — won't change; required for DNS resolution in the builder stage and applies only at build time, not to the running container.
+- **#5 (image digest pinning)** — deferred; added to TODO under "Hardening."
+- **#6 (API key readable inside container)** — won't fix; inherent tradeoff of file-based credential delivery to an autonomous agent, documented in the security model.
+- **#16 (`docker rm -f` affects other users)** — won't fix; single-user host assumption is a known design scope.
+- **#17 (no prune/cleanup mechanism)** — deferred; added to TODO under "Hardening."
+- **#18 (no known-issues/limitations section)** — deferred; added to TODO under "Hardening."
+- **ring-feedback.md remaining items #1–#3** (no `--pull`, no SSH agent forwarding, HEALTHCHECK) — removed; `--pull` and SSH agent forwarding are won't-fixes, HEALTHCHECK is resolved.
+
+`ring-feedback-0.md` deleted. `ring-feedback.md` blanked. `TODO.md` updated with a new "Hardening (deferred)" section covering the three deferred items.
