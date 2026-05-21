@@ -43,8 +43,8 @@ Findings from GPT-5.5 review (2026-05-21) that survived triage. Ordered by sever
 ### High
 
 - ~~**[#20] SSH agent forwarding not default; `~/.ssh` mounted read-only**~~ ✓ resolved — agent forwarding on by default (`FARADAI_ENABLE_SSH_AGENT:-1`); `~/.ssh` dir mount is opt-in via `FARADAI_MOUNT_SSH_DIR=1`; `known_hosts` pre-seeded in image; README host-agent setup section added. "Known issues" entry moot (section not yet created).
-- **[#21] Global `~/.claude` mounted read-write into container** — mounts Claude settings, memory, conversation history, and hooks. Gives the agent access to more than auth, and bleeds global state across projects. Fix: default to an isolated `~/.config/faradai/claude` directory; mount that instead.
-- **[#22] Global `~/.aider.conf.yml` mounted read-only** — honest but not ideal; OpenRouter key is still agent-readable. Fix: default to a FaradAI-specific aider config at `~/.config/faradai/aider.conf.yml`; only mount it when `aider` is the active command. Document: use a FaradAI-specific OpenRouter key with a hard cost limit.
+- ~~**[#21] Global `~/.claude` mounted read-write**~~ → moved to Strict Profile section below; not urgent for personal/FOSS default.
+- ~~**[#22] Global `~/.aider.conf.yml` mounted read-only**~~ → moved to Strict Profile section below; not urgent for personal/FOSS default.
 
 ### Medium
 
@@ -61,6 +61,27 @@ Findings from GPT-5.5 review (2026-05-21) that survived triage. Ordered by sever
 - **[#26] No `--init` flag on `docker run`** — AI tooling spawns subprocesses; without `--init`, zombie processes accumulate in the long-lived container. Fix: add `--init` to the `docker run` invocation.
 - **[#27] No selectable network modes** — default open egress is correct for usefulness, but offline review/refactor/sensitive-client sessions benefit from `--network none`. Fix: add `FARADAI_NETWORK_MODE=open|none` with validation; default `open`. (`broker` mode deferred to v2 — see [#32].)
 - **[#28] `faradai update` docs/behavior mismatch** — README says "pulls the latest release"; script clones via SSH, which assumes GitHub SSH auth and implies "master HEAD" not a tagged release. Fix: either correct the README to say "clones latest source," or make it release-based. For public-user friendliness, prefer HTTPS clone over SSH.
+
+---
+
+## Optional / Future: Strict Profile
+
+The v1 default is optimized for **personal/FOSS development convenience**: writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open network. This is a deliberate tradeoff, not an oversight. For users with a low-capped API key, passphrase-protected SSH keys, and no client/private code in the container, the current mounts are not reckless.
+
+A future `FARADAI_PROFILE=strict` mode should address these for **client/sensitive/mixed-sensitivity work**:
+
+- **[#21] Isolated Claude config** — the global `~/.claude` mount gives the agent access to settings, memory, hooks, and history for all projects. A strict profile should mount an isolated `~/.config/faradai/claude` instead, so container activity does not bleed into the user's global Claude state.
+- **[#22] Isolated aider config** — the current `~/.aider.conf.yml` mount is acceptable for a low-budget OpenRouter key. A strict profile should use a dedicated `~/.config/faradai/aider.conf.yml` (or a credential broker — see v2). The `:ro` mount is write-protection, not secrecy; the agent can still read the file if directed to.
+
+Eventual shape:
+
+```bash
+FARADAI_PROFILE="${FARADAI_PROFILE:-personal}"
+# personal: global ~/.claude rw, ~/.aider.conf.yml ro, SSH agent, open network
+# strict:   isolated ~/.config/faradai/claude, isolated aider config, optional network none
+```
+
+`strict` consolidates the network-none mode (`FARADAI_NETWORK_MODE=none`) and the read-only root opt-in (`[#29]`) under one profile flag. The credential broker (v2 [#30]) is the long-term answer for the key-readability problem.
 
 ---
 

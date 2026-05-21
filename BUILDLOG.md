@@ -838,3 +838,24 @@ All four addressed in a single Dockerfile edit:
 Package versions sourced from the running container's dpkg database and the Ubuntu 24.04 package index. The `gh` pin is sourced from GitHub's stable apt channel and is the currently-installed version; it may need bumping when GitHub releases a new `gh` version and drops the old one from their channel.
 
 TODO items #34, #35, #36 marked resolved.
+
+---
+
+## Session 24 — 2026-05-21
+
+### CI Green — Hadolint Fixes Confirmed
+
+CI passed on the first push following the Session 23 hadolint fixes. All three jobs (`lint-shell`, `lint-dockerfile`, `build`) green. No further Dockerfile or workflow changes needed.
+
+### Full Smoke Test — All Green
+
+Full SMOKETEST.md run against the current image.
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — `~/Development/personal` mounted, `.credentials.json` present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- `gh auth` — not logged in on fresh container start (known, TODO #33); **Josiah ran `gh auth login`** from host terminal (device flow, code `B1DF-6B75`), authenticated as `josiah14` (scopes: `repo`, `read:org`, `gist`); re-test passed ✅
+- SSH agent — socket at `/ssh-agent`, 7 keys loaded ✅
+- tmux → aider round-trip ✅ (Ring responded "hello", $0.00018, no credential errors)

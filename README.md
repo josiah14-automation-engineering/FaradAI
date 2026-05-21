@@ -153,6 +153,8 @@ Credentials are delivered as mounted files rather than environment variables —
 
 ## Security model
 
+**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](TODO.md) for the planned `FARADAI_PROFILE=strict` mode.
+
 **The Faraday cage protects the filesystem boundary, not the process environment.**
 
 Credentials are kept out of environment variables and injected as mounted files instead:
