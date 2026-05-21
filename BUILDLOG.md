@@ -862,7 +862,7 @@ Full SMOKETEST.md run against the current image.
 
 ### entrypoint.sh: Arg Passthrough (#38)
 
-Fixed `entrypoint.sh` to forward remaining args to the selected tool via `"${@:2}"` in each `exec` call. Enables patterns like `faradai claude --resume` and `faradai aider --no-git`. No filtering applied — args go to the tools inside the container, not to Docker itself, so the container boundary is unaffected. Closes #38.
+Fixed `entrypoint.sh` to forward remaining args to the selected tool via `"${@:2}"` in each `exec` call. Enables patterns like `faradai claude --resume` and `faradai aider --no-git`. No filtering applied — args go to the tools inside the container, not to Docker itself, so the container boundary is unaffected. Updated `faradai` help text to document the passthrough syntax. **Josiah verified** with `faradai aider --no-git`. Closes #38.
 
 ### Ring Assessment 2 Triage
 
