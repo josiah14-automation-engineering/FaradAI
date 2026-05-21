@@ -797,3 +797,44 @@ Implemented SSH agent forwarding as the default transport for Git authentication
 - `README.md`: added "Host SSH agent setup" section under the SSH forwarding callout explaining how to check for, start, and persist an agent across sessions, including the `keychain` option.
 
 **Josiah directed** closing out the BUILDLOG and TODO after confirming the implementation was complete and the only remaining steps were rebuild and smoke test (his side).
+
+---
+
+## Session 23 — 2026-05-21
+
+### Full Smoke Test — All Green (gh auth gap identified)
+
+Full SMOKETEST.md run against the current image. Results:
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — `~/Development/personal` mounted, `.credentials.json` present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- `gh auth` — not logged in ❌ (see below)
+- SSH agent — socket at `/ssh-agent`, 7 keys loaded ✅
+- tmux → aider round-trip ✅ (Ring responded "hello", cost line present)
+
+**`gh auth` not persisted:** `gh auth login` stores tokens in `/home/josiah/.config/gh/hosts.yml` inside the container's writable layer — not on a host-mounted path. Credentials are lost on rebuild or restart. **Josiah ran `gh auth login` himself** from the host terminal (device-flow, one-time code `D0DA-1B65`), authenticating as `josiah14` with scopes `repo`, `read:org`, `gist`. Re-test passed. Added as TODO [#33] (low priority): mount a host-side `~/.config/gh/` to persist across sessions.
+
+### GitHub Issues Created for All Open TODO Items
+
+**Josiah directed** creating GitHub issues for every open item in TODO.md. Seven labels created (`priority: high/medium/low`, `security`, `dockerfile`, `deferred`, `v2`) and 23 issues filed across all severity tiers, deferred hardening items, and v2 architectural work.
+
+### CI Fix — Hadolint Dockerfile Violations
+
+**Josiah provided CI error output** showing four hadolint failures that were blocking the `build` job:
+
+- **DL3008 (line 10):** builder stage `apt-get install` without pinned versions
+- **DL3015 (line 10):** builder stage missing `--no-install-recommends`
+- **DL4006 (line 40):** piped `RUN` in final stage without `SHELL pipefail` guard
+- **DL3008 (line 40):** final stage `apt-get install` without pinned versions
+
+All four addressed in a single Dockerfile edit:
+
+- Builder stage `apt-get install`: added `--no-install-recommends`; pinned `nodejs=18.19.1+dfsg-6ubuntu5`, `npm=9.2.0~ds1-2`, `python3=3.12.3-0ubuntu2.1`, `python3-pip=24.0+dfsg-1ubuntu1.3`, `python3-venv=3.12.3-0ubuntu2.1`, `pipx=1.4.3-1`
+- Final stage: added `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` before the first `RUN`; pinned all 14 Ubuntu packages and `gh=2.92.0`
+
+Package versions sourced from the running container's dpkg database and the Ubuntu 24.04 package index. The `gh` pin is sourced from GitHub's stable apt channel and is the currently-installed version; it may need bumping when GitHub releases a new `gh` version and drops the old one from their channel.
+
+TODO items #34, #35, #36 marked resolved.
