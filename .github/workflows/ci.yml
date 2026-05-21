@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   lint-shell:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        run: shellcheck faradai install.sh build.sh entrypoint.sh
+        run: shellcheck faradai install.sh uninstall-faradai build.sh entrypoint.sh
 
   lint-dockerfile:
     runs-on: ubuntu-24.04

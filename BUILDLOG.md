@@ -754,3 +754,32 @@ Three polish fixes done together as pre-public-release prep.
 **#8 — `entrypoint.sh` help consistency:** Extracted usage text into a `_usage()` function. Added `--help|-h|help)` case that prints usage and exits 0. The `*` catch-all now prefixes the unrecognised command before printing usage and exiting 1 — matching the pattern of the host-side `faradai --help`.
 
 **#18 — `uninstall` removed from in-container help:** `uninstall` was listed in `entrypoint.sh`'s help output despite being a host-only command. Removed. The host-side `faradai --help` still documents it.
+
+---
+
+## Session 22 — 2026-05-21
+
+### GPT-5.5 External Review — Triage and TODO Integration
+
+Josiah brought in an external GPT-5.5 review of the FaradAI codebase, which produced 15 findings (P0–P14) with a proposed execution order. Josiah directed integrating these into the TODO, with duplicates dropped and priorities assigned.
+
+**Josiah identified** that the suggested execution order was largely sound and directed using it as the basis for insertion. Triage decisions:
+
+- **#15 (SSH forwarding missing from Troubleshooting)** — marked superseded by the incoming P1 (SSH agent forwarding implementation). If the whole SSH model changes, the doc fix becomes moot.
+- **P6 (gate `--publish`/`--device`)** — confirmed not a duplicate of resolved #1. #1 fixed flag injection via allowlist; P6 is a refinement requiring explicit opt-in env vars for the two boundary-widening flags within that allowlist.
+- **P14 (seccomp/AppArmor)** — landed in a new "Explicitly not prioritized" section rather than deferred, consistent with GPT's own recommendation to defer.
+- **P11, P12, P13** — placed in a new "v2 (deferred)" section, not mixed with v1 hardening items.
+- **GPT's YAML-flattening concern** — investigated and disproved; the workflow file was already well-formed.
+
+New items added to TODO: #19–#28 (open), #29 (hardening deferred), #30–#32 (v2 deferred).
+
+### CI Fix — Branch Targeting and Missing Script (#19)
+
+`ci.yml` referenced `main` in both `on.push.branches` and `on.pull_request.branches`; the repo default branch is `master`. CI had not been triggering on any push or PR.
+
+**Anansi caught** a second issue while inspecting the file: `uninstall-faradai` was absent from the `shellcheck` target despite being a shell script in the repo. Both issues fixed together:
+
+- `branches: [main]` → `branches: [master]` (both triggers)
+- `shellcheck faradai install.sh build.sh entrypoint.sh` → added `uninstall-faradai`
+
+#19 resolved and marked in TODO.
