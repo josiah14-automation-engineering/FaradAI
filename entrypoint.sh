@@ -10,13 +10,13 @@ _usage() {
 
 case "${1:-claude}" in
   claude)
-    exec claude
+    exec claude "${@:2}"
     ;;
   aider)
-    exec aider
+    exec aider "${@:2}"
     ;;
   bash)
-    exec bash
+    exec bash "${@:2}"
     ;;
   --help|-h|help)
     _usage

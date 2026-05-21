@@ -4,12 +4,12 @@ set -euo pipefail
 case "${1:-}" in
   --help|-h|help)
     cat <<'EOF'
-Usage: faradai [COMMAND]
+Usage: faradai [COMMAND [ARGS...]]
 
 Commands:
   (none)     Launch Claude Code (default)
-  claude     Launch Claude Code
-  aider      Launch aider
+  claude     Launch Claude Code; remaining args passed through (e.g. --resume)
+  aider      Launch aider; remaining args passed through (e.g. --no-git)
   bash       Open a bash shell inside the container
   update     Pull the latest release and reinstall
   uninstall  Remove the faradai container, image, and installed binaries

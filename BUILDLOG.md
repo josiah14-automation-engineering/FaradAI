@@ -860,6 +860,10 @@ Full SMOKETEST.md run against the current image.
 - SSH agent — socket at `/ssh-agent`, 7 keys loaded ✅
 - tmux → aider round-trip ✅ (Ring responded "hello", $0.00018, no credential errors)
 
+### entrypoint.sh: Arg Passthrough (#38)
+
+Fixed `entrypoint.sh` to forward remaining args to the selected tool via `"${@:2}"` in each `exec` call. Enables patterns like `faradai claude --resume` and `faradai aider --no-git`. No filtering applied — args go to the tools inside the container, not to Docker itself, so the container boundary is unaffected. Closes #38.
+
 ### Ring Assessment 2 Triage
 
 Ring-2.6-1T reviewed the current codebase and produced 6 new findings. All 6 triaged and added to TODO as #37–#42.
