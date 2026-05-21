@@ -859,3 +859,16 @@ Full SMOKETEST.md run against the current image.
 - `gh auth` — not logged in on fresh container start (known, TODO #33); **Josiah ran `gh auth login`** from host terminal (device flow, code `B1DF-6B75`), authenticated as `josiah14` (scopes: `repo`, `read:org`, `gist`); re-test passed ✅
 - SSH agent — socket at `/ssh-agent`, 7 keys loaded ✅
 - tmux → aider round-trip ✅ (Ring responded "hello", $0.00018, no credential errors)
+
+### Ring Assessment 2 Triage
+
+Ring-2.6-1T reviewed the current codebase and produced 6 new findings. All 6 triaged and added to TODO as #37–#42.
+
+Ring also flagged incidental fixes for already-tracked issues #6 (fragile container state detection) and #24 (CPU/PID zero validation) as bonus changes while touching the same code paths — noted in #41's TODO entry.
+
+Summary of findings by severity:
+
+- **Medium:** #37 (no image pre-flight check), #38 (entrypoint drops args after command), #41 (update uses SSH clone + fall-through bug)
+- **Low:** #39 (no logs/status subcommands), #40 (no version flag), #42 (CI smoke test bypasses entrypoint)
+
+Josiah noted these findings are less critical than previous review rounds — the core hardening work is paying off.

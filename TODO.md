@@ -64,6 +64,24 @@ Findings from GPT-5.5 review (2026-05-21) that survived triage. Ordered by sever
 
 ---
 
+## Ring Assessment 2 — Open Items
+
+Findings from Ring-2.6-1T review (2026-05-21) that survived triage. Ordered by severity.
+
+### Medium
+
+- **[#37] No image pre-flight check** — if `faradai:latest` doesn't exist (fresh install before first build, or after `docker image prune`), `docker run` fails with a cryptic Docker error rather than an actionable message. Distinct from the binary check (#7) and daemon check (#13). Fix: `docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }`.
+- **[#38] entrypoint.sh: args after command silently dropped** — `faradai claude --help` passes `--help` to the entrypoint but `exec claude` only receives `$1`; remaining args are lost. Same for `aider` and `bash`. Fix: `exec claude "${@:2}"` in each case.
+- **[#41] faradai update uses SSH clone** — `git clone git@github.com:...` fails for any user without GitHub SSH key auth. Affects public users running `faradai update`. Also: after install completes the old case fell through to `docker run` rather than exiting or restarting — replace the entire update block. See also [#28] (README/behavior mismatch). Fix: switch to HTTPS clone; add explicit exit or auto-restart after successful install.
+
+### Low
+
+- **[#39] No logs/status subcommands** — users must shell out to `docker logs faradai` and `docker inspect` for basic diagnostics. Add `faradai logs` and `faradai status`.
+- **[#40] No version subcommand** — no `faradai version` or `--version`; no way to verify which CLI is installed without reading the script. Useful for debugging and issue reports.
+- **[#42] CI smoke test bypasses entrypoint.sh** — build job uses `--entrypoint /bin/bash`, so `entrypoint.sh` is never exercised by CI. Fix: add a step using `docker run --rm faradai:ci claude --version` and `docker run --rm faradai:ci aider --version` through the real entrypoint.
+
+---
+
 ## Optional / Future: Strict Profile
 
 The v1 default is optimized for **personal/FOSS development convenience**: writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open network. This is a deliberate tradeoff, not an oversight. For users with a low-capped API key, passphrase-protected SSH keys, and no client/private code in the container, the current mounts are not reckless.
