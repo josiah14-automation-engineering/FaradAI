@@ -2,82 +2,30 @@
 
 ---
 
-## Ring Assessment 1 — Open Items
-
-Findings from Ring-2.6-1T review (2026-05-20) that survived triage. Ordered by severity.
-
-### Critical
-
-- ~~**[#1] FARADAI_DOCKER_ARGS flag injection**~~ ✓ resolved — allowlist implemented.
-
-### High
-
-- ~~**[#2] Memory validation allows double-unit values**~~ ✓ resolved — anchored regex with decimal support.
-- ~~**[#3] Floating base image tag**~~ ✓ resolved — both stages pinned to digest.
-
-### Medium
+## Medium
 
 - **[#6] Fragile container state detection** — `grep -q true` on `docker inspect` output is unanchored; a container in a `restarting` state could match unexpectedly, and `2>/dev/null` swallows daemon errors silently. Fix: `[[ "$(docker inspect --format '{{.State.Running}}' faradai 2>/dev/null)" == "true" ]]`.
-- ~~**[#7] No Docker binary pre-flight check**~~ ✓ resolved — `command -v docker` guard added.
-- ~~**[#8] entrypoint.sh catch-all silent exit**~~ ✓ resolved — `--help` case added, catch-all prints usage.
 - **[#9] uninstall-faradai unguarded sudo** — no `command -v sudo` guard, unlike `install.sh`. Will hang or fail silently on systems requiring a password or missing sudo. Fix: add the same guard `install.sh` uses.
+- **[#23] No `FARADAI_WORKDIR` existence validation** — if the directory is absent or wrong, Docker silently creates or exposes an unexpected path. Fix: `[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }`; optionally `realpath` before mounting.
+- **[#24] CPU/PID validation accepts zero** — `FARADAI_CPUS=0` and `FARADAI_PIDS=0` pass current validation even though both are nonsensical. Fix: require `FARADAI_CPUS > 0` (using `awk` for float comparison) and `FARADAI_PIDS >= 1` (integer check with `(( FARADAI_PIDS < 1 ))`).
+- **[#25] `--publish`/`--device` not gated within allowlist** — current allowlist permits these, but both widen container boundaries meaningfully (`--device` opens hardware, `--publish` exposes services). Fix: require explicit opt-in via `FARADAI_ALLOW_PUBLISH=1` and `FARADAI_ALLOW_DEVICE=1`; update allowlist enforcement and error message accordingly.
+- **[#37] No image pre-flight check** — if `faradai:latest` doesn't exist (fresh install before first build, or after `docker image prune`), `docker run` fails with a cryptic Docker error. Distinct from the binary check (#7) and daemon check (#13). Fix: `docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }`.
+- **[#38] entrypoint.sh: args after command silently dropped** — `faradai claude --help` passes `--help` to the entrypoint but `exec claude` only receives `$1`; remaining args are lost. Same for `aider` and `bash`. Fix: `exec claude "${@:2}"` in each case.
+- **[#41] faradai update uses SSH clone** — `git clone git@github.com:...` fails for any user without GitHub SSH key auth. Also: after install completes the old case fell through to `docker run` rather than exiting or restarting — replace the entire update block. See also [#28] (README/behavior mismatch). Fix: switch to HTTPS clone; add explicit exit or auto-restart after successful install.
 
-### Low
+---
+
+## Low
 
 - **[#11] No `--pull` in build** — `build.sh` reuses cached base layers without checking for upstream updates. Previously accepted as won't-fix; reconsidered.
 - **[#13] No Docker daemon availability check** — distinct from #7: Docker installed but daemon stopped produces swallowed socket errors. Fix: `docker info > /dev/null 2>&1 || { echo "faradai: Docker daemon is not running" >&2; exit 1; }`.
 - **[#14] No `LABEL` metadata in Dockerfile** — `docker image inspect faradai:latest` yields no provenance. Fix: add OCI labels (`image.title`, `image.source`).
-- ~~**[#15] SSH forwarding limitation missing from Troubleshooting**~~ superseded by [#20] — implementing SSH agent forwarding makes the framing moot.
-- ~~**[#18] entrypoint.sh help lists host-only `uninstall`**~~ ✓ resolved — removed from in-container help.
-
----
-
-## GPT-5.5 Review — Open Items
-
-Findings from GPT-5.5 review (2026-05-21) that survived triage. Ordered by severity.
-
-### Critical
-
-- ~~**[#19] CI YAML / branch targeting broken**~~ ✓ resolved — branches corrected to `master`; `uninstall-faradai` added to shellcheck target (it was missing).
-
-### High
-
-- ~~**[#20] SSH agent forwarding not default; `~/.ssh` mounted read-only**~~ ✓ resolved — agent forwarding on by default (`FARADAI_ENABLE_SSH_AGENT:-1`); `~/.ssh` dir mount is opt-in via `FARADAI_MOUNT_SSH_DIR=1`; `known_hosts` pre-seeded in image; README host-agent setup section added. "Known issues" entry moot (section not yet created).
-- ~~**[#21] Global `~/.claude` mounted read-write**~~ → moved to Strict Profile section below; not urgent for personal/FOSS default.
-- ~~**[#22] Global `~/.aider.conf.yml` mounted read-only**~~ → moved to Strict Profile section below; not urgent for personal/FOSS default.
-
-### Medium
-
-- ~~**[#34] Dockerfile: unversioned apt-get installs (DL3008)**~~ ✓ resolved — all packages pinned to exact versions in both stages.
-- ~~**[#35] Dockerfile: missing `pipefail` before piped RUN (DL4006)**~~ ✓ resolved — `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` added to final stage.
-- **[#23] No `FARADAI_WORKDIR` existence validation** — if the directory is absent or wrong, Docker silently creates or exposes an unexpected path. Fix: `[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }`; optionally `realpath` before mounting.
-- **[#24] CPU/PID validation accepts zero** — `FARADAI_CPUS=0` and `FARADAI_PIDS=0` pass current validation even though both are nonsensical. Fix: require `FARADAI_CPUS > 0` (using `awk` for float comparison) and `FARADAI_PIDS >= 1` (integer check with `(( FARADAI_PIDS < 1 ))`).
-- **[#25] `--publish`/`--device` not gated within allowlist** — current allowlist (#1 fix) permits these, but both widen container boundaries meaningfully (`--device` opens hardware, `--publish` exposes services). Fix: require explicit opt-in via `FARADAI_ALLOW_PUBLISH=1` and `FARADAI_ALLOW_DEVICE=1`; update allowlist enforcement and error message accordingly.
-
-### Low
-
-- ~~**[#36] Dockerfile: missing `--no-install-recommends` (DL3015)**~~ ✓ resolved — added to builder stage `apt-get install`; final stage already had it.
-- **[#33] `gh auth` credentials not persisted across container restarts** — `gh auth login` stores tokens in `/home/josiah/.config/gh/hosts.yml` inside the container's writable layer; not on a host-mounted path, so they are lost on rebuild/restart. Fix: mount a host-side `~/.config/gh/` (or a FaradAI-specific equivalent) to persist `gh` auth without re-authenticating each session.
 - **[#26] No `--init` flag on `docker run`** — AI tooling spawns subprocesses; without `--init`, zombie processes accumulate in the long-lived container. Fix: add `--init` to the `docker run` invocation.
 - **[#27] No selectable network modes** — default open egress is correct for usefulness, but offline review/refactor/sensitive-client sessions benefit from `--network none`. Fix: add `FARADAI_NETWORK_MODE=open|none` with validation; default `open`. (`broker` mode deferred to v2 — see [#32].)
-- **[#28] `faradai update` docs/behavior mismatch** — README says "pulls the latest release"; script clones via SSH, which assumes GitHub SSH auth and implies "master HEAD" not a tagged release. Fix: either correct the README to say "clones latest source," or make it release-based. For public-user friendliness, prefer HTTPS clone over SSH.
-
----
-
-## Ring Assessment 2 — Open Items
-
-Findings from Ring-2.6-1T review (2026-05-21) that survived triage. Ordered by severity.
-
-### Medium
-
-- **[#37] No image pre-flight check** — if `faradai:latest` doesn't exist (fresh install before first build, or after `docker image prune`), `docker run` fails with a cryptic Docker error rather than an actionable message. Distinct from the binary check (#7) and daemon check (#13). Fix: `docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }`.
-- **[#38] entrypoint.sh: args after command silently dropped** — `faradai claude --help` passes `--help` to the entrypoint but `exec claude` only receives `$1`; remaining args are lost. Same for `aider` and `bash`. Fix: `exec claude "${@:2}"` in each case.
-- **[#41] faradai update uses SSH clone** — `git clone git@github.com:...` fails for any user without GitHub SSH key auth. Affects public users running `faradai update`. Also: after install completes the old case fell through to `docker run` rather than exiting or restarting — replace the entire update block. See also [#28] (README/behavior mismatch). Fix: switch to HTTPS clone; add explicit exit or auto-restart after successful install.
-
-### Low
-
+- **[#28] `faradai update` docs/behavior mismatch** — README says "pulls the latest release"; script clones master HEAD via SSH. Fix handled by [#41]; this item tracks the README correction once [#41] ships.
+- **[#33] `gh auth` credentials not persisted across container restarts** — `gh auth login` stores tokens inside the container's writable layer; lost on rebuild/restart. Fix: mount a host-side `~/.config/gh/` to persist `gh` auth without re-authenticating each session.
 - **[#39] No logs/status subcommands** — users must shell out to `docker logs faradai` and `docker inspect` for basic diagnostics. Add `faradai logs` and `faradai status`.
-- **[#40] No version subcommand** — no `faradai version` or `--version`; no way to verify which CLI is installed without reading the script. Useful for debugging and issue reports.
+- **[#40] No version subcommand** — no `faradai version` or `--version`; no way to verify which CLI is installed without reading the script.
 - **[#42] CI smoke test bypasses entrypoint.sh** — build job uses `--entrypoint /bin/bash`, so `entrypoint.sh` is never exercised by CI. Fix: add a step using `docker run --rm faradai:ci claude --version` and `docker run --rm faradai:ci aider --version` through the real entrypoint.
 
 ---
@@ -106,7 +54,7 @@ FARADAI_PROFILE="${FARADAI_PROFILE:-personal}"
 ## Hardening (deferred)
 
 - **Container/image prune mechanism** — add a `faradai prune` subcommand (or note in README) to clean up old images, stopped containers, and orphaned volumes.
-- **Known issues / limitations section in README** — document: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, multi-user `docker rm` behavior. (Remove "no SSH agent forwarding" entry when [#20] ships.)
+- **Known issues / limitations section in README** — document: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, multi-user `docker rm` behavior.
 - **[#29] Read-only root filesystem opt-in** — writable rootfs allows mutation inside the container; `--read-only` reduces this surface. Fix: add `FARADAI_READ_ONLY_ROOT=1` opt-in with `--tmpfs /tmp` and `--tmpfs ~/.cache` writable mounts. Dogfood before considering as default.
 
 ---
