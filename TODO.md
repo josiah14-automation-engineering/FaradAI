@@ -4,6 +4,8 @@
 
 ## Medium
 
+- **[#43] Use `pwd` as default workdir with trust prompt** — current default (`~/Development/personal`) is hardcoded to one user's layout. Change to `$(pwd)` so `faradai` works from any project directory. Before `docker run`, prompt "mount \<path\> into container? [y/N]" mirroring how Claude Code handles directory trust; add `FARADAI_TRUST_DIR=1` to bypass non-interactively. Skip prompt on the `docker exec` attach path. Drop the Dockerfile `ARG WORKDIR_PATH` mkdir (path unknown at build time; use runtime `mkdir -p` instead). Update README env var table while there — regroup by category and add the four vars currently missing from it (`FARADAI_ENABLE_SSH_AGENT`, `FARADAI_MOUNT_SSH_DIR`, `FARADAI_ALLOW_DEVICE`, `FARADAI_ALLOW_PUBLISH`).
+
 - ~~**[#6] Fragile container state detection**~~ ✓ resolved — replaced `grep -q true` with `[[ "$(docker inspect ...)" == "true" ]]` during script refactor.
 - **[#9] uninstall-faradai unguarded sudo** — no `command -v sudo` guard, unlike `install.sh`. Will hang or fail silently on systems requiring a password or missing sudo. Fix: add the same guard `install.sh` uses.
 - **[#23] No `FARADAI_WORKDIR` existence validation** — if the directory is absent or wrong, Docker silently creates or exposes an unexpected path. Fix: `[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }`; optionally `realpath` before mounting.
