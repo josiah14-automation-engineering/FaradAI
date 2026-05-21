@@ -876,3 +876,28 @@ Summary of findings by severity:
 - **Low:** #39 (no logs/status subcommands), #40 (no version flag), #42 (CI smoke test bypasses entrypoint)
 
 Josiah noted these findings are less critical than previous review rounds — the core hardening work is paying off.
+
+---
+
+## Session 25 — 2026-05-21
+
+### faradai Script Refactor
+
+Extracted inline validation blocks and the DOCKER_ARGS allowlist loop into named functions (`_validate_memory`, `_validate_cpus`, `_validate_pids`, `_build_extra_docker_args`), pulled `_usage` into a function, and reorganised the script body into clearly labelled sections (functions → dispatch → pre-flight → attach → start → validate → mounts → debug → run). No behaviour changes to existing functionality.
+
+Also resolved in the same pass:
+
+- **#6 (fragile container state detection)** — replaced `docker inspect ... | grep -q true` with `[[ "$(docker inspect --format '{{.State.Running}}' ...)" == "true" ]]`.
+- **Update fall-through bug (#41 partial)** — added `exit 0` after `install.sh` in the `update` case; previously execution fell through to `docker run` after a successful update.
+- **#25 (`--publish`/`--device` gating)** — both flags removed from the base allowlist; now require explicit opt-in via `FARADAI_ALLOW_DEVICE=1` / `FARADAI_ALLOW_PUBLISH=1`. Error message updated to explain the opt-in. Two new env vars documented in help text.
+- **Mount array if-blocks condensed** — nested conditionals flattened to single-line `[[ ]] &&` assignments where the body fits on one line.
+
+### Rash Migration Considered — Deferred
+
+Josiah raised whether it was time to migrate `faradai` to rash (Racket-based Lisp shell) in keeping with the Lisp-at-each-layer philosophy. Decision: not yet.
+
+The script is almost entirely Docker flag orchestration — conditional array building, exec replacement, fork/exec patterns. These are first-class in bash and awkward to express cleanly in most alternatives. The refactor removed the main source of bash pain (inline validation); what remains reads well at 181 lines.
+
+The inflection point for a migration would be if the script grew real complexity: profile switching, config file parsing, per-project policy. That would make bash start to fight back, and a Lisp shell would start paying for its runtime dependency. That complexity does not exist yet.
+
+The polyparadigm angle (rash as a curriculum target) is a valid separate motivation — the script is a well-understood, appropriately-sized port target. But that is a learning exercise, not a maintenance need. Deferred.

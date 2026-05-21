@@ -4,11 +4,11 @@
 
 ## Medium
 
-- **[#6] Fragile container state detection** — `grep -q true` on `docker inspect` output is unanchored; a container in a `restarting` state could match unexpectedly, and `2>/dev/null` swallows daemon errors silently. Fix: `[[ "$(docker inspect --format '{{.State.Running}}' faradai 2>/dev/null)" == "true" ]]`.
+- ~~**[#6] Fragile container state detection**~~ ✓ resolved — replaced `grep -q true` with `[[ "$(docker inspect ...)" == "true" ]]` during script refactor.
 - **[#9] uninstall-faradai unguarded sudo** — no `command -v sudo` guard, unlike `install.sh`. Will hang or fail silently on systems requiring a password or missing sudo. Fix: add the same guard `install.sh` uses.
 - **[#23] No `FARADAI_WORKDIR` existence validation** — if the directory is absent or wrong, Docker silently creates or exposes an unexpected path. Fix: `[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }`; optionally `realpath` before mounting.
 - **[#24] CPU/PID validation accepts zero** — `FARADAI_CPUS=0` and `FARADAI_PIDS=0` pass current validation even though both are nonsensical. Fix: require `FARADAI_CPUS > 0` (using `awk` for float comparison) and `FARADAI_PIDS >= 1` (integer check with `(( FARADAI_PIDS < 1 ))`).
-- **[#25] `--publish`/`--device` not gated within allowlist** — current allowlist permits these, but both widen container boundaries meaningfully (`--device` opens hardware, `--publish` exposes services). Fix: require explicit opt-in via `FARADAI_ALLOW_PUBLISH=1` and `FARADAI_ALLOW_DEVICE=1`; update allowlist enforcement and error message accordingly.
+- ~~**[#25] `--publish`/`--device` not gated within allowlist**~~ ✓ resolved — both removed from base allowlist; require explicit `FARADAI_ALLOW_DEVICE=1` / `FARADAI_ALLOW_PUBLISH=1` opt-in.
 - **[#37] No image pre-flight check** — if `faradai:latest` doesn't exist (fresh install before first build, or after `docker image prune`), `docker run` fails with a cryptic Docker error. Distinct from the binary check (#7) and daemon check (#13). Fix: `docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }`.
 - ~~**[#38] entrypoint.sh: args after command silently dropped**~~ ✓ resolved — `"${@:2}"` added to all three exec calls.
 - **[#41] faradai update uses SSH clone** — `git clone git@github.com:...` fails for any user without GitHub SSH key auth. Also: after install completes the old case fell through to `docker run` rather than exiting or restarting — replace the entire update block. See also [#28] (README/behavior mismatch). Fix: switch to HTTPS clone; add explicit exit or auto-restart after successful install.

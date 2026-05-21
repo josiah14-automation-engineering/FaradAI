@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-case "${1:-}" in
-  --help|-h|help)
-    cat <<'EOF'
+# ── functions ──────────────────────────────────────────────────────────────────
+
+_usage() {
+  cat <<'EOF'
 Usage: faradai [COMMAND [ARGS...]]
 
 Commands:
@@ -22,9 +23,74 @@ Environment variables:
   FARADAI_PIDS              Container PID limit (default: 512)
   FARADAI_ENABLE_SSH_AGENT  Forward SSH agent socket when available (default: 1)
   FARADAI_MOUNT_SSH_DIR     Mount ~/.ssh read-only into the container (default: 0)
-  FARADAI_DOCKER_ARGS       Extra flags appended to docker run (allowlist: --env/-e, --label/-l, --device, --publish/-p, --hostname)
+  FARADAI_DOCKER_ARGS       Extra flags appended to docker run (always: --env/-e, --label/-l, --hostname; opt-in: --device, --publish/-p)
+  FARADAI_ALLOW_DEVICE      Set to 1 to permit --device in FARADAI_DOCKER_ARGS (opens host hardware to container)
+  FARADAI_ALLOW_PUBLISH     Set to 1 to permit --publish/-p in FARADAI_DOCKER_ARGS (exposes container ports to host)
   FARADAI_DEBUG             Set to 1 to print resolved config and docker command before running
 EOF
+}
+
+_validate_memory() {
+  # k (kilobytes) intentionally omitted — not a realistic container memory unit
+  [[ "${FARADAI_MEMORY}" =~ ^([0-9]+(\.[0-9]+)?)([mgMG])$ ]] || {
+    echo "faradai: invalid FARADAI_MEMORY '${FARADAI_MEMORY}' (expected e.g. 4g or 512m)" >&2
+    exit 1
+  }
+  local num="${BASH_REMATCH[1]}" unit="${BASH_REMATCH[3],,}" int="${BASH_REMATCH[1]%%.*}"
+  if (( int == 0 )) && { [[ "${num}" != *.* ]] || [[ "${num#*.}" =~ ^0+$ ]]; }; then
+    echo "faradai: FARADAI_MEMORY must be greater than zero" >&2
+    exit 1
+  fi
+  if { [[ "${unit}" == "g" ]] && (( int > 512 )); } ||
+     { [[ "${unit}" == "m" ]] && (( int > 524288 )); }; then
+    echo "faradai: FARADAI_MEMORY '${FARADAI_MEMORY}' exceeds the 512g sanity limit" >&2
+    exit 1
+  fi
+}
+
+_validate_cpus() {
+  # %.* strips the decimal for the integer bound check
+  [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (( ${FARADAI_CPUS%.*} <= 128 )) || {
+    echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
+    exit 1
+  }
+}
+
+_validate_pids() {
+  [[ "${FARADAI_PIDS}" =~ ^[0-9]+$ ]] || {
+    echo "faradai: invalid FARADAI_PIDS '${FARADAI_PIDS}' (expected a positive integer)" >&2
+    exit 1
+  }
+}
+
+_build_extra_docker_args() {
+  [[ -z "${FARADAI_DOCKER_ARGS:-}" ]] && return
+  # Word-split only — paths with spaces are not supported.
+  read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
+  local permitted=(--env -e --label -l --hostname)
+  [[ "${FARADAI_ALLOW_DEVICE:-0}"  == "1" ]] && permitted+=(--device)
+  [[ "${FARADAI_ALLOW_PUBLISH:-0}" == "1" ]] && permitted+=(--publish -p)
+  local arg flag ok
+  for arg in "${EXTRA_DOCKER_ARGS[@]}"; do
+    [[ "${arg}" != -* ]] && continue
+    ok=0
+    for flag in "${permitted[@]}"; do
+      [[ "${arg}" == "${flag}" || "${arg}" == "${flag}="* ]] && { ok=1; break; }
+    done
+    (( ok )) || {
+      echo "faradai: FARADAI_DOCKER_ARGS flag '${arg}' is not permitted" >&2
+      echo "faradai: always permitted: --env/-e, --label/-l, --hostname" >&2
+      echo "faradai: opt-in: --device (FARADAI_ALLOW_DEVICE=1), --publish/-p (FARADAI_ALLOW_PUBLISH=1)" >&2
+      exit 1
+    }
+  done
+}
+
+# ── subcommand dispatch ────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  --help|-h|help)
+    _usage
     exit 0
     ;;
   update)
@@ -32,108 +98,67 @@ EOF
     trap 'rm -rf "${_update_dir}"' EXIT
     git clone git@github.com:josiah14-automation-engineering/faradai.git "${_update_dir}"
     "${_update_dir}/install.sh"
+    exit 0
     ;;
   uninstall)
     exec /usr/local/bin/uninstall-faradai
     ;;
 esac
 
+# ── docker pre-flight ──────────────────────────────────────────────────────────
+
 command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
 
-if docker inspect --format '{{.State.Running}}' faradai 2>/dev/null | grep -q true; then
-  # exec replaces this process on success; set -e exits on failure — no exit needed
+# ── attach if already running ─────────────────────────────────────────────────
+
+if [[ "$(docker inspect --format '{{.State.Running}}' faradai 2>/dev/null)" == "true" ]]; then
   exec docker exec -it faradai "${@:-claude}"
 fi
 
-# Remove any stopped container with this name so --name faradai doesn't conflict
+# ── start fresh: cleanup + trap ───────────────────────────────────────────────
+
+# Remove any stopped container so --name faradai doesn't conflict.
 docker rm -f faradai 2>/dev/null || true
-# exec replaces this process on success, so this trap only fires if the script is
-# interrupted or errors out before docker run fully starts.
+# Trap fires only in the narrow window before exec docker run replaces this process.
 trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT
+
+# ── config defaults + validation ──────────────────────────────────────────────
 
 FARADAI_WORKDIR="${FARADAI_WORKDIR:-${HOME}/Development/personal}"
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
 FARADAI_PIDS="${FARADAI_PIDS:-512}"
 
-# k (kilobytes) intentionally omitted — container memory in kilobytes is not a realistic
-# use case, and the equivalent ceiling (536870912k) is unreadable.
-if ! [[ "${FARADAI_MEMORY}" =~ ^([0-9]+(\.[0-9]+)?)([mgMG])$ ]]; then
-  echo "faradai: invalid FARADAI_MEMORY '${FARADAI_MEMORY}' (expected e.g. 4g or 512m)" >&2
-  exit 1
-fi
-_mem_num="${BASH_REMATCH[1]}"
-_mem_unit="${BASH_REMATCH[3]}"
-_mem_unit="${_mem_unit,,}"
-_mem_int="${_mem_num%%.*}"  # integer part for zero check and bounds comparison
-if (( _mem_int == 0 )); then
-  if [[ "${_mem_num}" != *.* ]] || [[ "${_mem_num#*.}" =~ ^0+$ ]]; then
-    echo "faradai: FARADAI_MEMORY must be greater than zero" >&2
-    exit 1
-  fi
-fi
-if ( [[ "${_mem_unit}" == "g" ]] && (( _mem_int > 512 )) ) || \
-   ( [[ "${_mem_unit}" == "m" ]] && (( _mem_int > 524288 )) ); then
-  echo "faradai: FARADAI_MEMORY '${FARADAI_MEMORY}' exceeds the 512g sanity limit" >&2
-  exit 1
-fi
+_validate_memory
+_validate_cpus
+_validate_pids
 
-# %.*  strips the decimal so bash (( )) can do an integer comparison on the CPU count.
-if ! [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || (( ${FARADAI_CPUS%.*} > 128 )); then
-  echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
-  exit 1
-fi
-
-if ! [[ "${FARADAI_PIDS}" =~ ^[0-9]+$ ]]; then
-  echo "faradai: invalid FARADAI_PIDS '${FARADAI_PIDS}' (expected a positive integer)" >&2
-  exit 1
-fi
+# ── build optional mount arrays ───────────────────────────────────────────────
 
 USER="$(whoami)"
 
 AIDER_CONF_MOUNT=()
-if [ -f "${HOME}/.aider.conf.yml" ]; then
-  AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
-fi
+[[ -f "${HOME}/.aider.conf.yml" ]] && AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
 
 SSH_AGENT_ARGS=()
-if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" == "1" ]]; then
-  if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
-    SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
-  fi
+if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" == "1" && -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
+  SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
 fi
 
 SSH_DIR_ARGS=()
-if [[ "${FARADAI_MOUNT_SSH_DIR:-0}" == "1" ]]; then
-  SSH_DIR_ARGS=(-v "${HOME}/.ssh:/home/${USER}/.ssh:ro")
-fi
+[[ "${FARADAI_MOUNT_SSH_DIR:-0}" == "1" ]] && SSH_DIR_ARGS=(-v "${HOME}/.ssh:/home/${USER}/.ssh:ro")
 
-# Word-split only — paths with spaces are not supported.
-# Flag tokens (starting with -) are validated against an allowlist; value tokens pass through.
 EXTRA_DOCKER_ARGS=()
-if [[ -n "${FARADAI_DOCKER_ARGS:-}" ]]; then
-  read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
-  _permitted=(--env -e --label -l --device --publish -p --hostname)
-  for _arg in "${EXTRA_DOCKER_ARGS[@]}"; do
-    [[ "${_arg}" != -* ]] && continue
-    _ok=0
-    for _flag in "${_permitted[@]}"; do
-      if [[ "${_arg}" == "${_flag}" || "${_arg}" == "${_flag}="* ]]; then
-        _ok=1; break
-      fi
-    done
-    if (( _ok == 0 )); then
-      echo "faradai: FARADAI_DOCKER_ARGS flag '${_arg}' is not in the allowlist" >&2
-      echo "faradai: permitted: --env/-e, --label/-l, --device, --publish/-p, --hostname" >&2
-      exit 1
-    fi
-  done
-fi
+_build_extra_docker_args
+
+# ── debug ─────────────────────────────────────────────────────────────────────
 
 if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
   echo "faradai: WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
   set -x
 fi
+
+# ── run ───────────────────────────────────────────────────────────────────────
 
 exec docker run -it --rm \
   --name faradai \
