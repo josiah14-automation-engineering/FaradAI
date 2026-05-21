@@ -36,13 +36,11 @@ Builds the image and copies the `faradai` CLI script to `/usr/local/bin/faradai`
 faradai
 ```
 
-If no container is running, starts a new one and launches Claude Code (default). If a container named `faradai` is already running, attaches to it instead via `docker exec`.
-
-This means you can open as many terminals as you like — tmux panes, terminal emulator splits, separate windows — and each one that runs `faradai <tool>` will land inside the same container.
+Mounts the current directory into the container and launches Claude Code (default). Prompts you to confirm the directory before mounting.
 
 ### Modes
 
-An optional argument selects which tool to launch (or attach to):
+An optional argument selects which tool to launch:
 
 | Command | Result |
 |---------|--------|
@@ -50,35 +48,67 @@ An optional argument selects which tool to launch (or attach to):
 | `faradai aider` | aider |
 | `faradai bash` | bare shell, useful for debugging |
 | `faradai update` | pull latest release from GitHub and reinstall |
-| `faradai uninstall` | remove the container, image, and installed binaries |
+| `faradai uninstall` | remove all faradai containers, the image, and installed binaries |
 
-### Resource limits
+### Multi-project and multi-container usage
 
-`faradai` reads environment variables to configure the container, with sensible defaults if unset:
+By default, `faradai` auto-detects whether a container named `faradai` is already running and attaches if so. Two flags give you explicit control:
 
-| Variable | Default | Controls |
-|----------|---------|----------|
-| `FARADAI_WORKDIR` | `~/Development/personal` | project directory mounted and used as working dir |
+| Invocation | Behaviour |
+|---|---|
+| `faradai` | auto-detect: attach if `faradai` is running, create if not |
+| `faradai -n NAME [CMD]` | create container `faradai-NAME`; error if it already exists |
+| `faradai -a [CMD]` | attach to running `faradai`; error if not running |
+| `faradai -a NAME [CMD]` | attach to running `faradai-NAME`; error if not running |
+
+`-n` and `-a` are mutually exclusive. This lets you run separate containers per project while keeping the default single-container workflow unchanged.
+
+### Configuration
+
+`faradai` reads environment variables to configure the container. Override inline or export from your shell rc file.
+
+**Workspace**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FARADAI_WORKDIR` | current directory | project directory mounted and used as working dir |
+| `FARADAI_TRUST_DIR` | `0` | set to `1` to skip the directory trust prompt |
+
+**Resource limits**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
 | `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
 | `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
-| `FARADAI_DOCKER_ARGS` | _(unset)_ | extra flags appended to `docker run` — allowlisted: `--env`/`-e`, `--label`/`-l`, `--device`, `--publish`/`-p`, `--hostname` |
+
+**SSH**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FARADAI_ENABLE_SSH_AGENT` | `1` | forward host SSH agent socket into the container |
+| `FARADAI_MOUNT_SSH_DIR` | `0` | mount `~/.ssh` read-only into the container |
+
+**Docker extras**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FARADAI_DOCKER_ARGS` | _(unset)_ | extra flags appended to `docker run`; always permitted: `--env`/`-e`, `--label`/`-l`, `--hostname`; opt-in via vars below |
+| `FARADAI_ALLOW_DEVICE` | `0` | set to `1` to permit `--device` in `FARADAI_DOCKER_ARGS` |
+| `FARADAI_ALLOW_PUBLISH` | `0` | set to `1` to permit `--publish`/`-p` in `FARADAI_DOCKER_ARGS` |
+
+**Debug**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
 | `FARADAI_DEBUG` | `0` | set to `1` to print resolved config and the `docker run` invocation before launching |
 
-Override inline:
+Example:
 ```bash
 FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 ```
 
-Or set permanently in your shell rc file (`~/.bashrc`, `~/.zshrc`, etc.):
-```sh
-export FARADAI_WORKDIR=~/Development/personal
-export FARADAI_MEMORY=4g
-export FARADAI_CPUS=4
-export FARADAI_PIDS=512
-```
-
-`faradai` also uses `$HOME` and `$USER` for mount paths — these are standard shell variables set automatically by your shell and require no configuration.
+`faradai` also uses `$HOME` and `$USER` for mount paths — standard shell variables set automatically by your shell.
 
 ### Mounts
 

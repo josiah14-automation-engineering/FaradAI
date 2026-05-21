@@ -5,7 +5,12 @@ set -euo pipefail
 
 _usage() {
   cat <<'EOF'
-Usage: faradai [COMMAND [ARGS...]]
+Usage: faradai [-n NAME | -a [NAME]] [COMMAND [ARGS...]]
+
+Flags:
+  -n NAME   Create container faradai-NAME; error if it already exists
+  -a [NAME] Attach to running faradai-NAME (or default faradai); error if not running
+  (none)    Auto-detect: attach if default faradai is running, create if not
 
 Commands:
   (none)     Launch Claude Code (default)
@@ -13,11 +18,12 @@ Commands:
   aider      Launch aider; remaining args passed through (e.g. --no-git)
   bash       Open a bash shell inside the container
   update     Pull the latest release and reinstall
-  uninstall  Remove the faradai container, image, and installed binaries
+  uninstall  Remove the faradai container(s), image, and installed binaries
   help       Show this help message
 
 Environment variables:
-  FARADAI_WORKDIR           Project directory (default: ~/Development/personal)
+  FARADAI_WORKDIR           Project directory (default: current directory)
+  FARADAI_TRUST_DIR         Set to 1 to skip the directory trust prompt
   FARADAI_MEMORY            Container RAM limit (default: 4g)
   FARADAI_CPUS              Container CPU limit (default: 4)
   FARADAI_PIDS              Container PID limit (default: 512)
@@ -30,6 +36,8 @@ Environment variables:
 EOF
 }
 
+_cleanup() { docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true; }
+
 _validate_memory() {
   # k (kilobytes) intentionally omitted — not a realistic container memory unit
   [[ "${FARADAI_MEMORY}" =~ ^([0-9]+(\.[0-9]+)?)([mgMG])$ ]] || {
@@ -37,6 +45,8 @@ _validate_memory() {
     exit 1
   }
   local num="${BASH_REMATCH[1]}" unit="${BASH_REMATCH[3],,}" int="${BASH_REMATCH[1]%%.*}"
+  # Reject zero: 0 and 0.0 are invalid, but 0.5 is fine — check integer part is 0
+  # and either there's no decimal or the decimal part is all zeros.
   if (( int == 0 )) && { [[ "${num}" != *.* ]] || [[ "${num#*.}" =~ ^0+$ ]]; }; then
     echo "faradai: FARADAI_MEMORY must be greater than zero" >&2
     exit 1
@@ -49,7 +59,7 @@ _validate_memory() {
 }
 
 _validate_cpus() {
-  # %.* strips the decimal for the integer bound check
+  # %.* strips the decimal so (( )) can do an integer bound check (bash can't compare floats natively).
   [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (( ${FARADAI_CPUS%.*} <= 128 )) || {
     echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
     exit 1
@@ -86,6 +96,54 @@ _build_extra_docker_args() {
   done
 }
 
+# ── flag parsing ───────────────────────────────────────────────────────────────
+
+# Manual loop avoids getopts consuming --help before subcommand dispatch sees it.
+# -n and -a are mutually exclusive; -a optionally takes a NAME argument.
+# Known tool commands are not consumed as NAME after -a.
+_KNOWN_CMDS=(claude aider bash update uninstall help --help -h)
+_CONTAINER_NAME="faradai"
+_MODE="auto"   # auto | create | attach
+
+_args=("$@")
+_remaining=()
+_i=0
+while (( _i < ${#_args[@]} )); do
+  case "${_args[_i]}" in
+    -n)
+      [[ "${_MODE}" == "attach" ]] && { echo "faradai: -n and -a are mutually exclusive" >&2; exit 1; }
+      _i=$(( _i + 1 ))
+      if (( _i >= ${#_args[@]} )) || [[ "${_args[_i]}" == -* ]]; then
+        echo "faradai: -n requires a NAME argument (e.g. faradai -n myproject)" >&2; exit 1
+      fi
+      _CONTAINER_NAME="faradai-${_args[_i]}"
+      _MODE="create"
+      ;;
+    -a)
+      [[ "${_MODE}" == "create" ]] && { echo "faradai: -n and -a are mutually exclusive" >&2; exit 1; }
+      _MODE="attach"
+      # Consume the next arg as NAME only if it is not a known command or flag.
+      _next="${_args[$(( _i + 1 ))]:-}"
+      _is_cmd=false
+      for _cmd in "${_KNOWN_CMDS[@]}"; do
+        [[ "${_next}" == "${_cmd}" ]] && { _is_cmd=true; break; }
+      done
+
+      if [[ -n "${_next}" && "${_next}" != -* && "${_is_cmd}" == "false" ]]; then
+        _CONTAINER_NAME="faradai-${_next}"
+        _i=$(( _i + 1 ))
+      fi
+      ;;
+    *)
+      _remaining+=("${_args[_i]}")
+      ;;
+  esac
+  _i=$(( _i + 1 ))
+done
+
+# ${array[@]+expansion} guards against set -u errors on empty arrays.
+set -- "${_remaining[@]+"${_remaining[@]}"}"
+
 # ── subcommand dispatch ────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -96,7 +154,8 @@ case "${1:-}" in
   update)
     _update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
     trap 'rm -rf "${_update_dir}"' EXIT
-    git clone git@github.com:josiah14-automation-engineering/faradai.git "${_update_dir}"
+    git clone git@github.com:josiah14-automation-engineering/faradai.git "${_update_dir}" \
+      || { echo "faradai: git clone failed — ensure SSH key access to GitHub is configured" >&2; exit 1; }
     "${_update_dir}/install.sh"
     exit 0
     ;;
@@ -109,22 +168,55 @@ esac
 
 command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
 
+# ── resolve workdir ────────────────────────────────────────────────────────────
+
+FARADAI_WORKDIR="${FARADAI_WORKDIR:-$(pwd)}"
+
 # ── attach if already running ─────────────────────────────────────────────────
 
-if [[ "$(docker inspect --format '{{.State.Running}}' faradai 2>/dev/null)" == "true" ]]; then
-  exec docker exec -it faradai "${@:-claude}"
+# docker inspect exits non-zero if the container doesn't exist; || clears the var rather than aborting.
+_is_running="$(docker inspect --format '{{.State.Running}}' "${_CONTAINER_NAME}" 2>/dev/null)" || _is_running=""
+
+if [[ "${_MODE}" == "attach" ]]; then
+  if [[ "${_is_running}" != "true" ]]; then
+    if [[ "${_CONTAINER_NAME}" == "faradai" ]]; then
+      echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai" >&2
+    else
+      echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai -n ${_CONTAINER_NAME#faradai-}" >&2
+    fi
+    exit 1
+  fi
+  exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
+fi
+
+if [[ "${_MODE}" == "auto" && "${_is_running}" == "true" ]]; then
+  exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
+fi
+
+# ── trust prompt ──────────────────────────────────────────────────────────────
+
+if [[ "${FARADAI_TRUST_DIR:-0}" != "1" ]]; then
+  printf "faradai: mount %s into container? [y/N] " "${FARADAI_WORKDIR}"
+  read -r _trust_answer
+  [[ "${_trust_answer}" =~ ^[Yy]$ ]] || { echo "faradai: aborted." >&2; exit 0; }
+fi
+
+# ── create mode: error if container already exists ────────────────────────────
+
+if [[ "${_MODE}" == "create" ]] && docker inspect "${_CONTAINER_NAME}" > /dev/null 2>&1; then
+  echo "faradai: container '${_CONTAINER_NAME}' already exists — attach with: faradai -a ${_CONTAINER_NAME#faradai-}" >&2
+  exit 1
 fi
 
 # ── start fresh: cleanup + trap ───────────────────────────────────────────────
 
-# Remove any stopped container so --name faradai doesn't conflict.
-docker rm -f faradai 2>/dev/null || true
+# Remove any stopped container so --name doesn't conflict.
+docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true
 # Trap fires only in the narrow window before exec docker run replaces this process.
-trap 'docker rm -f faradai 2>/dev/null || true' INT TERM EXIT
+trap _cleanup INT TERM EXIT
 
 # ── config defaults + validation ──────────────────────────────────────────────
 
-FARADAI_WORKDIR="${FARADAI_WORKDIR:-${HOME}/Development/personal}"
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
 FARADAI_PIDS="${FARADAI_PIDS:-512}"
@@ -154,14 +246,14 @@ _build_extra_docker_args
 # ── debug ─────────────────────────────────────────────────────────────────────
 
 if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
-  echo "faradai: WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
+  echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
   set -x
 fi
 
 # ── run ───────────────────────────────────────────────────────────────────────
 
 exec docker run -it --rm \
-  --name faradai \
+  --name "${_CONTAINER_NAME}" \
   --memory="${FARADAI_MEMORY}" \
   --cpus="${FARADAI_CPUS}" \
   --pids-limit="${FARADAI_PIDS}" \

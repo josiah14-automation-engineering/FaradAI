@@ -31,7 +31,6 @@ FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
-ARG WORKDIR_PATH=/home/${USERNAME}/Development/personal
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -67,9 +66,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && userdel -r ubuntu 2>/dev/null || true \
  && groupdel ubuntu 2>/dev/null || true \
  && groupadd --gid ${USER_GID} ${USERNAME} \
- && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME} \
- && mkdir -p ${WORKDIR_PATH} \
- && chown ${USER_UID}:${USER_GID} ${WORKDIR_PATH}
+ && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
 
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
@@ -91,6 +88,6 @@ RUN mkdir -p "/home/${USERNAME}/.ssh" \
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD claude --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
 
-WORKDIR ${WORKDIR_PATH}
+WORKDIR /home/${USERNAME}
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

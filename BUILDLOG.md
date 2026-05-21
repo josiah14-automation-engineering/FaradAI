@@ -901,3 +901,41 @@ The script is almost entirely Docker flag orchestration — conditional array bu
 The inflection point for a migration would be if the script grew real complexity: profile switching, config file parsing, per-project policy. That would make bash start to fight back, and a Lisp shell would start paying for its runtime dependency. That complexity does not exist yet.
 
 The polyparadigm angle (rash as a curriculum target) is a valid separate motivation — the script is a well-understood, appropriately-sized port target. But that is a learning exercise, not a maintenance need. Deferred.
+
+---
+
+## Session 26 — 2026-05-21
+
+### pwd Workdir Default, Explicit Container Naming, Trust Prompt (#43)
+
+Addressed three usability gaps that made `faradai` awkward across multiple simultaneous projects.
+
+**Workdir default changed to `$(pwd)`**
+
+`FARADAI_WORKDIR` previously defaulted to `~/Development/personal`. Changed to the current working directory at invocation time. Users who want a fixed path still set `FARADAI_WORKDIR` explicitly; users who run `faradai` from their project directory get the right mount automatically. Also removes `WORKDIR_PATH` from the Dockerfile, `build.sh`, and CI — the image no longer pre-creates a workdir since Docker auto-creates bind-mount targets at runtime.
+
+**Container naming via `-n` / `-a` CLI flags**
+
+The initial draft used a `FARADAI_NAME` environment variable. **Josiah redirected** to CLI flags, reasoning that naming is per-invocation intent rather than a persistent preference.
+
+Initial design: `-n NAME` creates `faradai-NAME`, errors if the container already exists. No env var.
+
+**Josiah then added `-a [NAME]`** for explicit attachment to a named (or default) container, making create vs. attach intent unambiguous at the call site rather than relying on implicit auto-detect for named containers.
+
+Final flag matrix:
+- `faradai [CMD]` — auto-detect default `faradai` container (attach if running, create if not); backward compatible
+- `faradai -n NAME [CMD]` — create `faradai-NAME`; error if any container by that name exists
+- `faradai -a NAME [CMD]` — attach to running `faradai-NAME`; error if not running
+- `faradai -a [CMD]` — attach to default `faradai`; error if not running
+
+`-n` and `-a` are mutually exclusive. Error messages in both directions include the corrective hint (`faradai -a NAME` / `faradai -n NAME`), acting as in-band documentation.
+
+The flag parser uses a manual `case` loop rather than `getopts` to avoid a known bash edge case where `getopts` consumes `--help` as an unknown option before the subcommand dispatch can see it.
+
+**Trust prompt**
+
+Added a `mount <path>? [y/N]` prompt before every fresh container start, mirroring the trust model Claude Code uses for new directories. Fires for all subcommands (`faradai`, `faradai bash`, `faradai aider`, `faradai claude`). The only path that skips it is `exec docker exec` on an already-running container (which exits the script before reaching the prompt). Bypass via `FARADAI_TRUST_DIR=1` for scripts and environments where the prompt is unnecessary.
+
+**`uninstall-faradai` updated**
+
+All single-container `docker inspect faradai` calls replaced with `--filter "name=faradai"` queries, which match both `faradai` and any `faradai-*` containers. Running-container check now lists all matching containers; removal step uses `xargs -r docker rm -f` to handle the multi-container case.

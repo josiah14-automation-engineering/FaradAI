@@ -13,8 +13,8 @@ git --version
 
 **Mounts**
 ```bash
-pwd
-ls "${HOME}/Development/personal" | head -5
+pwd                              # should match the directory faradai was launched from
+ls . | head -5                   # working dir contents
 ls ~/.claude/.credentials.json
 stat -c "%A %n" ~/.claude/.credentials.json
 ```
@@ -58,7 +58,7 @@ ssh -T git@github.com     # "Hi <username>! You've successfully authenticated...
 
 **SSH agent disabled (`FARADAI_ENABLE_SSH_AGENT=0`)**
 
-Launch the container with `FARADAI_ENABLE_SSH_AGENT=0 faradai bash`, then inside:
+Launch the container with `FARADAI_TRUST_DIR=1 FARADAI_ENABLE_SSH_AGENT=0 faradai bash`, then inside:
 ```bash
 echo "${SSH_AUTH_SOCK:-unset}"   # should print: unset
 ls /ssh-agent 2>&1               # should fail: No such file or directory
