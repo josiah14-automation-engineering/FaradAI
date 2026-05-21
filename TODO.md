@@ -4,7 +4,7 @@
 
 ## Medium
 
-- ~~**[#43] Use `pwd` as default workdir, project-scoped container naming, trust prompt**~~ ✓ resolved — see BUILDLOG Session 26. — current default (`~/Development/personal`) is hardcoded to one user's layout. Change to `$(pwd)`; add a "mount \<path\> into container? [y/N]" trust prompt before `docker run` (bypass via `FARADAI_TRUST_DIR=1`; skip on attach path). Container names become `faradai-{suffix}` where suffix is derived from `basename $FARADAI_WORKDIR` (sanitized); `FARADAI_NAME=foo` overrides the suffix — user supplies the suffix only, `faradai-` prefix always enforced. Different projects get separate containers automatically; `FARADAI_NAME` is the escape hatch for basename collisions or parallel instances. Drop the Dockerfile `ARG WORKDIR_PATH` mkdir; replace with runtime `mkdir -p`. Thread the dynamic container name through all `docker rm`, `docker exec`, and trap calls. Update `uninstall-faradai` to remove all `faradai-*` containers. Update README env var table: regroup by category and add missing vars (`FARADAI_ENABLE_SSH_AGENT`, `FARADAI_MOUNT_SSH_DIR`, `FARADAI_ALLOW_DEVICE`, `FARADAI_ALLOW_PUBLISH`, `FARADAI_NAME`, `FARADAI_TRUST_DIR`).
+- ~~**[#43] Use `pwd` as default workdir, project-scoped container naming, trust prompt**~~ ✓ resolved — see BUILDLOG Sessions 26–27.
 
 - ~~**[#6] Fragile container state detection**~~ ✓ resolved — replaced `grep -q true` with `[[ "$(docker inspect ...)" == "true" ]]` during script refactor.
 - **[#9] uninstall-faradai unguarded sudo** — no `command -v sudo` guard, unlike `install.sh`. Will hang or fail silently on systems requiring a password or missing sudo. Fix: add the same guard `install.sh` uses.
