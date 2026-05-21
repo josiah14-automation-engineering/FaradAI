@@ -34,6 +34,8 @@ cat /proc/self/status | grep NoNewPrivs
 **Resource limits**
 ```bash
 cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes
+cat /sys/fs/cgroup/pids.max 2>/dev/null          # should match FARADAI_PIDS (default: 512)
+cat /sys/fs/cgroup/cpu.max 2>/dev/null           # quota period; quota/period = CPU count
 ```
 
 **gh auth**

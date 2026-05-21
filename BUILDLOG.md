@@ -939,3 +939,47 @@ Added a `mount <path>? [y/N]` prompt before every fresh container start, mirrori
 **`uninstall-faradai` updated**
 
 All single-container `docker inspect faradai` calls replaced with `--filter "name=faradai"` queries, which match both `faradai` and any `faradai-*` containers. Running-container check now lists all matching containers; removal step uses `xargs -r docker rm -f` to handle the multi-container case.
+
+---
+
+## Session 27 — 2026-05-21 18:05 UTC
+
+### Full Smoke Test — All Green
+
+Full SMOKETEST.md run against the current image (pre-rebuild; Session 26 changes not yet reflected in the running container).
+
+- `claude` 2.1.143, `aider` 0.86.2, `gh` 2.92.0, `python3` 3.12.3, `git` 2.43.0 ✅
+- Mounts — workdir mounted, `.credentials.json` present at `600` ✅
+- `CapPrm`/`CapEff` both `0000000000000000` ✅
+- `NoNewPrivs: 1` ✅
+- Memory limit: 16 GiB ✅
+- PID limit: 1024 ✅ — Josiah has `FARADAI_PIDS=1024` set in `.zshrc` (above the script default of 512)
+- CPU limit: 8 cores ✅ — Josiah has `FARADAI_CPUS=8` set in `.zshrc` (above the script default of 4)
+- `gh auth` — logged in as `josiah14` ✅
+- SSH agent — socket at `/ssh-agent`, 7 keys loaded ✅
+- tmux → aider round-trip ✅ (Ring responded "hello", $0.00018, no credential errors)
+
+### Ring Bash Review
+
+Ring-2.6-1T reviewed the bash scripting across all five shell scripts (`faradai`, `uninstall-faradai`, `build.sh`, `install.sh`, `entrypoint.sh`) for best practices, shellcheck compliance, and cleanup opportunities. Produced a prioritized findings table.
+
+**P1 — Bug (already correct):** Ring flagged `_remaining+=("${_args[@]}")` appending all args instead of the current one. The file already had `_remaining+=("${_args[_i]}")` — Ring caught it in its thinking pass but the written code was already correct. No change needed.
+
+**Fixes applied:**
+
+- `_build_extra_docker_args` — `xargs -r` (GNU-only) in `uninstall-faradai` replaced with `while IFS= read -r ... done < <(...)` process substitution; portable to macOS/BSD.
+- `build.sh` — `$(dirname "$0")` replaced with `$(cd "$(dirname "$0")" && pwd)` to resolve symlinks correctly; `install.sh` already used this pattern.
+- `faradai` — Added explanatory comments to the zero-memory check, CPU float validation, `_is_running || _is_running=""` pattern, and the `set -- "${array[@]+...}"` bashism.
+- `faradai` — `_is_cmd` changed from integer `0`/`1` to string `false`/`true` for type consistency with its string comparison.
+- `faradai` — Added actionable error message to `git clone` failure in the `update` case.
+- `uninstall-faradai` — `_confirm_kill`/`_confirm` renamed to `_confirm_containers`/`_confirm_removal` for clarity.
+- `uninstall-faradai` — `echo "Done."` moved to after both `sudo rm` calls so it doesn't print prematurely if sudo prompts for a password.
+- Various whitespace: blank lines added between `done`/`for` and following `if`/`case` blocks for readability (**Josiah directed** these hygiene fixes).
+
+### bats Test Ticket Created
+
+Created GitHub issue #39 (TODO item #44) for adding bats-core unit tests covering the validation functions and flag parser. Docker interaction explicitly out of scope — CI smoke test covers that surface.
+
+### SMOKETEST.md Updated
+
+Added PID and CPU limit checks to the Resource limits section. Josiah's system has `FARADAI_PIDS=1024` and `FARADAI_CPUS=8` set in `.zshrc` — both confirmed active in the cgroup checks above.
