@@ -41,6 +41,29 @@ cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.li
 gh auth status
 ```
 
+**SSH agent forwarding**
+
+> Pre-condition: host SSH agent must be running with at least one key loaded (`ssh-add -l` on the host returns keys). If not, see the "Host SSH agent setup" section in README.md.
+
+```bash
+echo "$SSH_AUTH_SOCK"     # should be /ssh-agent
+ls -la /ssh-agent         # should show a socket: srwx... or srwxr-xr-x ...
+ssh-add -l                # should list at least one loaded key
+```
+
+Optional — verify Git host authentication works end-to-end:
+```bash
+ssh -T git@github.com     # "Hi <username>! You've successfully authenticated..."
+```
+
+**SSH agent disabled (`FARADAI_ENABLE_SSH_AGENT=0`)**
+
+Launch the container with `FARADAI_ENABLE_SSH_AGENT=0 faradai bash`, then inside:
+```bash
+echo "${SSH_AUTH_SOCK:-unset}"   # should print: unset
+ls /ssh-agent 2>&1               # should fail: No such file or directory
+```
+
 **tmux → aider round-trip**
 
 Verifies that Claude Code can start an aider session in a background tmux pane, send a prompt, and capture the response — the internal pattern used for running Ring alongside Claude.

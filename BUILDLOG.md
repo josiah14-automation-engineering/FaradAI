@@ -783,3 +783,17 @@ New items added to TODO: #19–#28 (open), #29 (hardening deferred), #30–#32 (
 - `shellcheck faradai install.sh build.sh entrypoint.sh` → added `uninstall-faradai`
 
 #19 resolved and marked in TODO.
+
+### SSH Agent Forwarding Implementation (#20)
+
+Implemented SSH agent forwarding as the default transport for Git authentication inside the container, replacing the previous behavior where `~/.ssh` was the only available path.
+
+**What shipped:**
+
+- `faradai` script: `FARADAI_ENABLE_SSH_AGENT` defaults to `1`; when `$SSH_AUTH_SOCK` is set and points to a live socket, the script mounts it into the container at `/ssh-agent` and sets `SSH_AUTH_SOCK=/ssh-agent` in the container environment.
+- `faradai` script: `FARADAI_MOUNT_SSH_DIR` defaults to `0`; `~/.ssh` directory mount is now an explicit opt-in, not the default path.
+- `Dockerfile`: `openssh-client` installed; `ssh-keyscan` bakes GitHub, GitLab, and Bitbucket into `~/.ssh/known_hosts` at image build time so agent forwarding works without mounting `~/.ssh`.
+- `build.sh`: already passes `USER_UID`/`USER_GID` as build args, so the container user's UID matches the host user's UID — socket permissions work without any extra steps.
+- `README.md`: added "Host SSH agent setup" section under the SSH forwarding callout explaining how to check for, start, and persist an agent across sessions, including the `keychain` option.
+
+**Josiah directed** closing out the BUILDLOG and TODO after confirming the implementation was complete and the only remaining steps were rebuild and smoke test (his side).

@@ -79,6 +79,13 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER ${USERNAME}
 
+# Pre-register common Git hosts so SSH agent forwarding works without ~/.ssh mounted.
+# ssh-keyscan exits 0 even if a host is unreachable, so this won't fail the build.
+RUN mkdir -p "/home/${USERNAME}/.ssh" \
+ && chmod 700 "/home/${USERNAME}/.ssh" \
+ && ssh-keyscan github.com gitlab.com bitbucket.org >> "/home/${USERNAME}/.ssh/known_hosts" 2>/dev/null \
+ && chmod 600 "/home/${USERNAME}/.ssh/known_hosts"
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD claude --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
 

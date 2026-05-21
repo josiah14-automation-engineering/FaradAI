@@ -89,12 +89,52 @@ export FARADAI_PIDS=512
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
-| `~/.ssh/` | `~/.ssh/` | read-only | SSH key files for SSH-based git remotes |
+| `$SSH_AUTH_SOCK` | `/ssh-agent` | read-only | SSH agent socket — forwarded automatically when present; set `FARADAI_ENABLE_SSH_AGENT=0` to disable |
+| `~/.ssh/` | `~/.ssh/` | read-only | SSH key files — opt-in via `FARADAI_MOUNT_SSH_DIR=1`; not needed when agent forwarding is active |
 | `$FARADAI_WORKDIR` | `$FARADAI_WORKDIR` | read-write | Your project files — the primary work surface |
 
 The working directory defaults to `~/Development/personal`, mounted at the same path inside the container so all project-relative references, memory files, and tooling behave identically inside and outside.
 
-> **SSH agent forwarding:** `SSH_AUTH_SOCK` is not forwarded into the container. If you rely on an ssh-agent rather than key files directly, git over SSH will not work inside the container. HTTPS remotes are unaffected.
+> **SSH agent forwarding:** When `$SSH_AUTH_SOCK` is set and points to a live socket, FaradAI forwards it into the container at `/ssh-agent`. Common Git hosts (GitHub, GitLab, Bitbucket) are pre-registered in the image's `known_hosts`. Set `FARADAI_ENABLE_SSH_AGENT=0` to disable, or `FARADAI_MOUNT_SSH_DIR=1` to use key files directly instead.
+
+#### Host SSH agent setup
+
+FaradAI forwards your existing agent — it does not start one. The agent must be running on the host before you launch the container.
+
+**Check if an agent is already running:**
+
+```bash
+echo "$SSH_AUTH_SOCK"          # should be a non-empty path
+ls -la "$SSH_AUTH_SOCK"        # should show a socket: srwxr-xr-x ...
+ssh-add -l                     # should list at least one loaded key
+```
+
+Most desktop environments (GNOME, KDE, Xfce) start an SSH agent automatically at login and `$SSH_AUTH_SOCK` will already be set. If `ssh-add -l` returns keys, you're done.
+
+**If no agent is running**, start one and add your key for the current session:
+
+```bash
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519      # adjust to your key filename
+```
+
+**To persist across shell sessions**, add to your `~/.bashrc` or `~/.zshrc`:
+
+```bash
+if [ -z "$SSH_AUTH_SOCK" ]; then
+  eval "$(ssh-agent -s)"
+fi
+```
+
+Then `ssh-add` your key once after each login. For a more robust solution that survives across terminal sessions without re-adding keys, install `keychain`:
+
+```bash
+sudo apt install keychain
+# Add to ~/.bashrc or ~/.zshrc:
+eval "$(keychain --eval --quiet ~/.ssh/id_ed25519)"
+```
+
+`keychain` starts one agent per user login session and reuses it across all terminals, including new ones opened after the initial login.
 
 Credentials are delivered as mounted files rather than environment variables — any secret in the environment will appear in tool output if `env` is inspected. See [Security model](#security-model).
 

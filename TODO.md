@@ -42,7 +42,7 @@ Findings from GPT-5.5 review (2026-05-21) that survived triage. Ordered by sever
 
 ### High
 
-- **[#20] SSH agent forwarding not default; `~/.ssh` mounted read-only** — read-only protects host files from modification, not from disclosure. For public users with unencrypted keys this is a significant exposure. Fix: make SSH agent forwarding the default when `$SSH_AUTH_SOCK` is present; make `~/.ssh` dir mounting an explicit opt-in via `FARADAI_MOUNT_SSH_DIR=1`. Note: update "Known issues" README entry when this ships.
+- ~~**[#20] SSH agent forwarding not default; `~/.ssh` mounted read-only**~~ ✓ resolved — agent forwarding on by default (`FARADAI_ENABLE_SSH_AGENT:-1`); `~/.ssh` dir mount is opt-in via `FARADAI_MOUNT_SSH_DIR=1`; `known_hosts` pre-seeded in image; README host-agent setup section added. "Known issues" entry moot (section not yet created).
 - **[#21] Global `~/.claude` mounted read-write into container** — mounts Claude settings, memory, conversation history, and hooks. Gives the agent access to more than auth, and bleeds global state across projects. Fix: default to an isolated `~/.config/faradai/claude` directory; mount that instead.
 - **[#22] Global `~/.aider.conf.yml` mounted read-only** — honest but not ideal; OpenRouter key is still agent-readable. Fix: default to a FaradAI-specific aider config at `~/.config/faradai/aider.conf.yml`; only mount it when `aider` is the active command. Document: use a FaradAI-specific OpenRouter key with a hard cost limit.
 
