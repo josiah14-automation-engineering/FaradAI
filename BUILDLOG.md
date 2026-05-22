@@ -1087,14 +1087,6 @@ Full smoketest run against a fresh container:
 
 ---
 
-## Session 33 — 2026-05-22
-
-### Add --pull to build.sh (#11)
-
-`--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
-
----
-
 ## Session 34 — 2026-05-22
 
 ### Known issues and limitations section in README
@@ -1133,3 +1125,17 @@ Three subcommands added in one pass:
 ### Fix CI smoke test to exercise entrypoint.sh (#42)
 
 The existing CI smoke test used `--entrypoint /bin/bash`, bypassing `entrypoint.sh` entirely. Added a second step, "Smoke test (entrypoint dispatch)", that runs `claude --version`, `aider --version`, and `bash -c "echo ok"` through the real entrypoint — covering all three dispatch branches. Original tool-availability step retained and renamed for clarity.
+
+---
+
+## Session 35 — 2026-05-22
+
+### Bump Node 18 → 22 LTS, consolidate apt layers, add --shm-size (#54 #43)
+
+Node 18 reached end-of-life in April 2025. Switched both builder and final stages to NodeSource `node_22.x` channel; pinned to `nodejs=22.22.2-1nodesource1` after verifying the installed version in a running container.
+
+The NodeSource addition introduced two extra `apt-get update` calls (one per repo added). Consolidated: both NodeSource and gh CLI repos are now registered back-to-back before a single combined `apt-get update` + `apt-get install` covering all packages. `gnupg` (used only for keyring import) is purged with `apt-get autoremove` at the end of the layer — it was previously left installed in the final image unnecessarily.
+
+Also added `--shm-size=1g` to `docker run`. Claude Code is Electron-based and the default Docker 64 MB `/dev/shm` causes crashes and silent failures.
+
+**Josiah noted** the build was noticeably slower after the initial NodeSource switch, which prompted the apt consolidation. Build time recovered after the restructure. New container verified working.

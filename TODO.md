@@ -7,8 +7,6 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 ## Now
 
 - [#42](https://github.com/josiah14-automation-engineering/FaradAI/issues/42) — `_build_extra_docker_args` rejects combined short-flag forms (`-eFOO=bar`)
-- [#43](https://github.com/josiah14-automation-engineering/FaradAI/issues/43) — Add `--shm-size` to `docker run` (default 64 MB causes Claude Code crashes)
-- [#54](https://github.com/josiah14-automation-engineering/FaradAI/issues/54) — Node.js 18 is EOL — bump to Node 22 LTS
 - [#44](https://github.com/josiah14-automation-engineering/FaradAI/issues/44) — `faradai update` has no integrity verification on cloned `install.sh`
 - [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47) — SSH agent forwarding not covered in Troubleshooting section
 - [#48](https://github.com/josiah14-automation-engineering/FaradAI/issues/48) — No `CHANGELOG.md`
