@@ -260,3 +260,11 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"not permitted"* ]]
 }
+
+# ── update subcommand ──────────────────────────────────────────────────────────
+
+@test "update: --branch without NAME exits with error" {
+  run "${FARADAI}" update --branch
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"--branch requires a name"* ]]
+}
