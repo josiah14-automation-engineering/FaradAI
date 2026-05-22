@@ -6,12 +6,7 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ## Now
 
-- [#42](https://github.com/josiah14-automation-engineering/FaradAI/issues/42) — `_build_extra_docker_args` rejects combined short-flag forms (`-eFOO=bar`)
-- [#44](https://github.com/josiah14-automation-engineering/FaradAI/issues/44) — `faradai update` has no integrity verification on cloned `install.sh`
-- [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47) — SSH agent forwarding not covered in Troubleshooting section
-- [#48](https://github.com/josiah14-automation-engineering/FaradAI/issues/48) — No `CHANGELOG.md`
-- [#46](https://github.com/josiah14-automation-engineering/FaradAI/issues/46) — `uninstall-faradai`: document user data that persists after uninstall
-- [#55](https://github.com/josiah14-automation-engineering/FaradAI/issues/55) — `USER="$(whoami)"` spawns unnecessary subshell
+_(nothing — all shipped in v0.1.0-alpha.1)_
 
 ---
 
@@ -27,6 +22,7 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 - [#9](https://github.com/josiah14-automation-engineering/FaradAI/issues/9) — Isolated Claude config for strict/client-work profile
 - [#10](https://github.com/josiah14-automation-engineering/FaradAI/issues/10) — Isolated aider config for strict/client-work profile
 - [#40](https://github.com/josiah14-automation-engineering/FaradAI/issues/40) — Migrate complex Bash scripting to Rash
+- git mock for `_resolve_latest_tag` / `_verify_update_tag` unit tests (no issue yet)
 
 ---
 
