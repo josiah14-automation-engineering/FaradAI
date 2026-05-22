@@ -197,11 +197,8 @@ case "${1:-}" in
     exec docker logs "${_CONTAINER_NAME}" "${@:2}"
     ;;
   status)
-    docker inspect "${_CONTAINER_NAME}" \
-      --format 'name:    {{slice .Name 1}}
-state:   {{.State.Status}}
-started: {{.State.StartedAt}}
-image:   {{.Config.Image}}' 2>/dev/null \
+    _fmt=$'name:    {{slice .Name 1}}\nstate:   {{.State.Status}}\nstarted: {{.State.StartedAt}}\nimage:   {{.Config.Image}}'
+    docker inspect "${_CONTAINER_NAME}" --format "${_fmt}" 2>/dev/null \
       || { echo "faradai: container '${_CONTAINER_NAME}' not found" >&2; exit 1; }
     exit 0
     ;;
