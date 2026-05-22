@@ -238,6 +238,9 @@ _validate_pids
 
 USER="$(whoami)"
 
+mkdir -p "${HOME}/.config/gh"
+GH_CONFIG_ARGS=(-v "${HOME}/.config/gh:/home/${USER}/.config/gh")
+
 AIDER_CONF_MOUNT=()
 [[ -f "${HOME}/.aider.conf.yml" ]] && AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
 
@@ -283,6 +286,7 @@ exec docker run -it --rm \
   -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro" \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
   -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
+  "${GH_CONFIG_ARGS[@]}" \
   "${SSH_AGENT_ARGS[@]}" \
   "${SSH_DIR_ARGS[@]}" \
   -v "${FARADAI_WORKDIR}:${FARADAI_WORKDIR}" \

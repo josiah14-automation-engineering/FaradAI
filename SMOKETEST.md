@@ -17,6 +17,7 @@ pwd                              # should match the directory faradai was launch
 ls . | head -5                   # working dir contents
 ls ~/.claude/.credentials.json
 stat -c "%A %n" ~/.claude/.credentials.json
+ls ~/.config/gh                          # should exist (mounted from host)
 ```
 
 **Capability drop**

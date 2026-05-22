@@ -120,6 +120,7 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
+| `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
 | `$SSH_AUTH_SOCK` | `/ssh-agent` | read-only | SSH agent socket — forwarded automatically when present; set `FARADAI_ENABLE_SSH_AGENT=0` to disable |
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH key files — opt-in via `FARADAI_MOUNT_SSH_DIR=1`; not needed when agent forwarding is active |
 | `$FARADAI_WORKDIR` | `$FARADAI_WORKDIR` | read-write | Your project files — the primary work surface |
