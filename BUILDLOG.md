@@ -1041,3 +1041,13 @@ All four GitHub issues closed with commit reference.
 ### faradai update: SSH → HTTPS (#41 #28)
 
 The `update` subcommand cloned via `git@github.com:...` (SSH), which fails for any user without a GitHub SSH key configured. Switched to `https://github.com/...` — no credentials required for a public repo clone. Error message updated to reference network connectivity rather than SSH keys. README Upgrading section corrected to say "over HTTPS (no SSH key required)" rather than "latest release". Closes both #41 and #28 (docs/behavior mismatch).
+
+### Low-Priority One-Liners (#13 #14 #26)
+
+Three low-priority single-line fixes applied in one pass:
+
+- **[#13] Docker daemon check** — `docker info` pre-flight added after the binary check; gives a clear "Docker daemon is not running" error instead of a swallowed socket error.
+- **[#26] `--init` flag** — `--init` added to `docker run`; prevents zombie process accumulation in long-lived containers where AI tooling spawns subprocesses.
+- **[#14] OCI labels** — `org.opencontainers.image.title` and `org.opencontainers.image.source` added to the Dockerfile final stage; `docker image inspect` now shows provenance.
+
+All three GitHub issues closed with commit reference.

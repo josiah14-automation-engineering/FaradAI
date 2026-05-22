@@ -20,9 +20,9 @@
 ## Low
 
 - **[#11] No `--pull` in build** — `build.sh` reuses cached base layers without checking for upstream updates. Previously accepted as won't-fix; reconsidered.
-- **[#13] No Docker daemon availability check** — distinct from #7: Docker installed but daemon stopped produces swallowed socket errors. Fix: `docker info > /dev/null 2>&1 || { echo "faradai: Docker daemon is not running" >&2; exit 1; }`.
-- **[#14] No `LABEL` metadata in Dockerfile** — `docker image inspect faradai:latest` yields no provenance. Fix: add OCI labels (`image.title`, `image.source`).
-- **[#26] No `--init` flag on `docker run`** — AI tooling spawns subprocesses; without `--init`, zombie processes accumulate in the long-lived container. Fix: add `--init` to the `docker run` invocation.
+- ~~**[#13] No Docker daemon availability check**~~ ✓ resolved — `docker info` pre-flight added after binary check; commit in Session 30.
+- ~~**[#14] No `LABEL` metadata in Dockerfile**~~ ✓ resolved — OCI `image.title` and `image.source` labels added to final stage; commit in Session 30.
+- ~~**[#26] No `--init` flag on `docker run`**~~ ✓ resolved — `--init` added to `docker run`; commit in Session 30.
 - **[#27] No selectable network modes** — default open egress is correct for usefulness, but offline review/refactor/sensitive-client sessions benefit from `--network none`. Fix: add `FARADAI_NETWORK_MODE=open|none` with validation; default `open`. (`broker` mode deferred to v2 — see [#32].)
 - ~~**[#28] `faradai update` docs/behavior mismatch**~~ ✓ resolved — README corrected alongside [#41]. Commit in Session 30.
 - **[#33] `gh auth` credentials not persisted across container restarts** — `gh auth login` stores tokens inside the container's writable layer; lost on rebuild/restart. Fix: mount a host-side `~/.config/gh/` to persist `gh` auth without re-authenticating each session.

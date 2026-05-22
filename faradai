@@ -173,6 +173,7 @@ esac
 # ── docker pre-flight ──────────────────────────────────────────────────────────
 
 command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
+docker info > /dev/null 2>&1 || { echo "faradai: Docker daemon is not running" >&2; exit 1; }
 docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }
 
 # ── resolve workdir ────────────────────────────────────────────────────────────
@@ -271,6 +272,7 @@ fi
 # ── run ───────────────────────────────────────────────────────────────────────
 
 exec docker run -it --rm \
+  --init \
   --name "${_CONTAINER_NAME}" \
   --memory="${FARADAI_MEMORY}" \
   --cpus="${FARADAI_CPUS}" \
