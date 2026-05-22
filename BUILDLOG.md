@@ -1175,6 +1175,30 @@ The question arose: after the first release, should ongoing decisions continue i
 
 **Keeping BUILDLOG indefinitely** was rejected because the session-log format accumulates unboundedly and becomes unwieldy.
 
+---
+
+## Session 38 — 2026-05-22 17:04 UTC
+
+### Dual code review: Ring-2.6-1T and Opus; triage and issue logging
+
+Ran Ring-2.6-1T (via aider) and Opus independently on the full codebase. Each finding was validated against the actual source before logging.
+
+**Discarded findings (not real):**
+- Opus: "update clones master with no integrity check" — fixed this session before the review ran.
+- Opus: "README says working directory defaults to ~/Development/personal" — not in the file; hallucination.
+- Opus: "no shellcheck/hadolint CI" — both have been in CI since session 33; Ring confirmed them present.
+
+**Real findings logged as GitHub issues:**
+
+- **#59** — Username mismatch footgun (Opus). `USERNAME` is baked into the image at build time; the runtime script constructs mount paths from `$USER`. If a different host user runs `faradai`, all mounts land at paths that don't exist inside the container. Failure is a confusing permission error. Promoted to **Now** — likely to affect new users immediately.
+- **#60** — `trap _cleanup` is dead code (Opus). Set at line 345 immediately before `exec docker run` at line 402. Once `exec` replaces the process, the trap is gone. Container has `--rm` so Docker handles cleanup regardless. The comment acknowledges the "narrow window" but in that window no container exists yet, so `_cleanup` would silently no-op.
+- **#61** — `-v` flag unhandled; `-a -v` footgun (Ring + Opus). `-v` is not in the subcommand dispatch or `_KNOWN_CMDS`. `faradai -v` falls through to docker. `faradai -a -v` creates a container named `faradai--v`.
+- **#62** — bats-core unpinned in CI (Ring). CI clones `--depth=1` with no tag pin; can drift.
+- **#63** — `build.sh` symlink handling (Ring). `dirname "$0"` resolves to the symlink's directory, not the target's.
+- **#64** — Three documentation gaps (Ring + Opus): tmux not listed in "What's in the image"; URL casing inconsistency (`faradai` vs `FaradAI`); `.credentials.json :ro` is not explicitly noted as "not a secrecy mechanism" the way `~/.aider.conf.yml` is.
+
+ROADMAP updated: #59 moved to **Now**; #60–64 added to **Later**.
+
 **Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
 
 ---

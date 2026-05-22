@@ -6,14 +6,19 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ## Now
 
-_(nothing — all shipped in v0.1.0-alpha.1)_
+- [#59](https://github.com/josiah14-automation-engineering/FaradAI/issues/59) — Pre-flight check: runtime `$USER` must match image's baked-in USERNAME
 
 ---
 
 ## Later
 
+- [#60](https://github.com/josiah14-automation-engineering/FaradAI/issues/60) — `trap _cleanup` is dead code — remove or restructure
+- [#61](https://github.com/josiah14-automation-engineering/FaradAI/issues/61) — `-v` short flag unhandled — falls through to docker; `-a -v` creates `faradai--v`
+- [#62](https://github.com/josiah14-automation-engineering/FaradAI/issues/62) — Pin bats-core to a specific tag in CI
+- [#63](https://github.com/josiah14-automation-engineering/FaradAI/issues/63) — `build.sh` symlink resolution
+- [#64](https://github.com/josiah14-automation-engineering/FaradAI/issues/64) — Docs: tmux in image list, URL casing, credentials `:ro` note
 - [#45](https://github.com/josiah14-automation-engineering/FaradAI/issues/45) — `FARADAI_DEBUG=1` leaks environment variables to stderr without warning
-- [#50](https://github.com/josiah14-automation-engineering/FaradAI/issues/50) — `_validate_cpus` float upper-bound check allows 128.5
+- [#50](https://github.com/josiah14-automation-engineering/FaradAI/issues/50) — `_validate_cpus` / `_validate_memory` float upper-bound check allows 128.5 / 512.5g
 - [#49](https://github.com/josiah14-automation-engineering/FaradAI/issues/49) — Docker mock in tests too permissive — can't test failure paths
 - [#56](https://github.com/josiah14-automation-engineering/FaradAI/issues/56) — `entrypoint.sh` `_usage()` doesn't reflect current command surface
 - [#51](https://github.com/josiah14-automation-engineering/FaradAI/issues/51) — No shell completion (bash/zsh/fish)
