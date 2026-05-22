@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-_FARADAI_VERSION="0.1.0"
+_FARADAI_VERSION="0.1.0-alpha.1"
 
 # ── functions ──────────────────────────────────────────────────────────────────
 
