@@ -1093,6 +1093,10 @@ Full smoketest run against a fresh container:
 
 `--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
 
+### Fix smoketest ssh-add fingerprint exposure (#46)
+
+`ssh-add -l` in SMOKETEST.md printed key fingerprints and email labels into the conversation context. Replaced with `ssh-add -l | wc -l` — confirms at least one key is loaded without exposing identity metadata.
+
 ### Fix CI smoke test to exercise entrypoint.sh (#42)
 
 The existing CI smoke test used `--entrypoint /bin/bash`, bypassing `entrypoint.sh` entirely. Added a second step, "Smoke test (entrypoint dispatch)", that runs `claude --version`, `aider --version`, and `bash -c "echo ok"` through the real entrypoint — covering all three dispatch branches. Original tool-availability step retained and renamed for clarity.

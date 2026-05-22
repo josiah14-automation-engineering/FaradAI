@@ -51,7 +51,7 @@ gh auth status
 ```bash
 echo "$SSH_AUTH_SOCK"     # should be /ssh-agent
 ls -la /ssh-agent         # should show a socket: srwx... or srwxr-xr-x ...
-ssh-add -l                # should list at least one loaded key
+ssh-add -l | wc -l        # should be >= 1 (avoids printing fingerprints and email labels)
 ```
 
 Optional — verify Git host authentication works end-to-end:
