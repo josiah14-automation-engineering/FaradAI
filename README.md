@@ -242,7 +242,7 @@ The image predates the least-privilege install fix (Session 7). Rebuild: `./buil
 aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
 
 **`gh` not authenticated inside the container**
-`gh` requires manual login after each fresh install. Run `gh auth login` from inside the container (or via `faradai bash`) and follow the device-code flow. This is a known gap — credential passthrough for `gh` is not yet implemented.
+`~/.config/gh/` is mounted from the host. If you have previously run `gh auth login` on the host, credentials will be available inside the container automatically. If not, run `gh auth login` from inside the container — tokens will persist to the host mount and survive restarts.
 
 **`install.sh` fails with "sudo is required but not available"**
 `install.sh` needs `sudo` to copy the `faradai` binary to `/usr/local/bin`. Install sudo (`apt-get install sudo` on Debian/Ubuntu) or copy the binary manually: `cp faradai /usr/local/bin/faradai && cp uninstall-faradai /usr/local/bin/uninstall-faradai` as root.
@@ -289,6 +289,22 @@ api-key: openrouter=<your-key>
 ```
 
 Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
+
+## Known issues and limitations
+
+**Docker filesystem I/O overhead**
+All file reads and writes go through Docker's overlay filesystem, which adds latency compared to native disk access. For most coding tasks this is imperceptible, but large `find` scans, heavy test suites writing many files, or build systems that hash large trees may be noticeably slower inside the container than on the host.
+
+**No GPU passthrough**
+The container runs with `--cap-drop ALL` and no `--device` flags by default. GPU access (e.g. for local model inference alongside the agent) requires `FARADAI_ALLOW_DEVICE=1` and the appropriate `--device` flag in `FARADAI_DOCKER_ARGS`. There is no first-class GPU profile yet.
+
+**Local LSP limitations**
+Language servers that rely on system-wide installations (e.g. a globally installed `pylsp` or `clangd`) will not be present inside the container unless they are added to the Dockerfile. LSPs that install into the project (e.g. via `npm install` or a virtualenv) work fine.
+
+**Multi-user `docker rm` behavior**
+`faradai` calls `docker rm -f faradai` before each new launch to clear any stopped container. On a shared machine where multiple users might run faradai containers, this could remove another user's stopped container if container names collide. Use `-n NAME` to give each session a unique name.
+
+---
 
 ## Future work
 

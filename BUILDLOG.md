@@ -1093,6 +1093,18 @@ Full smoketest run against a fresh container:
 
 `--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
 
+---
+
+## Session 34 — 2026-05-22
+
+### Known issues and limitations section in README
+
+Added a "Known issues and limitations" section to README covering: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, and multi-user `docker rm` name collision. Also updated the stale `gh` auth troubleshooting entry — it previously said credentials weren't persisted, which was true before #33 was fixed.
+
+---
+
+## Session 33 — 2026-05-22
+
 ### Add bats unit tests for validation and flag-parsing (#44)
 
 40 tests in `test/unit.bats` covering:

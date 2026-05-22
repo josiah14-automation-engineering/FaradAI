@@ -59,7 +59,7 @@ FARADAI_PROFILE="${FARADAI_PROFILE:-personal}"
 ## Hardening (deferred)
 
 - **Container/image prune mechanism** — add a `faradai prune` subcommand (or note in README) to clean up old images, stopped containers, and orphaned volumes.
-- **Known issues / limitations section in README** — document: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, multi-user `docker rm` behavior.
+- ~~**Known issues / limitations section in README**~~ ✓ resolved — section added covering Docker I/O overhead, no GPU passthrough, local LSP limitations, and multi-user `docker rm` behavior. Stale `gh` auth troubleshooting entry updated to reflect #33 fix. See BUILDLOG Session 34.
 - **[#29] Read-only root filesystem opt-in** — writable rootfs allows mutation inside the container; `--read-only` reduces this surface. Fix: add `FARADAI_READ_ONLY_ROOT=1` opt-in with `--tmpfs /tmp` and `--tmpfs ~/.cache` writable mounts. Dogfood before considering as default.
 
 ---
