@@ -249,6 +249,24 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 
 ---
 
+## Testing
+
+Unit tests use [bats-core](https://github.com/bats-core/bats-core). Install it once:
+
+```bash
+git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core
+```
+
+Then run:
+
+```bash
+test/libs/bats-core/bin/bats test/unit.bats
+```
+
+Tests cover `_validate_memory/cpus/pids/network_mode`, the `_build_extra_docker_args` allowlist, and the `-n`/`-a` flag parser. Docker is mocked via `test/helpers/` — no running daemon required. `test/libs/` is gitignored.
+
+---
+
 ## Upgrading
 
 ```bash

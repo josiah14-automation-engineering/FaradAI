@@ -1093,6 +1093,19 @@ Full smoketest run against a fresh container:
 
 `--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
 
+### Add bats unit tests for validation and flag-parsing (#44)
+
+40 tests in `test/unit.bats` covering:
+
+- **Flag parser** — `-n`/`-a` mutual exclusivity, `-n` without NAME, `-a` not consuming a known command as a container name, `-a` consuming an unknown word as a container name
+- **`_validate_memory`** — rejects 0g/0m/0.0g, non-numeric, >512g; accepts 0.5g, 512g, 4g, 512m
+- **`_validate_cpus`** — rejects 0, negatives, non-numeric, >128; accepts 4, 2.5, 128
+- **`_validate_pids`** — rejects 0, non-integer, float; accepts 512, 1
+- **`_validate_network_mode`** — rejects unknown modes; accepts open, none
+- **`_build_extra_docker_args`** — permits --env/-e/--label/--hostname; denies --volume/--network/--device/--publish without opt-in; permits --device/--publish/-p with opt-in env vars
+
+Docker mocked via `test/helpers/docker` stub on `$PATH`. `test/libs/` gitignored; local install: `git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core`. CI clones bats-core in a `unit-tests` job that gates the `build` job. All 40 tests pass.
+
 ### Add logs, status, and version subcommands (#39 #40)
 
 Three subcommands added in one pass:

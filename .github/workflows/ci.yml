@@ -24,8 +24,19 @@ jobs:
         with:
           dockerfile: Dockerfile
 
+  unit-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats-core
+        run: |
+          git clone --depth=1 https://github.com/bats-core/bats-core.git test/libs/bats-core
+      - name: Run unit tests
+        run: test/libs/bats-core/bin/bats test/unit.bats
+
   build:
-    needs: [lint-shell, lint-dockerfile]
+    needs: [lint-shell, lint-dockerfile, unit-tests]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

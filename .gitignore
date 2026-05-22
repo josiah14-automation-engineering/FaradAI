@@ -5,6 +5,9 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Test dependencies (install with: git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core)
+test/libs/
+
 # Claude Code
 .claude/settings.local.json
 

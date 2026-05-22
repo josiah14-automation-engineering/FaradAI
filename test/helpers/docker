@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Mock docker for unit tests. Handles only the calls faradai makes during
+# pre-flight and container lifecycle; docker run exits 0 without doing anything.
+case "$1" in
+  info)    exit 0 ;;
+  image)   exit 0 ;;   # docker image inspect faradai:latest
+  inspect) echo "false"; exit 0 ;;  # container running-state check
+  rm)      exit 0 ;;
+  run)     exit 0 ;;
+  logs)    exit 0 ;;
+  *)       exit 0 ;;
+esac
