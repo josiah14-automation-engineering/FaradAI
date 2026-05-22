@@ -14,7 +14,7 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
 
-A Docker container for running CLI-based AI coding agents. Claude Code and aider are currently supported; the container pattern is not specific to either. Named after the Faraday cage, but the metaphor is precise: the cage is the **filesystem boundary plus the absence of the Docker socket**. Network egress is intentionally unrestricted — the agent can reach the internet freely. Full network isolation is on the [roadmap](ROADMAP.md).
+A Docker container for running CLI-based AI coding agents. Claude Code and aider are currently supported; the container pattern is not specific to either. Named after the Faraday cage, but the metaphor is precise: the cage is the **filesystem, environment, and process boundary — plus the absence of the Docker socket**. Network egress is intentionally unrestricted — the agent can reach the internet freely. Full network isolation is on the [roadmap](ROADMAP.md).
 
 ## About this project
 
@@ -197,7 +197,7 @@ Credentials are delivered as mounted files rather than environment variables —
 
 **Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
 
-**The Faraday cage protects the filesystem boundary, not the process environment.**
+**The Faraday cage is a filesystem, environment, and process boundary — plus the absence of the Docker socket.** Host processes are invisible inside the container (no `--pid=host`), and host environment variables do not leak in; everything in the container's environment was explicitly injected at launch. What the cage does not protect against: outbound network access is unrestricted (the agent can reach the internet freely — no egress filtering), and any secret passed as an environment variable is visible to the agent.
 
 Credentials are kept out of environment variables and injected as mounted files instead:
 
