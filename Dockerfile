@@ -42,13 +42,13 @@ RUN curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELL
 
 FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS final
 
-LABEL org.opencontainers.image.title="FaradAI" \
-      org.opencontainers.image.source="https://github.com/josiah14-automation-engineering/faradai" \
-      org.opencontainers.image.faradai.username="${USERNAME}"
-
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
+
+LABEL org.opencontainers.image.title="FaradAI" \
+      org.opencontainers.image.source="https://github.com/josiah14-automation-engineering/faradai" \
+      org.opencontainers.image.faradai.username="${USERNAME}"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
