@@ -249,3 +249,14 @@ setup() {
   run env FARADAI_DOCKER_ARGS="-p 8080:80" FARADAI_ALLOW_PUBLISH=1 "${FARADAI}"
   [ "$status" -eq 0 ]
 }
+
+@test "_build_extra_docker_args: permits combined short-flag form -eFOO=bar" {
+  run env FARADAI_DOCKER_ARGS="-eFOO=bar" "${FARADAI}"
+  [ "$status" -eq 0 ]
+}
+
+@test "_build_extra_docker_args: denies combined unknown short flag -xFOO" {
+  run env FARADAI_DOCKER_ARGS="-xFOO" "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not permitted"* ]]
+}

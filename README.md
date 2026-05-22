@@ -294,6 +294,21 @@ faradai update
 
 Clones the latest commit from GitHub over HTTPS (no SSH key required), rebuilds the image, and reinstalls the CLI binary. The running container is not affected until the next launch.
 
+To remove faradai entirely:
+
+```bash
+faradai uninstall
+```
+
+This removes all faradai containers, the image, and the installed binaries. The following are **not** removed and must be deleted manually if desired:
+
+| Path | Contents |
+|------|----------|
+| `~/.claude/` | Claude Code settings, memory, and conversation history |
+| `~/.claude.json` | Claude Code top-level config |
+| `~/.config/gh/` | GitHub CLI auth tokens |
+| faradai source directory | Wherever you cloned the repo |
+
 **Updating pinned tool versions:** `@anthropic-ai/claude-code` and `aider-chat` are pinned in the Dockerfile. To update them, edit the version strings in the `RUN npm install` and `pipx install` lines and rebuild.
 
 ---

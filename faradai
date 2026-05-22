@@ -105,6 +105,8 @@ _build_extra_docker_args() {
     ok=0
     for flag in "${permitted[@]}"; do
       [[ "${arg}" == "${flag}" || "${arg}" == "${flag}="* ]] && { ok=1; break; }
+      # Combined short-flag form: -eFOO=bar, -lkey=val
+      [[ "${flag}" =~ ^-[^-]$ && "${arg}" =~ ^"${flag}".+ ]] && { ok=1; break; }
     done
     (( ok )) || {
       echo "faradai: FARADAI_DOCKER_ARGS flag '${arg}' is not permitted" >&2
@@ -271,7 +273,7 @@ NETWORK_ARGS=()
 
 # ── build optional mount arrays ───────────────────────────────────────────────
 
-USER="$(whoami)"
+USER="${USER:-$(whoami)}"
 
 mkdir -p "${HOME}/.config/gh"
 GH_CONFIG_ARGS=(-v "${HOME}/.config/gh:/home/${USER}/.config/gh")

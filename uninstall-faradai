@@ -70,3 +70,9 @@ docker rmi faradai:latest 2>/dev/null || true
 sudo rm -f /usr/local/bin/faradai
 sudo rm -f /usr/local/bin/uninstall-faradai
 echo "Done."
+echo ""
+echo "The following are not removed and must be deleted manually if desired:"
+echo "  ~/.claude/        Claude Code settings, memory, and conversation history"
+echo "  ~/.claude.json    Claude Code top-level config"
+echo "  ~/.config/gh/     GitHub CLI auth tokens"
+echo "  faradai source directory (wherever you cloned it)"
