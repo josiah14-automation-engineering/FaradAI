@@ -1054,18 +1054,6 @@ All three GitHub issues closed with commit reference.
 
 ---
 
-## Session 32 — 2026-05-22
-
-### Add FARADAI_NETWORK_MODE=open|none (#27)
-
-`FARADAI_NETWORK_MODE` env var added with `open` (default, no `--network` flag) and `none` (`--network none`) modes. Validation follows the existing `_validate_*` pattern. `broker` mode remains deferred to v2. README env var table updated; network section already anticipated the feature. `#27` closed.
-
-### Persist gh auth across container restarts (#33)
-
-`gh auth login` writes tokens to `~/.config/gh/hosts.yml` inside the container's writable layer, losing them on every restart. Fixed by mounting the host's `~/.config/gh/` read-write into the container. A `mkdir -p` call before `docker run` ensures the directory exists on the host even for users who have never run gh outside the container, so `gh auth login` inside the container always persists. README mounts table and SMOKETEST updated accordingly.
-
----
-
 ## Session 31 — 2026-05-22
 
 ### Smoketest — All Checks Passed
@@ -1080,3 +1068,19 @@ Full smoketest run against a fresh container:
 - SSH agent forwarding: `/ssh-agent` socket present, keys accessible
 
 **Josiah noted** that the smoketest's `ssh-add -l` step prints key fingerprints and email labels into the conversation context. Logged a suggestion to replace it with `ssh-add -l | wc -l` to confirm keys are loaded without exposing identity metadata.
+
+---
+
+## Session 32 — 2026-05-22
+
+### Persist gh auth across container restarts (#33)
+
+`gh auth login` writes tokens to `~/.config/gh/hosts.yml` inside the container's writable layer, losing them on every restart. Fixed by mounting the host's `~/.config/gh/` read-write into the container. A `mkdir -p` call before `docker run` ensures the directory exists on the host even for users who have never run gh outside the container, so `gh auth login` inside the container always persists. README mounts table and SMOKETEST updated accordingly.
+
+**Verified:** `ls ~/.config/gh` on the host showed `config.yml` and `hosts.yml` populated from the earlier `gh auth login` run inside the container. `gh auth status` on the host confirmed token intact and active.
+
+### Add FARADAI_NETWORK_MODE=open|none (#27)
+
+`FARADAI_NETWORK_MODE` env var added with `open` (default, no `--network` flag) and `none` (`--network none`) modes. Validation follows the existing `_validate_*` pattern. `broker` mode remains deferred to v2. README env var table updated; network section already anticipated the feature.
+
+**Verified:** `FARADAI_NETWORK_MODE=none faradai bash` → `ping www.google.com` returned `Operation not permitted`. Launching without the var confirmed outbound network still works.
