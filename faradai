@@ -67,10 +67,10 @@ _validate_memory() {
 
 _validate_cpus() {
   # %.* strips the decimal so (( )) can do an integer bound check (bash can't compare floats natively).
-  [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] && (( ${FARADAI_CPUS%.*} <= 128 )) || {
+  if ! [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || (( ${FARADAI_CPUS%.*} > 128 )); then
     echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
     exit 1
-  }
+  fi
   awk -v v="${FARADAI_CPUS}" 'BEGIN { if (v <= 0) { print "faradai: FARADAI_CPUS must be greater than zero" > "/dev/stderr"; exit 1 } }' || exit 1
 }
 
