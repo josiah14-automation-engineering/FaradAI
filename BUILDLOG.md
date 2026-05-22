@@ -1024,3 +1024,20 @@ Extended the language rewrite discussion (first opened in Session 25). scsh was 
 The glibc issue itself is solvable: build on an old-glibc Docker base (e.g. `ubuntu:20.04`) or Alpine/musl in CI, and the binary runs widely. Go's `CGO_ENABLED=0` remains the path of least resistance for distribution, but Rash isn't disqualified on glibc grounds alone.
 
 **Revised ranking:** Rash over scsh. Reasoning and Opus's Nim/Zig/Rash analysis added as comments on GitHub issue #40.
+
+## Session 30 — 2026-05-22 02:41 UTC
+
+### Pre-flight Checks and Validation Guards (#9 #23 #24 #37)
+
+Four medium-priority defensive fixes applied in a single pass; commit f4c80c8.
+
+- **[#37] Image pre-flight** — `docker image inspect faradai:latest` check added to the docker pre-flight section; clear error directs user to `./install.sh` rather than surfacing a cryptic Docker message.
+- **[#23] FARADAI_WORKDIR existence validation** — `[ -d "${FARADAI_WORKDIR}" ]` check added immediately after workdir resolution; exits with a descriptive error if the directory does not exist.
+- **[#24] Zero validation for CPU and PID** — `_validate_cpus` now rejects zero via awk float comparison; `_validate_pids` now rejects zero via an integer `if` block. **Josiah caught** that the initial `|| true` on the PID check was an antipattern (masking `(( ))`'s non-zero exit when the condition is false); replaced with a proper `if` block.
+- **[#9] uninstall-faradai sudo guard** — `command -v sudo` guard added at the top of `uninstall-faradai`, matching the pattern already in `install.sh`.
+
+All four GitHub issues closed with commit reference.
+
+### faradai update: SSH → HTTPS (#41 #28)
+
+The `update` subcommand cloned via `git@github.com:...` (SSH), which fails for any user without a GitHub SSH key configured. Switched to `https://github.com/...` — no credentials required for a public repo clone. Error message updated to reference network connectivity rather than SSH keys. README Upgrading section corrected to say "over HTTPS (no SSH key required)" rather than "latest release". Closes both #41 and #28 (docs/behavior mismatch).

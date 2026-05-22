@@ -160,8 +160,8 @@ case "${1:-}" in
   update)
     _update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
     trap 'rm -rf "${_update_dir}"' EXIT
-    git clone git@github.com:josiah14-automation-engineering/faradai.git "${_update_dir}" \
-      || { echo "faradai: git clone failed — ensure SSH key access to GitHub is configured" >&2; exit 1; }
+    git clone https://github.com/josiah14-automation-engineering/faradai.git "${_update_dir}" \
+      || { echo "faradai: git clone failed — check your network connection and try again" >&2; exit 1; }
     "${_update_dir}/install.sh"
     exit 0
     ;;

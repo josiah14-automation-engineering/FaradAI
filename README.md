@@ -253,7 +253,7 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 faradai update
 ```
 
-Clones the latest release from GitHub, rebuilds the image, and reinstalls the CLI binary. The running container is not affected until the next launch.
+Clones the latest commit from GitHub over HTTPS (no SSH key required), rebuilds the image, and reinstalls the CLI binary. The running container is not affected until the next launch.
 
 **Updating pinned tool versions:** `@anthropic-ai/claude-code` and `aider-chat` are pinned in the Dockerfile. To update them, edit the version strings in the `RUN npm install` and `pipx install` lines and rebuild.
 

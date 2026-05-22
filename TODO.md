@@ -7,13 +7,13 @@
 - ~~**[#43] Use `pwd` as default workdir, project-scoped container naming, trust prompt**~~ ✓ resolved — see BUILDLOG Sessions 26–27.
 
 - ~~**[#6] Fragile container state detection**~~ ✓ resolved — replaced `grep -q true` with `[[ "$(docker inspect ...)" == "true" ]]` during script refactor.
-- **[#9] uninstall-faradai unguarded sudo** — no `command -v sudo` guard, unlike `install.sh`. Will hang or fail silently on systems requiring a password or missing sudo. Fix: add the same guard `install.sh` uses.
-- **[#23] No `FARADAI_WORKDIR` existence validation** — if the directory is absent or wrong, Docker silently creates or exposes an unexpected path. Fix: `[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }`; optionally `realpath` before mounting.
-- **[#24] CPU/PID validation accepts zero** — `FARADAI_CPUS=0` and `FARADAI_PIDS=0` pass current validation even though both are nonsensical. Fix: require `FARADAI_CPUS > 0` (using `awk` for float comparison) and `FARADAI_PIDS >= 1` (integer check with `(( FARADAI_PIDS < 1 ))`).
+- ~~**[#9] uninstall-faradai unguarded sudo**~~ ✓ resolved — `command -v sudo` guard added matching `install.sh`; commit f4c80c8.
+- ~~**[#23] No `FARADAI_WORKDIR` existence validation**~~ ✓ resolved — existence check added after workdir resolution; commit f4c80c8.
+- ~~**[#24] CPU/PID validation accepts zero**~~ ✓ resolved — `_validate_cpus` rejects zero via awk float comparison; `_validate_pids` rejects zero via integer if-block; commit f4c80c8.
 - ~~**[#25] `--publish`/`--device` not gated within allowlist**~~ ✓ resolved — both removed from base allowlist; require explicit `FARADAI_ALLOW_DEVICE=1` / `FARADAI_ALLOW_PUBLISH=1` opt-in.
-- **[#37] No image pre-flight check** — if `faradai:latest` doesn't exist (fresh install before first build, or after `docker image prune`), `docker run` fails with a cryptic Docker error. Distinct from the binary check (#7) and daemon check (#13). Fix: `docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }`.
+- ~~**[#37] No image pre-flight check**~~ ✓ resolved — `docker image inspect faradai:latest` pre-flight added with clear error directing user to `./install.sh`; commit f4c80c8.
 - ~~**[#38] entrypoint.sh: args after command silently dropped**~~ ✓ resolved — `"${@:2}"` added to all three exec calls.
-- **[#41] faradai update uses SSH clone** — `git clone git@github.com:...` fails for any user without GitHub SSH key auth. Also: after install completes the old case fell through to `docker run` rather than exiting or restarting — replace the entire update block. See also [#28] (README/behavior mismatch). Fix: switch to HTTPS clone; add explicit exit or auto-restart after successful install.
+- ~~**[#41] faradai update uses SSH clone**~~ ✓ resolved — switched to HTTPS clone; error message updated; see also [#28]. Commit in Session 30.
 
 ---
 
@@ -24,7 +24,7 @@
 - **[#14] No `LABEL` metadata in Dockerfile** — `docker image inspect faradai:latest` yields no provenance. Fix: add OCI labels (`image.title`, `image.source`).
 - **[#26] No `--init` flag on `docker run`** — AI tooling spawns subprocesses; without `--init`, zombie processes accumulate in the long-lived container. Fix: add `--init` to the `docker run` invocation.
 - **[#27] No selectable network modes** — default open egress is correct for usefulness, but offline review/refactor/sensitive-client sessions benefit from `--network none`. Fix: add `FARADAI_NETWORK_MODE=open|none` with validation; default `open`. (`broker` mode deferred to v2 — see [#32].)
-- **[#28] `faradai update` docs/behavior mismatch** — README says "pulls the latest release"; script clones master HEAD via SSH. Fix handled by [#41]; this item tracks the README correction once [#41] ships.
+- ~~**[#28] `faradai update` docs/behavior mismatch**~~ ✓ resolved — README corrected alongside [#41]. Commit in Session 30.
 - **[#33] `gh auth` credentials not persisted across container restarts** — `gh auth login` stores tokens inside the container's writable layer; lost on rebuild/restart. Fix: mount a host-side `~/.config/gh/` to persist `gh` auth without re-authenticating each session.
 - **[#45] Migrate complex Bash scripting to Rash** — flag parser, `_validate_*` functions, and `_build_extra_docker_args` are the most Bash-hostile sections. Rash (Racket-hosted shell DSL) would provide real data types, proper error handling, and macros for eliminating repetition. Deferred until v1 feature set stabilizes; adds a Racket dependency to the Dockerfile. See BUILDLOG Session 25 for stay-in-Bash reasoning. GitHub #40.
 - **[#44] Add bats unit tests for validation and flag-parsing logic** — `_validate_memory/cpus/pids`, `_build_extra_docker_args` allowlist, and the `-n`/`-a` flag parser (mutual exclusivity, known-command disambiguation). Docker interaction is out of scope — CI smoke test covers that. Use bats-core; mock external commands via `test/helpers/` bin on `$PATH`; add a CI job.
