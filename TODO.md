@@ -23,7 +23,7 @@
 - ~~**[#13] No Docker daemon availability check**~~ ✓ resolved — `docker info` pre-flight added after binary check; commit in Session 30.
 - ~~**[#14] No `LABEL` metadata in Dockerfile**~~ ✓ resolved — OCI `image.title` and `image.source` labels added to final stage; commit in Session 30.
 - ~~**[#26] No `--init` flag on `docker run`**~~ ✓ resolved — `--init` added to `docker run`; commit in Session 30.
-- **[#27] No selectable network modes** — default open egress is correct for usefulness, but offline review/refactor/sensitive-client sessions benefit from `--network none`. Fix: add `FARADAI_NETWORK_MODE=open|none` with validation; default `open`. (`broker` mode deferred to v2 — see [#32].)
+- ~~**[#27] No selectable network modes**~~ ✓ resolved — `FARADAI_NETWORK_MODE=open|none` added with validation; default `open`; `none` passes `--network none` to `docker run`. `broker` mode remains deferred to v2 (see [#32]). See BUILDLOG Session 32.
 - ~~**[#28] `faradai update` docs/behavior mismatch**~~ ✓ resolved — README corrected alongside [#41]. Commit in Session 30.
 - ~~**[#33] `gh auth` credentials not persisted across container restarts**~~ ✓ resolved — `~/.config/gh/` now mounted read-write; host dir created with `mkdir -p` if absent. See BUILDLOG Session 32.
 - **[#45] Migrate complex Bash scripting to Rash** — flag parser, `_validate_*` functions, and `_build_extra_docker_args` are the most Bash-hostile sections. Rash (Racket-hosted shell DSL) would provide real data types, proper error handling, and macros for eliminating repetition. Deferred until v1 feature set stabilizes; adds a Racket dependency to the Dockerfile. See BUILDLOG Session 25 for stay-in-Bash reasoning. GitHub #40.

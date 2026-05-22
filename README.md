@@ -81,6 +81,7 @@ By default, `faradai` auto-detects whether a container named `faradai` is alread
 | `FARADAI_MEMORY` | `4g` | `--memory` — max RAM |
 | `FARADAI_CPUS` | `4` | `--cpus` — max CPU cores |
 | `FARADAI_PIDS` | `512` | `--pids-limit` — max process count |
+| `FARADAI_NETWORK_MODE` | `open` | network access: `open` (default, unrestricted) or `none` (no outbound network) |
 
 **SSH**
 

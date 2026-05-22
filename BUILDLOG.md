@@ -1056,6 +1056,10 @@ All three GitHub issues closed with commit reference.
 
 ## Session 32 — 2026-05-22
 
+### Add FARADAI_NETWORK_MODE=open|none (#27)
+
+`FARADAI_NETWORK_MODE` env var added with `open` (default, no `--network` flag) and `none` (`--network none`) modes. Validation follows the existing `_validate_*` pattern. `broker` mode remains deferred to v2. README env var table updated; network section already anticipated the feature. `#27` closed.
+
 ### Persist gh auth across container restarts (#33)
 
 `gh auth login` writes tokens to `~/.config/gh/hosts.yml` inside the container's writable layer, losing them on every restart. Fixed by mounting the host's `~/.config/gh/` read-write into the container. A `mkdir -p` call before `docker run` ensures the directory exists on the host even for users who have never run gh outside the container, so `gh auth login` inside the container always persists. README mounts table and SMOKETEST updated accordingly.

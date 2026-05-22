@@ -27,6 +27,7 @@ Environment variables:
   FARADAI_MEMORY            Container RAM limit (default: 4g)
   FARADAI_CPUS              Container CPU limit (default: 4)
   FARADAI_PIDS              Container PID limit (default: 512)
+  FARADAI_NETWORK_MODE      Network access: open (default) or none (no outbound network)
   FARADAI_ENABLE_SSH_AGENT  Forward SSH agent socket when available (default: 1)
   FARADAI_TRUST_SSH_AGENT   Set to 1 to skip the SSH agent forwarding confirmation prompt (default: 0)
   FARADAI_MOUNT_SSH_DIR     Mount ~/.ssh read-only into the container (default: 0)
@@ -77,6 +78,13 @@ _validate_pids() {
     echo "faradai: FARADAI_PIDS must be at least 1" >&2
     exit 1
   fi
+}
+
+_validate_network_mode() {
+  [[ "${FARADAI_NETWORK_MODE}" == "open" || "${FARADAI_NETWORK_MODE}" == "none" ]] || {
+    echo "faradai: invalid FARADAI_NETWORK_MODE '${FARADAI_NETWORK_MODE}' (expected: open, none)" >&2
+    exit 1
+  }
 }
 
 _build_extra_docker_args() {
@@ -229,10 +237,15 @@ trap _cleanup INT TERM EXIT
 FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
 FARADAI_CPUS="${FARADAI_CPUS:-4}"
 FARADAI_PIDS="${FARADAI_PIDS:-512}"
+FARADAI_NETWORK_MODE="${FARADAI_NETWORK_MODE:-open}"
 
 _validate_memory
 _validate_cpus
 _validate_pids
+_validate_network_mode
+
+NETWORK_ARGS=()
+[[ "${FARADAI_NETWORK_MODE}" == "none" ]] && NETWORK_ARGS=(--network none)
 
 # ── build optional mount arrays ───────────────────────────────────────────────
 
@@ -268,7 +281,7 @@ _build_extra_docker_args
 # ── debug ─────────────────────────────────────────────────────────────────────
 
 if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
-  echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS}" >&2
+  echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS} NETWORK=${FARADAI_NETWORK_MODE}" >&2
   set -x
 fi
 
@@ -282,6 +295,7 @@ exec docker run -it --rm \
   --pids-limit="${FARADAI_PIDS}" \
   --cap-drop ALL \
   --security-opt no-new-privileges:true \
+  "${NETWORK_ARGS[@]}" \
   -v "${HOME}/.claude:/home/${USER}/.claude" \
   -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro" \
   -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
