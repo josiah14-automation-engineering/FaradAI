@@ -19,7 +19,7 @@
 
 ## Low
 
-- **[#11] No `--pull` in build** — `build.sh` reuses cached base layers without checking for upstream updates. Previously accepted as won't-fix; reconsidered.
+- ~~**[#11] No `--pull` in build**~~ ✓ resolved — `--pull` added to `docker build` in `build.sh`. See BUILDLOG Session 33.
 - ~~**[#13] No Docker daemon availability check**~~ ✓ resolved — `docker info` pre-flight added after binary check; commit in Session 30.
 - ~~**[#14] No `LABEL` metadata in Dockerfile**~~ ✓ resolved — OCI `image.title` and `image.source` labels added to final stage; commit in Session 30.
 - ~~**[#26] No `--init` flag on `docker run`**~~ ✓ resolved — `--init` added to `docker run`; commit in Session 30.

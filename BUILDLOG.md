@@ -1084,3 +1084,11 @@ Full smoketest run against a fresh container:
 `FARADAI_NETWORK_MODE` env var added with `open` (default, no `--network` flag) and `none` (`--network none`) modes. Validation follows the existing `_validate_*` pattern. `broker` mode remains deferred to v2. README env var table updated; network section already anticipated the feature.
 
 **Verified:** `FARADAI_NETWORK_MODE=none faradai bash` → `ping www.google.com` returned `Operation not permitted`. Launching without the var confirmed outbound network still works.
+
+---
+
+## Session 33 — 2026-05-22
+
+### Add --pull to build.sh (#11)
+
+`--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
