@@ -55,7 +55,7 @@ An optional argument selects which tool to launch:
 | `faradai` | Claude Code (default) |
 | `faradai aider` | aider |
 | `faradai bash` | bare shell, useful for debugging |
-| `faradai update` | pull latest release from GitHub and reinstall |
+| `faradai update` | pull latest tagged release and reinstall |
 | `faradai uninstall` | remove all faradai containers, the image, and installed binaries |
 
 ### Multi-project and multi-container usage
@@ -293,7 +293,13 @@ Tests cover `_validate_memory/cpus/pids/network_mode`, the `_build_extra_docker_
 faradai update
 ```
 
-Clones the latest commit from GitHub over HTTPS (no SSH key required), rebuilds the image, and reinstalls the CLI binary. The running container is not affected until the next launch.
+Resolves the latest tagged release, clones it over HTTPS (no SSH key required), verifies the cloned commit matches the expected tag, then rebuilds the image and reinstalls the CLI binary. The running container is not affected until the next launch.
+
+To pull from a branch instead (e.g. for testing unreleased changes):
+
+```bash
+faradai update --branch master
+```
 
 To remove faradai entirely:
 
