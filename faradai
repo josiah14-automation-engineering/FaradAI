@@ -315,6 +315,7 @@ exec docker run -it --rm \
   --memory="${FARADAI_MEMORY}" \
   --cpus="${FARADAI_CPUS}" \
   --pids-limit="${FARADAI_PIDS}" \
+  --shm-size=1g \
   --cap-drop ALL \
   --security-opt no-new-privileges:true \
   "${NETWORK_ARGS[@]}" \

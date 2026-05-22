@@ -8,8 +8,17 @@ ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
 ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    nodejs=18.19.1+dfsg-6ubuntu5 \
-    npm=9.2.0~ds1-2 \
+    ca-certificates \
+    curl \
+    gnupg \
+ && mkdir -p /etc/apt/keyrings \
+ && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+ && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+    | tee /etc/apt/sources.list.d/nodesource.list > /dev/null \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+    nodejs=22.22.2-1nodesource1 \
     python3=3.12.3-0ubuntu2.1 \
     python3-pip=24.0+dfsg-1ubuntu1.3 \
     python3-venv=3.12.3-0ubuntu2.1 \
@@ -42,27 +51,37 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
+    ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
-    dnsutils=1:9.18.39-0ubuntu0.24.04.3 \
-    git=1:2.43.0-1ubuntu7.3 \
-    iproute2=6.1.0-1ubuntu6.3 \
-    iputils-ping=3:20240117-1ubuntu0.1 \
-    net-tools=2.10-0.1ubuntu4.4 \
-    netcat-openbsd=1.226-1ubuntu2 \
-    nodejs=18.19.1+dfsg-6ubuntu5 \
-    openssh-client=1:9.6p1-3ubuntu13.16 \
-    python3=3.12.3-0ubuntu2.1 \
-    python3-pip=24.0+dfsg-1ubuntu1.3 \
-    python3-venv=3.12.3-0ubuntu2.1 \
-    tmux=3.4-1ubuntu0.1 \
-    vim=2:9.1.0016-1ubuntu7.13 \
+    gnupg \
+ && mkdir -p /etc/apt/keyrings \
+ && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+ && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+    | tee /etc/apt/sources.list.d/nodesource.list > /dev/null \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
  && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
     | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
  && apt-get update \
- && apt-get install -y --no-install-recommends gh=2.92.0 \
+ && apt-get install -y --no-install-recommends \
+    bind9-dnsutils=1:9.18.39-0ubuntu0.24.04.5 \
+    gh=2.92.0 \
+    git=1:2.43.0-1ubuntu7.3 \
+    iproute2=6.1.0-1ubuntu6.3 \
+    iputils-ping=3:20240117-1ubuntu0.1 \
+    net-tools=2.10-0.1ubuntu4.4 \
+    netcat-openbsd=1.226-1ubuntu2 \
+    nodejs=22.22.2-1nodesource1 \
+    openssh-client=1:9.6p1-3ubuntu13.16 \
+    python3=3.12.3-0ubuntu2.1 \
+    python3-pip=24.0+dfsg-1ubuntu1.3 \
+    python3-venv=3.12.3-0ubuntu2.1 \
+    tmux=3.4-1ubuntu0.1 \
+    vim=2:9.1.0016-1ubuntu7.13 \
+ && apt-get purge -y gnupg \
+ && apt-get autoremove -y \
  && rm -f /usr/share/keyrings/githubcli-archive-keyring.gpg \
  && rm -f /etc/apt/sources.list.d/github-cli.list \
  && rm -rf /var/lib/apt/lists/* \
