@@ -1271,3 +1271,38 @@ The original `update` command cloned from master HEAD with no integrity check. T
 - Final stage: `COPY --chmod=755 --from=builder /tmp/shellcheck /usr/local/bin/shellcheck`. The `--chmod=755` is explicit because Docker `COPY` does not guarantee preserving the execute bit across stages.
 
 CI smoke test updated to verify `shellcheck --version`. README "What's in the image" updated.
+
+---
+
+## Session 41 — 2026-05-22
+
+### Rash language spike (#40)
+
+**Trigger:** Josiah observed that `faradai` at 442 lines is well past the 150–200 line threshold where shell scripts start becoming maintenance liabilities. Issue #40 (migrate to Rash) was already open; this session was an exploratory spike to evaluate whether the move would be worthwhile.
+
+**Approach — intentional AI code generation for discernment:** Rather than writing the spike by hand, Josiah had Claude generate a full Rash rewrite of `faradai` across several passes. The explicit intent was to get a feel for what the language switch would look like in practice — using AI generation to compress the exploration time — while making clear that any actual rewrite would be written by Josiah himself. AI-generated code aids discernment; it does not replace judgment.
+
+The spike went through three passes:
+1. Direct translation — establish baseline
+2. Shell-first — minimize Racket, use shell line syntax wherever possible
+3. Racket-only-where-it-wins — identify the genuine high-value areas; leave everything else as shell lines
+
+**What Rash actually is:** The key discovery is that Rash's target audience runs the other direction from what was hoped. Rash is Racket with shell pipeline syntax for command invocation — not a shell with Racket available for complex logic. Control flow (`when`, `unless`, `match`, `define`, `let`, `with-handlers`) is always Racket/Lisp. An ops engineer reading the file would still be reading mostly Lisp. Shell syntax only applies at the command-invocation layer.
+
+**Where Racket genuinely wins:**
+- Validation (`_validate_memory`, `_validate_cpus`, etc.) — real regex, real numeric types, no `awk` for float comparison, no `BASH_REMATCH` gymnastics. The clearest win.
+- `_build_extra_docker_args` — iterating a word-split list with prefix matching is clean with `for/or`; gnarly in bash.
+- Optional mount list building + `run-pipeline` — conditional flag lists built as Racket lists splice automatically into the `docker run` invocation, replacing bash array quoting.
+
+**Line count:** At equivalent writing density (reasonable spacing and comments), the Rash spike lands at 402 lines vs. the bash original at 442 — roughly 40 lines / 9% reduction. The savings are real but modest.
+
+**Portability note surfaced:** The bash script already uses `read -ra`, `(( ))` arithmetic, and `[[ =~ ]]` with `BASH_REMATCH` — none guaranteed on bash 3.2, which is what macOS ships. The "it's just bash" portability story already has an asterisk. Rash's `raco exe` can produce a ~56MB self-contained binary with no host Racket dependency, similar to a Go binary but without the glibc concern.
+
+**Open questions** documented in a comment on issue #40 (see also `spike/rash-migration` branch):
+- Exit code propagation from interactive `docker run` via `run-pipeline`
+- Shell lines inside Racket forms (`lambda`, `match` bodies) — relies on Linea reader applying throughout, unverified
+- `&permissive` inside `#{}` capture blocks — validity unconfirmed
+- Packaging story (source + bundled Racket vs. compiled `raco exe`)
+- Whether Python would be a better call — equivalent validation wins, universally readable control flow, smaller adoption ask
+
+**Outcome:** Spike committed to `spike/rash-migration`, findings and open questions posted to issue #40. No decision made on the migration; deferred until v1 feature set stabilizes per the original issue.
