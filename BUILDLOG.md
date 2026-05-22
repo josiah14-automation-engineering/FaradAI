@@ -1139,3 +1139,12 @@ The NodeSource addition introduced two extra `apt-get update` calls (one per rep
 Also added `--shm-size=1g` to `docker run`. Claude Code is Electron-based and the default Docker 64 MB `/dev/shm` causes crashes and silent failures.
 
 **Josiah noted** the build was noticeably slower after the initial NodeSource switch, which prompted the apt consolidation. Build time recovered after the restructure. New container verified working.
+
+### Fix CI linting failures introduced by Node 22 changes
+
+Two hadolint warnings surfaced in CI after the Dockerfile restructure:
+
+- **DL4006** — builder stage had pipes but no `SHELL` directive. Added `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` to the builder stage.
+- **DL3008** — `ca-certificates`, `curl`, and `gnupg` were unpinned in the builder stage; `ca-certificates` and `gnupg` unpinned in the final stage. Pinned all. `gnupg` version required querying the exact digest-pinned base image directly (`docker run --rm ubuntu:24.04@sha256:...`) — the host's apt repos had a different version (`2.2.27`) than the image (`2.4.4-2ubuntu17.4`).
+
+A shellcheck SC2015 warning on the `&&/||` chain in `_validate_cpus` was also caught and fixed in the same CI run — rewritten as a proper `if` statement.
