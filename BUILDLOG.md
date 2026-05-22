@@ -1199,6 +1199,20 @@ Ran Ring-2.6-1T (via aider) and Opus independently on the full codebase. Each fi
 
 ROADMAP updated: #59 moved to **Now**; #60–64 added to **Later**.
 
+---
+
+## Session 39 — 2026-05-22 18:29 UTC
+
+### Cage framing clarification in README; remove version assumptions
+
+Opus flagged that "the AI inside has full capability, but can only reach what you explicitly mount" overstates the guarantee since network egress is open by default. Two changes:
+
+**Intro paragraph:** Reworded the cage metaphor sentence to be precise: "the cage is the filesystem boundary plus the absence of the Docker socket." Added that the agent can reach the internet freely. Described the container as running CLI-based AI coding agents generally, not just Claude Code and aider — the pattern is not specific to either. Removed "v1"/"v2" version references from the intro (and throughout README and ROADMAP) since the version roadmap isn't settled.
+
+**Security model / network section:** Made the cage boundary limitation more prominent ("This is the current boundary of the Faraday cage metaphor"), explicitly named both constraints (filesystem + no Docker socket), and linked the credential broker roadmap items (#29, #30, #31) directly rather than just referencing "v2."
+
+**Opus "update clones master" finding:** This was a stale finding — the tag-based update with integrity verification was implemented earlier in this session before the review ran. No change needed.
+
 **Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
 
 ---

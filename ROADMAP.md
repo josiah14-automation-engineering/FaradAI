@@ -34,11 +34,11 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 ## Deferred
 
 - [#57](https://github.com/josiah14-automation-engineering/FaradAI/issues/57) — `build.sh --network=host` gives build container full host network access (accepted tradeoff, documented)
-- [#58](https://github.com/josiah14-automation-engineering/FaradAI/issues/58) — Credential overlay `:ro` prevents writes but not reads (addressed in v2 via #29)
+- [#58](https://github.com/josiah14-automation-engineering/FaradAI/issues/58) — Credential overlay `:ro` prevents writes but not reads (tracked via #29)
 
 ---
 
-## v2
+## Planned
 
 - [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29) — Credential broker / proxy sidecar
 - [#30](https://github.com/josiah14-automation-engineering/FaradAI/issues/30) — Per-project policy / config support

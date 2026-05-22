@@ -14,7 +14,7 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
 
-A Docker container for running Claude Code and aider. Named after the Faraday cage: the AI inside has full capability, but can only reach what you explicitly mount. In v1, the cage constrains the *filesystem* — network egress is open by default. Full network isolation (a credential broker that the agent talks to instead of the internet directly) is planned for v2.
+A Docker container for running CLI-based AI coding agents. Claude Code and aider are currently supported; the container pattern is not specific to either. Named after the Faraday cage, but the metaphor is precise: the cage is the **filesystem boundary plus the absence of the Docker socket**. Network egress is intentionally unrestricted — the agent can reach the internet freely. Full network isolation is on the [roadmap](ROADMAP.md).
 
 ## About this project
 
@@ -218,9 +218,9 @@ For sessions where you do not need Git operations or SSH access inside the conta
 
 ### Network access
 
-The container has unrestricted outbound network access by default. This is intentional for v1: the agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting that in advance, which defeats the purpose of a general-purpose coding assistant.
+The container has unrestricted outbound network access by default. This is intentional: the agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting that in advance, which defeats the purpose of a general-purpose coding assistant.
 
-This is the current gap in the Faraday cage metaphor. Full network isolation — where the agent container talks only to a local credential broker rather than the internet directly — is planned for v2 (see [#30](ROADMAP.md)). For now, `FARADAI_NETWORK_MODE=none` is available as an opt-in for offline sessions where you know the agent won't need network access.
+**This is the current boundary of the Faraday cage metaphor.** The cage constrains the filesystem and blocks container escape via the Docker socket; it does not constrain the network. A credential broker that intermediates all outbound traffic — so the agent talks to a local proxy rather than the internet directly — is tracked on the [roadmap](ROADMAP.md) as [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29), [#30](https://github.com/josiah14-automation-engineering/FaradAI/issues/30), and [#31](https://github.com/josiah14-automation-engineering/FaradAI/issues/31). For now, `FARADAI_NETWORK_MODE=none` is available as an opt-in for offline sessions where you know the agent won't need network access.
 
 The container can also reach services running on the host via the Docker bridge gateway. This too is intentional — useful for workflows involving local k3s clusters, development servers, or other host-side services you want the agent to interact with.
 
