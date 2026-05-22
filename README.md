@@ -10,9 +10,17 @@
 
 # FaradAI
 
+**OS-level filesystem boundary for AI coding agents.**
+
 AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
 
 A Docker container for running Claude Code and aider. Named after the Faraday cage: the AI inside has full capability, but can only reach what you explicitly mount. In v1, the cage constrains the *filesystem* — network egress is open by default. Full network isolation (a credential broker that the agent talks to instead of the internet directly) is planned for v2.
+
+## About this project
+
+FaradAI is built with Claude Code as a coding assistant. [`BUILDLOG.md`](BUILDLOG.md) is a deliberate session-by-session record of every decision, tradeoff, and reasoning thread — proof that this is not AI running loose without thought or supervision. Every change reflects a human judgment call.
+
+[`CHANGELOG.md`](CHANGELOG.md) covers user-facing release notes. [`BUILDLOG.md`](BUILDLOG.md) covers process and reasoning through the first release; [`DECISIONLOG.md`](DECISIONLOG.md) captures architectural decisions thereafter.
 
 ## Prerequisites
 
@@ -186,7 +194,7 @@ Credentials are delivered as mounted files rather than environment variables —
 
 ## Security model
 
-**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](TODO.md) for the planned `FARADAI_PROFILE=strict` mode.
+**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
 
 **The Faraday cage protects the filesystem boundary, not the process environment.**
 
@@ -211,7 +219,7 @@ For sessions where you do not need Git operations or SSH access inside the conta
 
 The container has unrestricted outbound network access by default. This is intentional for v1: the agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting that in advance, which defeats the purpose of a general-purpose coding assistant.
 
-This is the current gap in the Faraday cage metaphor. Full network isolation — where the agent container talks only to a local credential broker rather than the internet directly — is planned for v2 (see [#30](TODO.md)). For now, `FARADAI_NETWORK_MODE=none` is available as an opt-in for offline sessions where you know the agent won't need network access.
+This is the current gap in the Faraday cage metaphor. Full network isolation — where the agent container talks only to a local credential broker rather than the internet directly — is planned for v2 (see [#30](ROADMAP.md)). For now, `FARADAI_NETWORK_MODE=none` is available as an opt-in for offline sessions where you know the agent won't need network access.
 
 The container can also reach services running on the host via the Docker bridge gateway. This too is intentional — useful for workflows involving local k3s clusters, development servers, or other host-side services you want the agent to interact with.
 
@@ -235,6 +243,9 @@ A stopped container is holding the name. The `faradai` script handles this autom
 **SSH key permissions rejected**
 SSH requires key files to be `600`. Fix: `chmod 600 ~/.ssh/id_*`.
 
+**SSH push/pull fails inside the container**
+Run `echo $SSH_AUTH_SOCK` inside the container — it should return `/ssh-agent`. If empty, the agent was not forwarded at launch. See [Host SSH agent setup](#host-ssh-agent-setup) for instructions. If your keys are passphrase-protected, run `ssh-add` on the host before starting the container.
+
 **aider not found inside the container**
 The image predates the least-privilege install fix (Session 7). Rebuild: `./build.sh && ./install.sh`.
 
@@ -248,6 +259,14 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 `install.sh` needs `sudo` to copy the `faradai` binary to `/usr/local/bin`. Install sudo (`apt-get install sudo` on Debian/Ubuntu) or copy the binary manually: `cp faradai /usr/local/bin/faradai && cp uninstall-faradai /usr/local/bin/uninstall-faradai` as root.
 
 ---
+
+## Development
+
+[`BUILDLOG.md`](BUILDLOG.md) is a session-by-session record of every implementation decision and tradeoff from inception through v0.1.0-alpha.1 — the reasoning behind changes, not just the changes themselves. Reading it alongside the git history gives a complete picture of how and why the project reached its first release.
+
+After v0.1.0-alpha.1, significant architectural and security decisions are captured in [`DECISIONLOG.md`](DECISIONLOG.md): a terse, indexed log of *why* non-obvious choices were made. [`CHANGELOG.md`](CHANGELOG.md) entries link to relevant [`DECISIONLOG.md`](DECISIONLOG.md) entries; DECISIONLOG entries note which version they affect.
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Testing
 

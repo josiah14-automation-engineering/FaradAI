@@ -1147,4 +1147,32 @@ Two hadolint warnings surfaced in CI after the Dockerfile restructure:
 - **DL4006** — builder stage had pipes but no `SHELL` directive. Added `SHELL ["/bin/bash", "-o", "pipefail", "-c"]` to the builder stage.
 - **DL3008** — `ca-certificates`, `curl`, and `gnupg` were unpinned in the builder stage; `ca-certificates` and `gnupg` unpinned in the final stage. Pinned all. `gnupg` version required querying the exact digest-pinned base image directly (`docker run --rm ubuntu:24.04@sha256:...`) — the host's apt repos had a different version (`2.2.27`) than the image (`2.4.4-2ubuntu17.4`).
 
-A shellcheck SC2015 warning on the `&&/||` chain in `_validate_cpus` was also caught and fixed in the same CI run — rewritten as a proper `if` statement.
+A shellcheck SC2015 warning on the `&&/||` chain in `_validate_cpus` was also caught and fixed — rewritten as a proper `if` statement.
+
+---
+
+## Session 36 — 2026-05-22
+
+### Rename TODO.md → ROADMAP.md; README overhaul; CHANGELOG and DECISIONLOG (#47 #48)
+
+**TODO → ROADMAP:** Renamed `TODO.md` to `ROADMAP.md` via `git mv`. Two internal README links updated.
+
+**README overhaul:**
+- Added bold tagline: "OS-level filesystem boundary for AI coding agents."
+- Added `## About this project` section near the top — explicitly calls out `BUILDLOG.md` as proof of intentional human oversight, not unsupervised AI.
+- Added `## Development` section — explains the BUILDLOG/DECISIONLOG split (see below) and links to `CONTRIBUTING.md`.
+- Fixed `ring-feedback.md` finding #15 (issue #47): added SSH troubleshooting entry pointing users to the Host SSH agent setup section. Ring flagged "SSH push/pull fails inside the container" — the forwarding itself works and has been verified; the failure mode is passphrase-protected keys not being loaded via `ssh-add` before launch, not a forwarding bug.
+
+**CHANGELOG.md (#48):** Created. Josiah's intent for `v0.1.0-alpha.1` is to get the release infrastructure right before populating the log; the file is minimal by design.
+
+**Delete `ring-feedback.md`:** All 18 Ring findings have been fixed, triaged to GitHub issues, or explicitly accepted. The file no longer serves a tracking function; GitHub issues are the source of truth.
+
+### Decision: BUILDLOG → DECISIONLOG after v0.1.0-alpha.1
+
+The question arose: after the first release, should ongoing decisions continue in BUILDLOG, or move to GitHub issues?
+
+**GitHub issues** were considered — standard engineering practice, richer metadata (labels, milestones, assignees). Rejected for two reasons: (1) they live on GitHub's servers, not in the repo, making migration to GitLab or another host lossy or complex; (2) issues are task-oriented and don't naturally capture architectural reasoning the way a decision log does.
+
+**Keeping BUILDLOG indefinitely** was rejected because the session-log format accumulates unboundedly and becomes unwieldy.
+
+**Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
