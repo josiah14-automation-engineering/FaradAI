@@ -6,10 +6,6 @@ All notable user-facing changes to FaradAI are documented here. For architectura
 
 ## [Unreleased]
 
-## [0.1.0-alpha.2] — 2026-05-22
-
-- `docs`: clarify security model — the cage is a filesystem, environment, and process boundary plus the absence of the Docker socket; call out that outbound network access is unrestricted alongside the env-var visibility warning
-
 ## [0.1.0-alpha.1] — 2026-05-22
 
 Initial release. Core features:
