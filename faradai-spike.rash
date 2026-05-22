@@ -1,0 +1,402 @@
+#!/usr/bin/env racket
+#lang rash
+
+;;; faradai — Claude Code container launcher
+
+(require racket/string
+         racket/list
+         racket/match
+         racket/file
+         rash/demo/setup)    ; provides the #{} output-capture form
+
+;; ── version ───────────────────────────────────────────────────────────────────
+
+(define faradai-version "0.1.0-alpha.1")
+
+;; ── known subcommands (for -a [NAME] disambiguation) ─────────────────────────
+
+(define known-commands
+  '("claude" "aider" "bash" "logs" "status" "version" "--version"
+    "update" "uninstall" "help" "--help" "-h"))
+
+;; ── usage ─────────────────────────────────────────────────────────────────────
+
+(define (usage)
+  (display #<<END
+Usage: faradai [-n NAME | -a [NAME]] [COMMAND [ARGS...]]
+
+Flags:
+  -n NAME   Create container faradai-NAME; error if it already exists
+  -a [NAME] Attach to running faradai-NAME (or default faradai); error if not running
+  (none)    Auto-detect: attach if default faradai is running, create if not
+
+Commands:
+  (none)     Launch Claude Code (default)
+  claude     Launch Claude Code; remaining args passed through
+  aider      Launch aider; remaining args passed through
+  bash       Open a bash shell inside the container
+  logs       Stream container logs
+  status     Show container state, image, and start time
+  version    Print the faradai CLI version
+  update [--branch NAME]  Pull the latest tagged release and reinstall
+  uninstall  Remove the faradai container(s), image, and installed binaries
+  help       Show this help message
+
+END
+  ))
+
+;; ── error helper ──────────────────────────────────────────────────────────────
+
+(define (die fmt . args)
+  (apply eprintf (string-append "faradai: " fmt "\n") args)
+  (exit 1))
+
+;; ── validation ────────────────────────────────────────────────────────────────
+;; Racket win: real regex, real numeric types — no awk for float comparison,
+;; no BASH_REMATCH gymnastics.
+
+(define (validate-memory mem)
+  ; Pattern: optional decimal number followed by m/M/g/G
+  (match (regexp-match #px"^(\\d+(?:\\.\\d+)?)([mgMG])$" mem)
+    [#f (die "invalid FARADAI_MEMORY '~a' (expected e.g. 4g or 512m)" mem)]
+    [(list _ num-str unit-str)
+     (define n (string->number num-str))
+     (define u (string-downcase unit-str))
+
+     (when (<= n 0)
+       (die "FARADAI_MEMORY must be greater than zero"))
+     (when (or (and (equal? u "g") (> n 512))
+               (and (equal? u "m") (> n 524288)))
+       (die "FARADAI_MEMORY '~a' exceeds the 512g sanity limit" mem))]))
+
+(define (validate-cpus cpus)
+  (define n (string->number cpus))
+  (unless (and n (real? n) (> n 0) (<= n 128))
+    (die "invalid FARADAI_CPUS '~a' (expected a number <= 128, e.g. 4 or 2.5)" cpus)))
+
+(define (validate-pids pids)
+  (define n (string->number pids))
+  (unless (and n (exact-integer? n) (>= n 1))
+    (die "invalid FARADAI_PIDS '~a' (expected a positive integer)" pids)))
+
+(define (validate-network-mode mode)
+  (unless (member mode '("open" "none"))
+    (die "invalid FARADAI_NETWORK_MODE '~a' (expected: open, none)" mode)))
+
+;; ── docker arg allowlist ──────────────────────────────────────────────────────
+;; Racket win: iterating a word-split list with prefix matching is a mess in shell.
+
+(define always-permitted '("--env" "-e" "--label" "-l" "--hostname"))
+
+(define (build-extra-docker-args raw)
+  (if (string=? raw "")
+      '()
+      (let* ([args      (string-split raw)]
+             [permitted (append always-permitted
+                                (if (equal? (getenv "FARADAI_ALLOW_DEVICE")  "1") '("--device")        '())
+                                (if (equal? (getenv "FARADAI_ALLOW_PUBLISH") "1") '("--publish" "-p")  '()))])
+
+        ; Scan only flag-shaped args (starting with -); values are not checked.
+        (for ([arg args] #:when (string-prefix? arg "-"))
+          ; for/or short-circuits on the first permitted match.
+          (unless (for/or ([flag permitted])
+                    (or (string=? arg flag)
+                        (string-prefix? arg (string-append flag "="))))
+            (eprintf "faradai: FARADAI_DOCKER_ARGS flag '~a' is not permitted\n" arg)
+            (eprintf "faradai: always permitted: --env/-e, --label/-l, --hostname\n")
+            (eprintf "faradai: opt-in: --device (FARADAI_ALLOW_DEVICE=1), --publish/-p (FARADAI_ALLOW_PUBLISH=1)\n")
+            (exit 1)))
+        args)))
+
+;; ── update ────────────────────────────────────────────────────────────────────
+
+(define repo-url "https://github.com/josiah14-automation-engineering/faradai.git")
+
+(define (resolve-latest-tag)
+  (define tag
+    (string-trim
+      ; &permissive: don't raise if any pipeline stage exits non-zero (e.g. no tags found).
+      #{git ls-remote --tags --sort=-version:refname $repo-url "v*"
+        | awk "{print $2}"
+        | grep -vF "^{}"
+        | sed "s|refs/tags/||"
+        | head -1
+        &permissive}))
+
+  ; Return #f instead of "" so callers can use (or (resolve-latest-tag) (die ...))
+  (if (string=? tag "") #f tag))
+
+(define (verify-update-tag dir expected)
+  ; with-handlers here: git describe exits non-zero if HEAD has no tag — return "" instead of raising.
+  (define actual
+    (string-trim
+      (with-handlers ([exn:fail? (lambda (e) "")])
+        #{git -C $dir describe --exact-match --tags HEAD})))
+
+  (cond
+    [(string=? actual "")
+     (die "integrity check failed — cloned HEAD is not a tagged commit")]
+    [(not (string=? actual expected))
+     (die "integrity check failed — expected '~a', got '~a'" expected actual)]))
+
+(define (update-faradai . update-args)
+  (define update-dir (make-temporary-file "faradai-update-~a" 'directory "/tmp"))
+
+  (match update-args
+    [(list "--branch" branch)
+     (eprintf "faradai: updating from branch '~a' — not a tagged release\n" branch)
+     git clone --depth=1 --branch $branch $repo-url $update-dir]
+
+    [(list "--branch")
+     (die "--branch requires a name (e.g. faradai update --branch master)")]
+
+    [_
+     (define tag (or (resolve-latest-tag)
+                     (die "failed to resolve latest release tag — check your network connection")))
+     (eprintf "faradai: updating to ~a\n" tag)
+     git clone --depth=1 --branch $tag $repo-url $update-dir
+     (verify-update-tag update-dir tag)])
+
+  ; Run installer then clean up regardless of outcome.
+  $update-dir/install.sh
+  rm -rf $update-dir &permissive)
+
+;; ── flag parsing ──────────────────────────────────────────────────────────────
+;; Manual recursive loop — racket/cmdline can't handle -a's optional NAME argument.
+
+(define-values (container-name mode remaining-args)
+  (let loop ([args  (vector->list (current-command-line-arguments))]
+             [cname "faradai"]
+             [m     'auto]
+             [rest  '()])
+    (match args
+      ['() (values cname m (reverse rest))]
+
+      ; -n NAME — always requires a name argument
+      [(list* "-n" name tail)
+       (when (equal? m 'attach) (die "-n and -a are mutually exclusive"))
+       (loop tail (string-append "faradai-" name) 'create rest)]
+      [(cons "-n" _)
+       (die "-n requires a NAME argument (e.g. faradai -n myproject)")]
+
+      ; -a [NAME] — name is optional; consume the next arg only if it isn't a known command or flag
+      [(list* "-a" (and next (not (or (member _ known-commands) (string-prefix? _ "-")))) tail)
+       (when (equal? m 'create) (die "-n and -a are mutually exclusive"))
+       (loop tail (string-append "faradai-" next) 'attach rest)]
+      [(cons "-a" rest-args)
+       (when (equal? m 'create) (die "-n and -a are mutually exclusive"))
+       (loop rest-args cname 'attach rest)]
+
+      [(cons arg tail)
+       (loop tail cname m (cons arg rest))])))
+
+;; ── subcommand dispatch ───────────────────────────────────────────────────────
+
+(match (if (null? remaining-args) "" (car remaining-args))
+  [(or "--help" "-h" "help") (usage) (exit 0)]
+  [(or "version" "--version") (printf "faradai ~a\n" faradai-version) (exit 0)]
+  ["update"    (apply update-faradai (cdr remaining-args)) (exit 0)]
+  ; Shell line — exec the uninstall script directly; no return.
+  ["uninstall" /usr/local/bin/uninstall-faradai]
+  [_ (void)])
+
+;; ── docker pre-flight ─────────────────────────────────────────────────────────
+;; Pattern throughout: shell line inside with-handlers — Rash raises on non-zero
+;; exit, so with-handlers acts as try/catch around command failures.
+
+(with-handlers ([exn:fail? (lambda (e) (die "docker is not installed or not in PATH"))])
+  which docker > /dev/null)
+
+(with-handlers ([exn:fail? (lambda (e) (die "Docker daemon is not running"))])
+  docker info > /dev/null)
+
+;; ── logs and status (before image check) ─────────────────────────────────────
+
+(define subcmd      (if (null? remaining-args) "" (car remaining-args)))
+(define subcmd-rest (if (null? remaining-args) '() (cdr remaining-args)))
+
+(match subcmd
+  ["logs"
+   ; $subcmd-rest is a list — Rash splices it into the command's argument positions.
+   docker logs $container-name $subcmd-rest
+   (exit 0)]
+
+  ["status"
+   (define fmt "name:    {{slice .Name 1}}\nstate:   {{.State.Status}}\nstarted: {{.State.StartedAt}}\nimage:   {{.Config.Image}}")
+   (with-handlers ([exn:fail? (lambda (e) (die "container '~a' not found" container-name))])
+     docker inspect $container-name --format $fmt)
+   (exit 0)]
+
+  [_ (void)])
+
+;; ── image check ───────────────────────────────────────────────────────────────
+
+(with-handlers ([exn:fail? (lambda (e) (die "image not found — run './install.sh' to build it"))])
+  docker image inspect faradai:latest > /dev/null)
+
+; Capture the username label from the image to verify it matches the current user.
+(define image-user
+  (string-trim
+    (with-handlers ([exn:fail? (lambda (e) "")])
+      #{docker image inspect faradai:latest
+        --format "{{index .Config.Labels \"org.opencontainers.image.faradai.username\"}}"})))
+
+(when (and (non-empty-string? image-user)
+           (not (string=? image-user (or (getenv "USER") ""))))
+  (eprintf "faradai: image was built for user '~a' but running as '~a'\n" image-user (getenv "USER"))
+  (eprintf "faradai: mount paths inside the container will not match — rebuild with: ./install.sh\n")
+  (exit 1))
+
+;; ── resolve workdir ───────────────────────────────────────────────────────────
+
+(define workdir (or (getenv "FARADAI_WORKDIR") #{pwd}))
+(unless (directory-exists? workdir)
+  (die "FARADAI_WORKDIR does not exist: ~a" workdir))
+
+;; ── attach or auto-attach ─────────────────────────────────────────────────────
+
+(define is-running
+  (with-handlers ([exn:fail? (lambda (e) "")])
+    (string-trim #{docker inspect --format "{{.State.Running}}" $container-name})))
+
+; Resolve command args early — needed in both attach paths below.
+(define cmd-args (if (null? remaining-args) '("claude") remaining-args))
+
+(when (equal? mode 'attach)
+  (unless (string=? is-running "true")
+    ; (substring container-name 7) strips the "faradai-" prefix for the hint message.
+    (if (string=? container-name "faradai")
+        (die "no running container '~a' — start one with: faradai" container-name)
+        (die "no running container '~a' — start one with: faradai -n ~a"
+             container-name (substring container-name 7))))
+  (exit (system*/exit-code "docker" "exec" "-it" container-name cmd-args)))
+
+(when (and (equal? mode 'auto) (string=? is-running "true"))
+  (exit (system*/exit-code "docker" "exec" "-it" container-name cmd-args)))
+
+;; ── trust prompt ──────────────────────────────────────────────────────────────
+
+(unless (equal? (getenv "FARADAI_TRUST_DIR") "1")
+  (printf "faradai: mount ~a into container? [y/N] " workdir)
+  (flush-output)  ; force the prompt to appear before read-line blocks
+  (unless (member (read-line) '("y" "Y"))
+    (eprintf "faradai: aborted.\n")
+    (exit 0)))
+
+;; ── create mode: error if container already exists ────────────────────────────
+
+(when (and (equal? mode 'create)
+           ; begin returns the value of its last form — #t here signals "container exists".
+           ; with-handlers catches docker inspect failing (container absent) and returns #f.
+           (with-handlers ([exn:fail? (lambda (e) #f)])
+             (begin docker inspect $container-name > /dev/null #t)))
+  (die "container '~a' already exists — attach with: faradai -a ~a"
+       container-name (substring container-name 7)))
+
+;; ── clean up any stopped container ───────────────────────────────────────────
+
+; Remove any stopped container with this name so --name doesn't conflict on docker run.
+docker rm -f $container-name > /dev/null &permissive
+
+;; ── config defaults + validation ──────────────────────────────────────────────
+
+(define memory  (or (getenv "FARADAI_MEMORY")       "4g"))
+(define cpus    (or (getenv "FARADAI_CPUS")         "4"))
+(define pids    (or (getenv "FARADAI_PIDS")         "512"))
+(define network (or (getenv "FARADAI_NETWORK_MODE") "open"))
+
+(validate-memory  memory)
+(validate-cpus    cpus)
+(validate-pids    pids)
+(validate-network-mode network)
+
+(define user (or (getenv "USER") #{whoami}))
+(define home (or (getenv "HOME") (path->string (find-system-path 'home-dir))))
+
+mkdir -p $home/.config/gh
+
+;; ── build optional mount lists ────────────────────────────────────────────────
+;; Racket win: these lists splice automatically into the docker run below —
+;; no more conditional flag-building with bash arrays.
+
+(define network-args
+  (if (string=? network "none") '("--network" "none") '()))
+
+(define aider-args
+  (let ([f (string-append home "/.aider.conf.yml")])
+    (if (file-exists? f)
+        `("-v" ,(string-append f ":/home/" user "/.aider.conf.yml:ro"))
+        '())))
+
+(define ssh-agent-args
+  (let ([sock (getenv "SSH_AUTH_SOCK")])
+    (if (and (equal? (or (getenv "FARADAI_ENABLE_SSH_AGENT") "1") "1")
+             sock (file-exists? sock))
+
+        (let ([forward?
+               (or (equal? (getenv "FARADAI_TRUST_SSH_AGENT") "1")
+                   (begin
+                     ; Show the user which keys would be accessible before asking.
+                     (eprintf "faradai: SSH agent socket detected. Keys accessible if forwarded:\n")
+                     (with-handlers ([exn:fail? (lambda (e) (eprintf "  (no keys loaded)\n"))]) ssh-add -l)
+                     (printf "faradai: forward SSH agent into container? [y/N] ")
+                     (flush-output)
+                     (member (read-line) '("y" "Y"))))])
+
+          (if forward?
+              `("-v" ,(string-append sock ":/ssh-agent") "-e" "SSH_AUTH_SOCK=/ssh-agent")
+              '()))
+
+        '())))  ; SSH_AUTH_SOCK unset or not a socket — skip silently
+
+(define ssh-dir-args
+  (if (equal? (getenv "FARADAI_MOUNT_SSH_DIR") "1")
+      `("-v" ,(string-append home "/.ssh:/home/" user "/.ssh:ro"))
+      '()))
+
+(define extra-args (build-extra-docker-args (or (getenv "FARADAI_DOCKER_ARGS") "")))
+
+;; ── debug ─────────────────────────────────────────────────────────────────────
+
+(when (equal? (getenv "FARADAI_DEBUG") "1")
+  (eprintf "faradai: CONTAINER=~a WORKDIR=~a MEMORY=~a CPUS=~a PIDS=~a NETWORK=~a\n"
+           container-name workdir memory cpus pids network))
+
+;; ── run ───────────────────────────────────────────────────────────────────────
+;; Racket win: optional arg lists above splice in automatically — no eval,
+;; no array quoting gymnastics.
+
+(exit
+  (run-pipeline =unix-pipe=
+    docker run -it --rm
+    "--init"
+    "--name"         $container-name
+    (string-append "--memory="     memory)
+    (string-append "--cpus="       cpus)
+    (string-append "--pids-limit=" pids)
+    "--shm-size=1g"
+    "--cap-drop"     "ALL"
+    "--security-opt" "no-new-privileges:true"
+    network-args                            ; '() or '("--network" "none")
+
+    ; Claude Code state and config
+    "-v" (string-append home "/.claude:/home/"                   user "/.claude")
+    "-v" (string-append home "/.claude/.credentials.json:/home/" user "/.claude/.credentials.json:ro")
+    "-v" (string-append home "/.claude.json:/home/"              user "/.claude.json")
+
+    ; Git and GitHub CLI config
+    "-v" (string-append home "/.gitconfig:/home/"  user "/.gitconfig:ro")
+    "-v" (string-append home "/.config/gh:/home/"  user "/.config/gh")
+
+    ; Optional mounts — each is '() or a list of flags; spliced in either way
+    ssh-agent-args
+    ssh-dir-args
+
+    ; Project directory — same path inside and outside the container
+    "-v" (string-append workdir ":" workdir)
+    aider-args
+    extra-args
+
+    "-w" $workdir
+    "faradai:latest"
+    cmd-args))
