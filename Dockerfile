@@ -7,10 +7,12 @@ ENV HOME=/home/${USERNAME}
 ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
 ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gnupg \
+    ca-certificates=20240203 \
+    curl=8.5.0-2ubuntu10.9 \
+    gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
  && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
@@ -51,9 +53,9 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates=20240203 \
     curl=8.5.0-2ubuntu10.9 \
-    gnupg \
+    gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
  && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
