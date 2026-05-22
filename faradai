@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+_FARADAI_VERSION="0.1.0"
+
 # ── functions ──────────────────────────────────────────────────────────────────
 
 _usage() {
@@ -17,6 +19,9 @@ Commands:
   claude     Launch Claude Code; remaining args passed through (e.g. --resume)
   aider      Launch aider; remaining args passed through (e.g. --no-git)
   bash       Open a bash shell inside the container
+  logs       Stream container logs; remaining args passed to docker logs (e.g. -f)
+  status     Show container state, image, and start time
+  version    Print the faradai CLI version
   update     Pull the latest release and reinstall
   uninstall  Remove the faradai container(s), image, and installed binaries
   help       Show this help message
@@ -115,7 +120,7 @@ _build_extra_docker_args() {
 # Manual loop avoids getopts consuming --help before subcommand dispatch sees it.
 # -n and -a are mutually exclusive; -a optionally takes a NAME argument.
 # Known tool commands are not consumed as NAME after -a.
-_KNOWN_CMDS=(claude aider bash update uninstall help --help -h)
+_KNOWN_CMDS=(claude aider bash logs status version --version update uninstall help --help -h)
 _CONTAINER_NAME="faradai"
 _MODE="auto"   # auto | create | attach
 
@@ -165,6 +170,10 @@ case "${1:-}" in
     _usage
     exit 0
     ;;
+  version|--version)
+    echo "faradai ${_FARADAI_VERSION}"
+    exit 0
+    ;;
   update)
     _update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
     trap 'rm -rf "${_update_dir}"' EXIT
@@ -182,6 +191,22 @@ esac
 
 command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
 docker info > /dev/null 2>&1 || { echo "faradai: Docker daemon is not running" >&2; exit 1; }
+
+case "${1:-}" in
+  logs)
+    exec docker logs "${_CONTAINER_NAME}" "${@:2}"
+    ;;
+  status)
+    docker inspect "${_CONTAINER_NAME}" \
+      --format 'name:    {{slice .Name 1}}
+state:   {{.State.Status}}
+started: {{.State.StartedAt}}
+image:   {{.Config.Image}}' 2>/dev/null \
+      || { echo "faradai: container '${_CONTAINER_NAME}' not found" >&2; exit 1; }
+    exit 0
+    ;;
+esac
+
 docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }
 
 # ── resolve workdir ────────────────────────────────────────────────────────────

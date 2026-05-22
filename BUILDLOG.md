@@ -1093,6 +1093,14 @@ Full smoketest run against a fresh container:
 
 `--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
 
+### Add logs, status, and version subcommands (#39 #40)
+
+Three subcommands added in one pass:
+
+- **`faradai logs`** — dispatches to `docker logs <container>` after the daemon check; extra args passed through (e.g. `-f`, `--tail 100`). Placed before the image pre-flight so it works even when the image is stale or absent.
+- **`faradai status`** — dispatches to `docker inspect` with a formatted template showing container name, state, started-at, and image. Clear error if the container doesn't exist.
+- **`faradai version` / `faradai --version`** — prints `faradai <version>`; dispatched before the docker pre-flight so it works with no daemon. Version string embedded as `_FARADAI_VERSION="0.1.0"` at the top of the script. Both `logs`, `status`, and `version` added to `_KNOWN_CMDS` so they are not misinterpreted as container names after `-a`.
+
 ### Fix smoketest ssh-add fingerprint exposure (#46)
 
 `ssh-add -l` in SMOKETEST.md printed key fingerprints and email labels into the conversation context. Replaced with `ssh-add -l | wc -l` — confirms at least one key is loaded without exposing identity metadata.

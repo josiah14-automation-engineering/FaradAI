@@ -29,8 +29,8 @@
 - **[#45] Migrate complex Bash scripting to Rash** — flag parser, `_validate_*` functions, and `_build_extra_docker_args` are the most Bash-hostile sections. Rash (Racket-hosted shell DSL) would provide real data types, proper error handling, and macros for eliminating repetition. Deferred until v1 feature set stabilizes; adds a Racket dependency to the Dockerfile. See BUILDLOG Session 25 for stay-in-Bash reasoning. GitHub #40.
 - **[#44] Add bats unit tests for validation and flag-parsing logic** — `_validate_memory/cpus/pids`, `_build_extra_docker_args` allowlist, and the `-n`/`-a` flag parser (mutual exclusivity, known-command disambiguation). Docker interaction is out of scope — CI smoke test covers that. Use bats-core; mock external commands via `test/helpers/` bin on `$PATH`; add a CI job.
 - ~~**[#46] `ssh-add -l` in smoketest exposes key fingerprints and email labels**~~ ✓ resolved — replaced with `ssh-add -l | wc -l`. See BUILDLOG Session 33.
-- **[#39] No logs/status subcommands** — users must shell out to `docker logs faradai` and `docker inspect` for basic diagnostics. Add `faradai logs` and `faradai status`.
-- **[#40] No version subcommand** — no `faradai version` or `--version`; no way to verify which CLI is installed without reading the script.
+- ~~**[#39] No logs/status subcommands**~~ ✓ resolved — `faradai logs` (wraps `docker logs`, passes through extra args) and `faradai status` (formatted `docker inspect` output) added. See BUILDLOG Session 33.
+- ~~**[#40] No version subcommand**~~ ✓ resolved — `faradai version` and `faradai --version` added; version string embedded as `_FARADAI_VERSION` in the script. See BUILDLOG Session 33.
 - ~~**[#42] CI smoke test bypasses entrypoint.sh**~~ ✓ resolved — second smoke test step added to CI using the real entrypoint: `claude --version`, `aider --version`, `bash -c "echo ok"`. See BUILDLOG Session 33.
 
 ---
