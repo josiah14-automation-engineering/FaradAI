@@ -65,6 +65,7 @@ _validate_cpus() {
     echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
     exit 1
   }
+  awk -v v="${FARADAI_CPUS}" 'BEGIN { if (v <= 0) { print "faradai: FARADAI_CPUS must be greater than zero" > "/dev/stderr"; exit 1 } }' || exit 1
 }
 
 _validate_pids() {
@@ -72,6 +73,10 @@ _validate_pids() {
     echo "faradai: invalid FARADAI_PIDS '${FARADAI_PIDS}' (expected a positive integer)" >&2
     exit 1
   }
+  if (( FARADAI_PIDS < 1 )); then
+    echo "faradai: FARADAI_PIDS must be at least 1" >&2
+    exit 1
+  fi
 }
 
 _build_extra_docker_args() {
@@ -168,10 +173,12 @@ esac
 # ── docker pre-flight ──────────────────────────────────────────────────────────
 
 command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
+docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }
 
 # ── resolve workdir ────────────────────────────────────────────────────────────
 
 FARADAI_WORKDIR="${FARADAI_WORKDIR:-$(pwd)}"
+[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }
 
 # ── attach if already running ─────────────────────────────────────────────────
 

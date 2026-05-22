@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ! command -v sudo > /dev/null 2>&1; then
+  echo "uninstall-faradai: sudo is required but not available" >&2
+  exit 1
+fi
+
 # If any faradai containers are currently running, ask before force-removing them.
 _running=$(docker ps --filter "name=faradai" --format "{{.Names}}" 2>/dev/null || true)
 if [[ -n "${_running}" ]]; then
