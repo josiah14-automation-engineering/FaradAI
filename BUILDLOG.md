@@ -1051,3 +1051,20 @@ Three low-priority single-line fixes applied in one pass:
 - **[#14] OCI labels** — `org.opencontainers.image.title` and `org.opencontainers.image.source` added to the Dockerfile final stage; `docker image inspect` now shows provenance.
 
 All three GitHub issues closed with commit reference.
+
+---
+
+## Session 31 — 2026-05-22
+
+### Smoketest — All Checks Passed
+
+Full smoketest run against a fresh container:
+
+- Tools: claude 2.1.143, aider 0.86.2, gh 2.92.0, python 3.12.3, git 2.43.0
+- Mounts: workdir correct, `~/.claude/.credentials.json` present and `rw-------`
+- Capability drop: all caps `0000000000000000`; `NoNewPrivs: 1`
+- Resource limits: 16 GiB RAM, 8 CPUs, 1024 PIDs
+- gh auth: logged in as josiah14
+- SSH agent forwarding: `/ssh-agent` socket present, keys accessible
+
+**Josiah noted** that the smoketest's `ssh-add -l` step prints key fingerprints and email labels into the conversation context. Logged a suggestion to replace it with `ssh-add -l | wc -l` to confirm keys are loaded without exposing identity metadata.
