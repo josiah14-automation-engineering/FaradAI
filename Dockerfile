@@ -1,6 +1,7 @@
 FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS builder
 
 ARG USERNAME
+ARG SHELLCHECK_VERSION=v0.11.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/home/${USERNAME}
@@ -36,6 +37,8 @@ RUN npm config set prefix "/home/${USERNAME}/.local" \
  && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} + \
  && rm -rf /home/${USERNAME}/.cache
 
+RUN curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+    | tar -xz --strip-components=1 -C /tmp "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
 
 FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS final
 
@@ -93,6 +96,8 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
 
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
+
+COPY --chmod=755 --from=builder /tmp/shellcheck /usr/local/bin/shellcheck
 
 COPY --from=builder --chown=${USER_UID}:${USER_GID} \
     /home/${USERNAME}/.local \

@@ -68,7 +68,8 @@ jobs:
           docker run --rm --entrypoint /bin/bash faradai:ci -c "
             which claude &&
             aider --version &&
-            gh --version
+            gh --version &&
+            shellcheck --version
           "
 
       - name: Smoke test (entrypoint dispatch)

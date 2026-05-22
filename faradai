@@ -22,7 +22,7 @@ Commands:
   logs       Stream container logs; remaining args passed to docker logs (e.g. -f)
   status     Show container state, image, and start time
   version    Print the faradai CLI version
-  update     Pull the latest release and reinstall
+  update [--branch NAME]  Pull the latest tagged release and reinstall; use --branch NAME to pull from a branch instead
   uninstall  Remove the faradai container(s), image, and installed binaries
   help       Show this help message
 
@@ -117,6 +117,98 @@ _build_extra_docker_args() {
   done
 }
 
+# _update_faradai [--branch NAME]
+#
+# Pull a new release of faradai and reinstall it.
+#
+# Default behaviour: queries the remote for the latest semver tag (v*), clones
+# at that exact ref with --depth=1, then verifies the cloned HEAD carries the
+# expected tag before invoking install.sh. The tag check ensures we are running
+# install.sh from a known, immutable ref rather than an arbitrary commit that
+# happened to land on the branch tip between the ls-remote query and the clone.
+#
+# --branch NAME: clones the tip of NAME instead and skips the integrity check.
+# Prints a warning because branch tips are mutable refs — use this for testing
+# unreleased changes (master, develop, a feature branch) rather than for
+# production upgrades.
+_update_faradai() {
+  local repo="https://github.com/josiah14-automation-engineering/faradai.git"
+  local update_dir ref latest_tag
+
+  update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
+
+  # SC2064 intentional: expand $update_dir now so the trap fires correctly
+  # after this function returns and the local variable is out of scope.
+  # shellcheck disable=SC2064
+  trap "rm -rf '${update_dir}'" EXIT
+
+  if [[ "${1:-}" == "--branch" ]]; then
+
+    if [[ -z "${2:-}" ]]; then
+      echo "faradai: --branch requires a name (e.g. faradai update --branch master)" >&2
+      return 1
+    fi
+
+    ref="${2}"
+    echo "faradai: updating from branch '${ref}' — not a tagged release" >&2
+
+    if ! git clone --depth=1 --branch "${ref}" "${repo}" "${update_dir}"; then
+      echo "faradai: git clone failed — check your network connection and try again" >&2
+      return 1
+    fi
+
+  else
+
+    if ! latest_tag="$(_resolve_latest_tag "${repo}")"; then
+      echo "faradai: failed to resolve latest release tag — check your network connection and try again" >&2
+      return 1
+    fi
+
+    echo "faradai: updating to ${latest_tag}" >&2
+
+    if ! git clone --depth=1 --branch "${latest_tag}" "${repo}" "${update_dir}"; then
+      echo "faradai: git clone failed — check your network connection and try again" >&2
+      return 1
+    fi
+
+    if ! _verify_update_tag "${update_dir}" "${latest_tag}"; then
+      return 1
+    fi
+
+  fi
+
+  "${update_dir}/install.sh"
+}
+
+_resolve_latest_tag() {
+  local repo="${1}" tag
+
+  tag="$(git ls-remote --tags --sort=-version:refname "${repo}" 'v*' \
+    | awk '{print $2}' | grep -vF '^{}' | sed 's|refs/tags/||' | head -1 || true)"
+
+  if [[ -z "${tag}" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${tag}"
+}
+
+_verify_update_tag() {
+  local update_dir="${1}" expected="${2}" actual
+
+  actual="$(git -C "${update_dir}" describe --exact-match --tags HEAD 2>/dev/null || true)"
+
+  if [[ -z "${actual}" ]]; then
+    echo "faradai: integrity check failed — cloned HEAD is not a tagged commit" >&2
+    return 1
+  fi
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "faradai: integrity check failed — expected '${expected}', got '${actual}'" >&2
+    return 1
+  fi
+}
+
 # ── flag parsing ───────────────────────────────────────────────────────────────
 
 # Manual loop avoids getopts consuming --help before subcommand dispatch sees it.
@@ -177,11 +269,7 @@ case "${1:-}" in
     exit 0
     ;;
   update)
-    _update_dir="$(mktemp -d /tmp/faradai-update-XXXXXX)"
-    trap 'rm -rf "${_update_dir}"' EXIT
-    git clone https://github.com/josiah14-automation-engineering/faradai.git "${_update_dir}" \
-      || { echo "faradai: git clone failed — check your network connection and try again" >&2; exit 1; }
-    "${_update_dir}/install.sh"
+    _update_faradai "${@:2}"
     exit 0
     ;;
   uninstall)

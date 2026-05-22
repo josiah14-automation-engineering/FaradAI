@@ -189,6 +189,7 @@ Credentials are delivered as mounted files rather than environment variables —
 - git, curl
 - gh (GitHub CLI) — installed from GitHub's official apt repository
 - vim — available when shelling in for manual edits or troubleshooting
+- shellcheck — shell script linter; useful for validating scripts inside the container
 - `HEALTHCHECK` — verifies `claude` and `aider` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
 

@@ -1176,3 +1176,39 @@ The question arose: after the first release, should ongoing decisions continue i
 **Keeping BUILDLOG indefinitely** was rejected because the session-log format accumulates unboundedly and becomes unwieldy.
 
 **Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
+
+---
+
+## Session 37 — 2026-05-22 16:19 UTC
+
+### Code fixes: combined short flags, USER subshell, uninstall data notice (#42 #46 #55)
+
+**#55** — `USER="$(whoami)"` replaced with `USER="${USER:-$(whoami)}"`. `$USER` is set by the shell in all normal environments; the subshell only fires as a fallback.
+
+**#42** — `_build_extra_docker_args` rejected combined short-flag forms like `-eFOO=bar`. The existing check matched `"${arg}" == "${flag}"` or `"${arg}" == "${flag}="*` but not the combined form. Added a third branch: if `${flag}` is a single-char flag (regex `^-[^-]$`) and `${arg}` starts with that flag followed by one or more characters, it's permitted. Two new bats tests added: one confirming `-eFOO=bar` passes, one confirming an unknown combined flag `-xFOO` is still rejected. Test suite now 42 tests.
+
+**#46** — `uninstall-faradai` now prints a "not removed" notice after `Done.` listing `~/.claude/`, `~/.claude.json`, `~/.config/gh/`, and the source directory. An initial draft used `$(pwd)` in an echo statement which expanded to a hardcoded path at write time (not at runtime as intended) — caught before commit, replaced with a static string. README Upgrading section also updated with a table of what persists.
+
+### faradai update overhaul: tag-based default, integrity check, --branch opt-in (#44)
+
+The original `update` command cloned from master HEAD with no integrity check. The new implementation:
+
+- **Default:** `git ls-remote --tags --sort=-version:refname` resolves the latest `v*` semver tag without a full clone, then `git clone --depth=1 --branch <tag>` fetches exactly that ref. After cloning, `git describe --exact-match --tags HEAD` verifies the cloned HEAD carries the expected tag — ensures `install.sh` runs from a known immutable ref, not an arbitrary commit that happened to land on the branch tip between the query and the clone.
+- **`--branch NAME`:** clones the tip of the named branch with `--depth=1` and skips the integrity check (branch tips are mutable by design). Prints a stability warning. Covers master, develop, or any feature branch — useful for testing unreleased changes.
+
+**Code style issue:** The first draft of the update block was rejected by Josiah: missing blank lines between `if` blocks, all logic inlined in the dispatch block, and `|| { echo ...; exit 1; }` chains instead of `if !` patterns. Rewritten to comply with Google Shell Style Guide conventions: blank lines between logical blocks, `if`/`if !` error handling throughout, and three extracted functions:
+
+- `_update_faradai([--branch NAME])` — top-level function with a doc comment explaining both code paths; dispatch block collapses to a single call.
+- `_resolve_latest_tag(repo)` — queries the remote and prints the latest tag, returns 1 if none found.
+- `_verify_update_tag(update_dir, expected)` — verifies the cloned HEAD matches the expected tag.
+
+**SC2064 trap pattern:** `_update_faradai` uses a local variable `update_dir` for the temp dir. `trap 'rm -rf ...' EXIT` with single quotes would capture the variable name, not the value, causing the cleanup to silently fail after the function returns. Used double quotes with a `# shellcheck disable=SC2064` comment to expand the path immediately at trap-set time — the standard pattern when cleanup must outlive the local variable's scope.
+
+### Add shellcheck v0.11.0 to image
+
+`shellcheck` is used heavily during development for linting shell scripts, but was not available inside the container. Ubuntu 24.04 includes shellcheck only in the `universe` component, which is not enabled in the base Docker image. Rather than enabling universe for one tool, installed the static binary from GitHub releases:
+
+- Builder stage: `ARG SHELLCHECK_VERSION=v0.11.0`, single `RUN curl | tar` to extract the binary to `/tmp/shellcheck`. Uses `.tar.gz` (not `.tar.xz`) to avoid needing `xz-utils`. Separate RUN layer for cache efficiency — changes only when `SHELLCHECK_VERSION` changes.
+- Final stage: `COPY --chmod=755 --from=builder /tmp/shellcheck /usr/local/bin/shellcheck`. The `--chmod=755` is explicit because Docker `COPY` does not guarantee preserving the execute bit across stages.
+
+CI smoke test updated to verify `shellcheck --version`. README "What's in the image" updated.
