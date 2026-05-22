@@ -1006,3 +1006,21 @@ Opus flagged that SSH agent forwarding deserved louder treatment in the security
 ### Rash Migration Ticket
 
 Added GitHub issue #40 and TODO item [#45] for eventual migration of complex Bash scripting to Rash (Racket-hosted shell DSL). Deferred until v1 feature set stabilizes. See Session 25 for the stay-in-Bash reasoning.
+
+## Session 29 — 2026-05-22 02:27 UTC
+
+### README Stale Workdir Reference Fixed
+
+Found one remaining `~/Development/personal` reference in the README mounts section (line 127) that was missed during the #43 workdir-default change. Updated to "current directory (`pwd`) at launch time."
+
+### Rash vs scsh — Language Evaluation
+
+Extended the language rewrite discussion (first opened in Session 25). scsh was raised as an alternative to Rash: already in the polyparadigm plan, more mature, fewer sharp edges. After examination the case for scsh doesn't hold:
+
+- **Same glibc problem** — scsh compiles to a dynamically-linked binary with the same distribution constraints as Rash, and less tooling around solving it.
+- **No substrate backstop** — Rash sits on Racket, which is actively maintained. If Rash the DSL moves slowly, the substrate is healthy. scsh has no equivalent; if it stalls, it stalls all the way down.
+- **Lower learning value** — Racket is a live, interesting ecosystem. scsh is closer to a historical curiosity as a polyparadigm target.
+
+The glibc issue itself is solvable: build on an old-glibc Docker base (e.g. `ubuntu:20.04`) or Alpine/musl in CI, and the binary runs widely. Go's `CGO_ENABLED=0` remains the path of least resistance for distribution, but Rash isn't disqualified on glibc grounds alone.
+
+**Revised ranking:** Rash over scsh. Reasoning and Opus's Nim/Zig/Rash analysis added as comments on GitHub issue #40.

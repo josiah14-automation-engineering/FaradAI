@@ -124,7 +124,7 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH key files — opt-in via `FARADAI_MOUNT_SSH_DIR=1`; not needed when agent forwarding is active |
 | `$FARADAI_WORKDIR` | `$FARADAI_WORKDIR` | read-write | Your project files — the primary work surface |
 
-The working directory defaults to `~/Development/personal`, mounted at the same path inside the container so all project-relative references, memory files, and tooling behave identically inside and outside.
+The working directory defaults to the current directory (`pwd`) at launch time, mounted at the same path inside the container so all project-relative references, memory files, and tooling behave identically inside and outside.
 
 > **SSH agent forwarding:** When `$SSH_AUTH_SOCK` is set and points to a live socket, FaradAI forwards it into the container at `/ssh-agent`. Common Git hosts (GitHub, GitLab, Bitbucket) are pre-registered in the image's `known_hosts`. Set `FARADAI_ENABLE_SSH_AGENT=0` to disable, or `FARADAI_MOUNT_SSH_DIR=1` to use key files directly instead.
 
