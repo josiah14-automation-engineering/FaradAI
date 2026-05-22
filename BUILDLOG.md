@@ -1092,3 +1092,7 @@ Full smoketest run against a fresh container:
 ### Add --pull to build.sh (#11)
 
 `--pull` added to `docker build` in `build.sh` so the base image is always checked for upstream updates rather than silently reusing a cached layer. One-line change.
+
+### Fix CI smoke test to exercise entrypoint.sh (#42)
+
+The existing CI smoke test used `--entrypoint /bin/bash`, bypassing `entrypoint.sh` entirely. Added a second step, "Smoke test (entrypoint dispatch)", that runs `claude --version`, `aider --version`, and `bash -c "echo ok"` through the real entrypoint — covering all three dispatch branches. Original tool-availability step retained and renamed for clarity.

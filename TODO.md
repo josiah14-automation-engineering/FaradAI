@@ -31,7 +31,7 @@
 - **[#46] `ssh-add -l` in smoketest exposes key fingerprints and email labels** — replace with `ssh-add -l | wc -l` (or `ssh-add -l > /dev/null && echo "keys loaded"`) to confirm forwarding works without printing identity metadata into the conversation context.
 - **[#39] No logs/status subcommands** — users must shell out to `docker logs faradai` and `docker inspect` for basic diagnostics. Add `faradai logs` and `faradai status`.
 - **[#40] No version subcommand** — no `faradai version` or `--version`; no way to verify which CLI is installed without reading the script.
-- **[#42] CI smoke test bypasses entrypoint.sh** — build job uses `--entrypoint /bin/bash`, so `entrypoint.sh` is never exercised by CI. Fix: add a step using `docker run --rm faradai:ci claude --version` and `docker run --rm faradai:ci aider --version` through the real entrypoint.
+- ~~**[#42] CI smoke test bypasses entrypoint.sh**~~ ✓ resolved — second smoke test step added to CI using the real entrypoint: `claude --version`, `aider --version`, `bash -c "echo ok"`. See BUILDLOG Session 33.
 
 ---
 

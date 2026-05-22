@@ -52,10 +52,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Smoke test
+      - name: Smoke test (tool availability)
         run: |
           docker run --rm --entrypoint /bin/bash faradai:ci -c "
             which claude &&
             aider --version &&
             gh --version
           "
+
+      - name: Smoke test (entrypoint dispatch)
+        run: |
+          docker run --rm faradai:ci claude --version
+          docker run --rm faradai:ci aider --version
+          docker run --rm faradai:ci bash -c "echo ok"
