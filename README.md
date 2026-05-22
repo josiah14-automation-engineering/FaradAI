@@ -12,7 +12,7 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
 
-A Docker container for running Claude Code and aider. Named after the Faraday cage: the AI inside has full capability, but can only reach what you explicitly mount.
+A Docker container for running Claude Code and aider. Named after the Faraday cage: the AI inside has full capability, but can only reach what you explicitly mount. In v1, the cage constrains the *filesystem* — network egress is open by default. Full network isolation (a credential broker that the agent talks to instead of the internet directly) is planned for v2.
 
 ## Prerequisites
 
@@ -87,6 +87,7 @@ By default, `faradai` auto-detects whether a container named `faradai` is alread
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FARADAI_ENABLE_SSH_AGENT` | `1` | forward host SSH agent socket into the container |
+| `FARADAI_TRUST_SSH_AGENT` | `0` | set to `1` to skip the SSH agent forwarding confirmation prompt |
 | `FARADAI_MOUNT_SSH_DIR` | `0` | mount `~/.ssh` read-only into the container |
 
 **Docker extras**
@@ -196,9 +197,19 @@ Any secret present as an environment variable is visible to the agent and will a
 
 **The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to Anthropic's servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
 
+### SSH agent forwarding
+
+When `FARADAI_ENABLE_SSH_AGENT=1` (the default) and a live agent socket is present, FaradAI forwards it into the container. **Any process inside the container — including the AI agent — can use the forwarded socket to sign arbitrary SSH operations with any of your loaded keys.** This means the agent could, in principle, authenticate to GitHub as you, push to repositories, or initiate SSH connections to any host your keys grant access to.
+
+On each fresh container start, FaradAI lists the loaded keys and prompts for confirmation before forwarding. Set `FARADAI_TRUST_SSH_AGENT=1` (e.g. in `.zshrc`) to skip this prompt if you always want forwarding. Set `FARADAI_ENABLE_SSH_AGENT=0` to disable forwarding entirely for a session.
+
+For sessions where you do not need Git operations or SSH access inside the container, declining the forwarding prompt is the safest option.
+
 ### Network access
 
-The container has unrestricted outbound network access. This is intentional: the agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting that in advance, which defeats the purpose of a general-purpose coding assistant.
+The container has unrestricted outbound network access by default. This is intentional for v1: the agent may need to reach arbitrary sources — documentation, APIs, package registries — and restricting outbound would require predicting that in advance, which defeats the purpose of a general-purpose coding assistant.
+
+This is the current gap in the Faraday cage metaphor. Full network isolation — where the agent container talks only to a local credential broker rather than the internet directly — is planned for v2 (see [#30](TODO.md)). For now, `FARADAI_NETWORK_MODE=none` is available as an opt-in for offline sessions where you know the agent won't need network access.
 
 The container can also reach services running on the host via the Docker bridge gateway. This too is intentional — useful for workflows involving local k3s clusters, development servers, or other host-side services you want the agent to interact with.
 

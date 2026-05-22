@@ -983,3 +983,26 @@ Created GitHub issue #39 (TODO item #44) for adding bats-core unit tests coverin
 ### SMOKETEST.md Updated
 
 Added PID and CPU limit checks to the Resource limits section. Josiah's system has `FARADAI_PIDS=1024` and `FARADAI_CPUS=8` set in `.zshrc` — both confirmed active in the cgroup checks above.
+
+## Session 28 — 2026-05-22 01:52 UTC
+
+### Name Transparency — README Update
+
+Opus raised that the "Faraday cage" name implies network isolation that FaradAI v1 does not provide — default egress is fully open. **Josiah confirmed** the name is aspirationally accurate: v2 broker mode (#30, #32) is the path to making it true. Updated README in two places to document this gap honestly:
+
+- Intro blurb: clarified that v1 constrains the filesystem, not network; noted v2 broker plan
+- Network access section: added an explicit paragraph naming this as the current gap in the metaphor, with a pointer to the v2 plan and a reminder that `FARADAI_NETWORK_MODE=none` is available for offline sessions
+
+### SSH Agent Forwarding — Threat Model + Confirmation Prompt
+
+Opus flagged that SSH agent forwarding deserved louder treatment in the security model: the AI agent inside the container has full signing authority over all loaded keys and can initiate arbitrary SSH operations (git push, SSH connections) as the user.
+
+**Changes:**
+
+- `faradai` script: added a confirmation prompt before forwarding the agent. Lists loaded keys via `ssh-add -l`, then asks `"forward SSH agent into container? [y/N]"`. Declining skips forwarding without aborting the container start. New `FARADAI_TRUST_SSH_AGENT` env var (default `0`) bypasses the prompt — **Josiah** chose `0` as default and will add `FARADAI_TRUST_SSH_AGENT=1` to his `.zshrc`.
+- README: added `FARADAI_TRUST_SSH_AGENT` to the SSH env var table; added `### SSH agent forwarding` subsection in the security model with an explicit callout on key signing authority
+- `_usage()` help text updated with new variable
+
+### Rash Migration Ticket
+
+Added GitHub issue #40 and TODO item [#45] for eventual migration of complex Bash scripting to Rash (Racket-hosted shell DSL). Deferred until v1 feature set stabilizes. See Session 25 for the stay-in-Bash reasoning.

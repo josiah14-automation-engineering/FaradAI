@@ -28,6 +28,7 @@ Environment variables:
   FARADAI_CPUS              Container CPU limit (default: 4)
   FARADAI_PIDS              Container PID limit (default: 512)
   FARADAI_ENABLE_SSH_AGENT  Forward SSH agent socket when available (default: 1)
+  FARADAI_TRUST_SSH_AGENT   Set to 1 to skip the SSH agent forwarding confirmation prompt (default: 0)
   FARADAI_MOUNT_SSH_DIR     Mount ~/.ssh read-only into the container (default: 0)
   FARADAI_DOCKER_ARGS       Extra flags appended to docker run (always: --env/-e, --label/-l, --hostname; opt-in: --device, --publish/-p)
   FARADAI_ALLOW_DEVICE      Set to 1 to permit --device in FARADAI_DOCKER_ARGS (opens host hardware to container)
@@ -234,7 +235,17 @@ AIDER_CONF_MOUNT=()
 
 SSH_AGENT_ARGS=()
 if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" == "1" && -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
-  SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
+  _forward_agent=1
+
+  if [[ "${FARADAI_TRUST_SSH_AGENT:-0}" != "1" ]]; then
+    echo "faradai: SSH agent socket detected. Keys that will be accessible inside the container if forwarded:" >&2
+    ssh-add -l 2>/dev/null || echo "  (no keys loaded)" >&2
+    printf "faradai: forward SSH agent into container? [y/N] "
+    read -r _ssh_agent_answer
+    [[ "${_ssh_agent_answer}" =~ ^[Yy]$ ]] || _forward_agent=0
+  fi
+
+  (( _forward_agent )) && SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
 fi
 
 SSH_DIR_ARGS=()
