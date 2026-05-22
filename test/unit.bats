@@ -261,6 +261,25 @@ setup() {
   [[ "$output" == *"not permitted"* ]]
 }
 
+# ── _check_image_user ─────────────────────────────────────────────────────────
+
+@test "_check_image_user: passes when label matches runtime user" {
+  run env MOCK_IMAGE_USER="testuser" USER="testuser" "${FARADAI}"
+  [ "$status" -eq 0 ]
+}
+
+@test "_check_image_user: fails with clear error when label mismatches runtime user" {
+  run env MOCK_IMAGE_USER="otheruser" USER="testuser" "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"image was built for user 'otheruser'"* ]]
+  [[ "$output" == *"rebuild with: ./install.sh"* ]]
+}
+
+@test "_check_image_user: skips silently when label is absent" {
+  run "${FARADAI}"
+  [ "$status" -eq 0 ]
+}
+
 # ── update subcommand ──────────────────────────────────────────────────────────
 
 @test "update: --branch without NAME exits with error" {

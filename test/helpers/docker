@@ -3,7 +3,12 @@
 # pre-flight and container lifecycle; docker run exits 0 without doing anything.
 case "$1" in
   info)    exit 0 ;;
-  image)   exit 0 ;;   # docker image inspect faradai:latest
+  image)
+    # docker image inspect faradai:latest --format '{{index .Config.Labels "..."}}'
+    # If MOCK_IMAGE_USER is set, echo it so _check_image_user can read the label.
+    [[ -n "${MOCK_IMAGE_USER:-}" ]] && echo "${MOCK_IMAGE_USER}"
+    exit 0
+    ;;
   inspect) echo "false"; exit 0 ;;  # container running-state check
   rm)      exit 0 ;;
   run)     exit 0 ;;

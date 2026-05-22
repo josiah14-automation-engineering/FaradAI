@@ -1201,6 +1201,27 @@ ROADMAP updated: #59 moved to **Now**; #60–64 added to **Later**.
 
 ---
 
+## Session 40 — 2026-05-22 18:35 UTC
+
+### Username mismatch pre-flight check (#59)
+
+`USERNAME` is baked into the image at build time. The faradai script constructs all mount paths from `$USER` at runtime. If the host user running faradai differs from the user the image was built for, mounts land at paths that don't exist inside the container — the failure mode is a confusing permission error with no clear cause.
+
+**Fix:** Added `org.opencontainers.image.faradai.username="${USERNAME}"` to the Dockerfile `LABEL` block. At runtime, `_check_image_user()` reads that label via `docker image inspect --format`, compares it to `$USER`, and exits with a clear message if they differ. Images predating the label (empty value) pass silently for backward compatibility.
+
+**Implementation note:** The function is called immediately after the image existence check in the docker pre-flight section, before any mount path construction. Extracted as a standalone function following the existing `_validate_*` / `_check_*` pattern.
+
+**Tests:** Three bats tests added (46/46 pass):
+- label matches user → passes
+- label mismatches user → exits 1 with clear error
+- label absent → skips silently
+
+One test failure during development: the initial test used `MOCK_IMAGE_USER="${USER}"` and `MOCK_IMAGE_USER="otheruser"` without explicitly setting `$USER`, relying on the test environment's value. The mismatch test exited 1 but without the expected message, suggesting a different exit path was reached first. Fixed by making both tests hermetic: explicitly set `USER="testuser"` in the test env so the comparison is fully predictable regardless of the host user.
+
+The docker mock's `image)` case was extended to echo `MOCK_IMAGE_USER` when set, allowing `_check_image_user` to be unit-tested without a real image.
+
+---
+
 ## Session 39 — 2026-05-22 18:29 UTC
 
 ### Cage framing clarification in README; remove version assumptions

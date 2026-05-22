@@ -209,6 +209,23 @@ _verify_update_tag() {
   fi
 }
 
+_check_image_user() {
+  local image_user
+
+  image_user="$(docker image inspect faradai:latest \
+    --format '{{index .Config.Labels "org.opencontainers.image.faradai.username"}}' 2>/dev/null || true)"
+
+  if [[ -z "${image_user}" ]]; then
+    return 0
+  fi
+
+  if [[ "${image_user}" != "${USER}" ]]; then
+    echo "faradai: image was built for user '${image_user}' but running as '${USER}'" >&2
+    echo "faradai: mount paths inside the container will not match — rebuild with: ./install.sh" >&2
+    exit 1
+  fi
+}
+
 # ── flag parsing ───────────────────────────────────────────────────────────────
 
 # Manual loop avoids getopts consuming --help before subcommand dispatch sees it.
@@ -295,6 +312,7 @@ case "${1:-}" in
 esac
 
 docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }
+_check_image_user
 
 # ── resolve workdir ────────────────────────────────────────────────────────────
 
