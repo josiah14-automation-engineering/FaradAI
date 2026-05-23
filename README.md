@@ -14,13 +14,15 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
 
-A Docker container for running CLI-based AI coding agents. Claude Code and aider are currently supported; the container pattern is not specific to either. Named after the Faraday cage, but the metaphor is precise: the cage is the **filesystem, environment, and process boundary — plus the absence of the Docker socket**. Network egress is intentionally unrestricted — the agent can reach the internet freely. Full network isolation is on the [roadmap](ROADMAP.md).
+A Docker container for running CLI-based AI coding agents — Claude Code and aider currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
 
-## About this project
+## Quickstart
 
-FaradAI is built with Claude Code as a coding assistant. [`BUILDLOG.md`](BUILDLOG.md) is a deliberate session-by-session record of every decision, tradeoff, and reasoning thread — proof that this is not AI running loose without thought or supervision. Every change reflects a human judgment call.
-
-[`CHANGELOG.md`](CHANGELOG.md) covers user-facing release notes. [`BUILDLOG.md`](BUILDLOG.md) covers process and reasoning through the first release; [`DECISIONLOG.md`](DECISIONLOG.md) captures architectural decisions thereafter.
+```bash
+./install.sh           # build image + install CLI
+cd ~/my-project
+faradai                # launches Claude Code in a sandboxed container
+```
 
 ## Prerequisites
 
@@ -35,8 +37,6 @@ FaradAI is built with Claude Code as a coding assistant. [`BUILDLOG.md`](BUILDLO
 ```
 
 Builds the image and copies the `faradai` CLI script to `/usr/local/bin/faradai`. After this, `faradai` is available as a system command.
-
-`build.sh` (called by `install.sh`) uses `--network=host` so the build container can resolve external hostnames during `apt-get` and package installs. This applies to the build only — the runtime container has its own network namespace.
 
 ## Run
 
@@ -53,23 +53,34 @@ An optional argument selects which tool to launch:
 | Command | Result |
 |---------|--------|
 | `faradai` | Claude Code (default) |
-| `faradai aider` | aider |
+| `faradai claude` | Claude Code; remaining args passed through (e.g. `--resume`) |
+| `faradai aider` | aider; remaining args passed through (e.g. `--no-git`) |
 | `faradai bash` | bare shell, useful for debugging |
+| `faradai logs` | stream container logs; remaining args passed to `docker logs` (e.g. `-f`) |
+| `faradai status` | show container state, image, and start time |
+| `faradai version` | print the faradai CLI version |
 | `faradai update` | pull latest tagged release and reinstall |
 | `faradai uninstall` | remove all faradai containers, the image, and installed binaries |
 
 ### Multi-project and multi-container usage
 
-By default, `faradai` auto-detects whether a container named `faradai` is already running and attaches if so. Two flags give you explicit control:
+By default, `faradai` auto-detects whether a container named `faradai` is already running and attaches if so. Three flags give you explicit control:
+
+| Flag | Meaning |
+|------|---------|
+| `-c` | create mode — error if the container already exists |
+| `-a` | attach mode — error if the container is not running |
+| `-n NAME` | use `faradai-NAME` instead of `faradai`; works with `-c`, `-a`, or auto |
 
 | Invocation | Behaviour |
 |---|---|
 | `faradai` | auto-detect: attach if `faradai` is running, create if not |
-| `faradai -n NAME [CMD]` | create container `faradai-NAME`; error if it already exists |
-| `faradai -a [CMD]` | attach to running `faradai`; error if not running |
-| `faradai -a NAME [CMD]` | attach to running `faradai-NAME`; error if not running |
+| `faradai -n NAME` | auto-detect against `faradai-NAME` |
+| `faradai -c -n NAME` | create `faradai-NAME`; error if it already exists |
+| `faradai -a` | attach to running `faradai`; error if not running |
+| `faradai -a -n NAME` | attach to running `faradai-NAME`; error if not running |
 
-`-n` and `-a` are mutually exclusive. This lets you run separate containers per project while keeping the default single-container workflow unchanged.
+`-a` and `-c` are mutually exclusive. `-n` is orthogonal to both. This lets you run separate containers per project while keeping the default single-container workflow unchanged.
 
 ### Configuration
 
@@ -118,8 +129,6 @@ Example:
 FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 ```
 
-`faradai` also uses `$HOME` and `$USER` for mount paths — standard shell variables set automatically by your shell.
-
 ### Mounts
 
 | Host | Container | Mode | Required for |
@@ -142,32 +151,23 @@ The working directory defaults to the current directory (`pwd`) at launch time, 
 
 FaradAI forwards your existing agent — it does not start one. The agent must be running on the host before you launch the container.
 
-**Check if an agent is already running:**
+**Check if an agent is running:**
 
 ```bash
-echo "$SSH_AUTH_SOCK"          # should be a non-empty path
-ls -la "$SSH_AUTH_SOCK"        # should show a socket: srwxr-xr-x ...
-ssh-add -l                     # should list at least one loaded key
+echo "$SSH_AUTH_SOCK"    # should be a non-empty path
+ssh-add -l               # should list at least one loaded key
 ```
 
 Most desktop environments (GNOME, KDE, Xfce) start an SSH agent automatically at login and `$SSH_AUTH_SOCK` will already be set. If `ssh-add -l` returns keys, you're done.
 
-**If no agent is running**, start one and add your key for the current session:
+**If no agent is running**, start one for the current session:
 
 ```bash
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519      # adjust to your key filename
 ```
 
-**To persist across shell sessions**, add to your `~/.bashrc` or `~/.zshrc`:
-
-```bash
-if [ -z "$SSH_AUTH_SOCK" ]; then
-  eval "$(ssh-agent -s)"
-fi
-```
-
-Then `ssh-add` your key once after each login. For a more robust solution that survives across terminal sessions without re-adding keys, install `keychain`:
+For persistence across sessions without re-adding keys each login, [keychain](https://www.funtoo.org/Keychain) is a widely used solution:
 
 ```bash
 sudo apt install keychain
@@ -175,9 +175,18 @@ sudo apt install keychain
 eval "$(keychain --eval --quiet ~/.ssh/id_ed25519)"
 ```
 
-`keychain` starts one agent per user login session and reuses it across all terminals, including new ones opened after the initial login.
-
 Credentials are delivered as mounted files rather than environment variables — any secret in the environment will appear in tool output if `env` is inspected. See [Security model](#security-model).
+
+### Aider configuration
+
+Aider reads `~/.aider.conf.yml` on startup. The relevant section for OpenRouter:
+
+```yaml
+model: openrouter/<provider>/<model>
+api-key: openrouter=<your-key>
+```
+
+Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
 
 ## What's in the image
 
@@ -263,15 +272,19 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 
 ## Development
 
-[`BUILDLOG.md`](BUILDLOG.md) is a session-by-session record of every implementation decision and tradeoff from inception through v0.1.0-alpha.1 — the reasoning behind changes, not just the changes themselves. Reading it alongside the git history gives a complete picture of how and why the project reached its first release.
+FaradAI is built with Claude Code as a coding assistant. [`BUILDLOG.md`](BUILDLOG.md) is a deliberate session-by-session record of every decision, tradeoff, and reasoning thread through v0.1.0-alpha.1 — proof that this is not AI running loose without thought or supervision. Every change reflects a human judgment call.
 
-After v0.1.0-alpha.1, significant architectural and security decisions are captured in [`DECISIONLOG.md`](DECISIONLOG.md): a terse, indexed log of *why* non-obvious choices were made. [`CHANGELOG.md`](CHANGELOG.md) entries link to relevant [`DECISIONLOG.md`](DECISIONLOG.md) entries; DECISIONLOG entries note which version they affect.
+After v0.1.0-alpha.1, significant architectural and security decisions are captured in [`DECISIONLOG.md`](DECISIONLOG.md): a terse, indexed log of *why* non-obvious choices were made. [`CHANGELOG.md`](CHANGELOG.md) covers user-facing release notes; DECISIONLOG entries note which version they affect.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Future work
+
+The container pattern is not specific to Claude Code or aider — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
+
 ## Testing
 
-Unit tests use [bats-core](https://github.com/bats-core/bats-core). Install it once:
+Tests use [bats-core](https://github.com/bats-core/bats-core). Install it once:
 
 ```bash
 git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core
@@ -280,10 +293,15 @@ git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core
 Then run:
 
 ```bash
-test/libs/bats-core/bin/bats test/unit.bats
+test/libs/bats-core/bin/bats test/unit.bats test/sourced.bats
 ```
 
-Tests cover `_validate_memory/cpus/pids/network_mode`, the `_build_extra_docker_args` allowlist, and the `-n`/`-a` flag parser. Docker is mocked via `test/helpers/` — no running daemon required. `test/libs/` is gitignored.
+Two test suites:
+
+- **`test/unit.bats`** — integration tests that execute the `faradai` script as a subprocess. Covers the `-c`/`-a`/`-n` flag parser, the `_append_extra_docker_args` allowlist, and the validators (`_validate_memory/cpus/pids/network_mode`).
+- **`test/sourced.bats`** — function-level tests that source the script directly (safe via the source-vs-execute guard). Tests each phase function in isolation: `_init_defaults`, `_parse_cli_flags`, `_dispatch_meta_commands`, `_maybe_attach_existing`, `_handle_ssh_agent_forwarding`, all `_append_*` arg-builders, and `_build_docker_run_args` ordering guards.
+
+Docker is mocked via `test/helpers/` — no running daemon required. `test/libs/` is gitignored.
 
 ---
 
@@ -320,17 +338,6 @@ This removes all faradai containers, the image, and the installed binaries. The 
 
 ---
 
-## Aider configuration
-
-Aider reads `~/.aider.conf.yml` on startup. The relevant section for OpenRouter:
-
-```yaml
-model: openrouter/<provider>/<model>
-api-key: openrouter=<your-key>
-```
-
-Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
-
 ## Known issues and limitations
 
 **Docker filesystem I/O overhead**
@@ -344,10 +351,3 @@ Language servers that rely on system-wide installations (e.g. a globally install
 
 **Multi-user `docker rm` behavior**
 `faradai` calls `docker rm -f faradai` before each new launch to clear any stopped container. On a shared machine where multiple users might run faradai containers, this could remove another user's stopped container if container names collide. Use `-n NAME` to give each session a unique name.
-
----
-
-## Future work
-
-The container pattern here is not specific to Claude Code or aider — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
-

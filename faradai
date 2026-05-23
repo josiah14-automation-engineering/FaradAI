@@ -7,12 +7,13 @@ _FARADAI_VERSION="0.1.0-alpha.1"
 
 _usage() {
   cat <<'EOF'
-Usage: faradai [-n NAME | -a [NAME]] [COMMAND [ARGS...]]
+Usage: faradai [-c | -a] [-n NAME] [COMMAND [ARGS...]]
 
 Flags:
-  -n NAME   Create container faradai-NAME; error if it already exists
-  -a [NAME] Attach to running faradai-NAME (or default faradai); error if not running
-  (none)    Auto-detect: attach if default faradai is running, create if not
+  -c        Create a new container; error if it already exists
+  -a        Attach to a running container; error if not running
+  -n NAME   Use faradai-NAME instead of faradai; works with -c, -a, or auto
+  (none)    Auto-detect: attach if the container is running, create if not
 
 Commands:
   (none)     Launch Claude Code (default)
@@ -41,6 +42,11 @@ Environment variables:
   FARADAI_ALLOW_PUBLISH     Set to 1 to permit --publish/-p in FARADAI_DOCKER_ARGS (exposes container ports to host)
   FARADAI_DEBUG             Set to 1 to print resolved config and docker command before running
 EOF
+}
+
+_die() {
+  echo "faradai: ${1}" >&2
+  exit 1
 }
 
 _cleanup() { docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true; }
@@ -90,31 +96,6 @@ _validate_network_mode() {
     echo "faradai: invalid FARADAI_NETWORK_MODE '${FARADAI_NETWORK_MODE}' (expected: open, none)" >&2
     exit 1
   }
-}
-
-_build_extra_docker_args() {
-  [[ -z "${FARADAI_DOCKER_ARGS:-}" ]] && return
-  # Word-split only — paths with spaces are not supported.
-  read -ra EXTRA_DOCKER_ARGS <<< "${FARADAI_DOCKER_ARGS}"
-  local permitted=(--env -e --label -l --hostname)
-  [[ "${FARADAI_ALLOW_DEVICE:-0}"  == "1" ]] && permitted+=(--device)
-  [[ "${FARADAI_ALLOW_PUBLISH:-0}" == "1" ]] && permitted+=(--publish -p)
-  local arg flag ok
-  for arg in "${EXTRA_DOCKER_ARGS[@]}"; do
-    [[ "${arg}" != -* ]] && continue
-    ok=0
-    for flag in "${permitted[@]}"; do
-      [[ "${arg}" == "${flag}" || "${arg}" == "${flag}="* ]] && { ok=1; break; }
-      # Combined short-flag form: -eFOO=bar, -lkey=val
-      [[ "${flag}" =~ ^-[^-]$ && "${arg}" =~ ^"${flag}".+ ]] && { ok=1; break; }
-    done
-    (( ok )) || {
-      echo "faradai: FARADAI_DOCKER_ARGS flag '${arg}' is not permitted" >&2
-      echo "faradai: always permitted: --env/-e, --label/-l, --hostname" >&2
-      echo "faradai: opt-in: --device (FARADAI_ALLOW_DEVICE=1), --publish/-p (FARADAI_ALLOW_PUBLISH=1)" >&2
-      exit 1
-    }
-  done
 }
 
 # _update_faradai [--branch NAME]
@@ -209,6 +190,51 @@ _verify_update_tag() {
   fi
 }
 
+# _parse_cli_flags "$@"
+#
+# Reads:  $@ (script arguments), _MODE (initialised by _init_defaults)
+# Writes: _MODE, _CONTAINER_NAME, _CMD_ARGS
+#
+# Processes flags until the first non-flag token; that token and everything
+# after it become _CMD_ARGS. getopts is avoided so --help reaches the
+# subcommand dispatcher intact.
+_parse_cli_flags() {
+  local _args=("$@") _i=0 _name_encountered=0
+
+  while (( _i < ${#_args[@]} )); do
+    case "${_args[_i]}" in
+      -a)
+        [[ "${_MODE}" == "create" ]] && _die "-a and -c are mutually exclusive"
+        _MODE="attach"
+        ;;
+      -c)
+        [[ "${_MODE}" == "attach" ]] && _die "-a and -c are mutually exclusive"
+        _MODE="create"
+        ;;
+      -n)
+        (( _name_encountered )) && _die "-n may only be specified once"
+        _name_encountered=1
+        _i=$(( _i + 1 ))
+        # Reject if: no token follows, next token is a flag, or token is empty/all-whitespace.
+        # ${_args[_i]//[[:space:]]/} strips all whitespace classes (space, tab, etc.);
+        # -z then catches "", "   ", $'\t', and any other whitespace-only string.
+        if (( _i >= ${#_args[@]} )) || [[ "${_args[_i]}" == -* ]] || [[ -z "${_args[_i]//[[:space:]]/}" ]]; then
+          _die "-n requires a NAME argument (e.g. faradai -n myproject)"
+        fi
+        _CONTAINER_NAME="faradai-${_args[_i]}"
+        ;;
+      *)
+        # First non-flag token ends flag processing; capture rest as command args.
+        _CMD_ARGS=("${_args[@]:_i}")
+        return
+        ;;
+    esac
+    _i=$(( _i + 1 ))
+  done
+
+  _CMD_ARGS=()
+}
+
 _check_image_user() {
   local image_user
 
@@ -226,217 +252,414 @@ _check_image_user() {
   fi
 }
 
-# ── flag parsing ───────────────────────────────────────────────────────────────
+# _init_defaults
+#
+# Reads:  USER (host env, optional)
+# Writes: USER, _MODE, _CONTAINER_NAME, _CMD_ARGS, DOCKER_RUN_ARGS
+#
+# Must run before any other phase. Normalising USER here (not later in mount
+# building) fixes a latent bug: _check_image_user compared the image label
+# against ${USER} before the old ${USER:-$(whoami)} fallback had run.
+_init_defaults() {
+  USER="${USER:-$(whoami)}"
+  _MODE="auto"
+  _CONTAINER_NAME="faradai"
+  _CMD_ARGS=()
+  DOCKER_RUN_ARGS=()
+  _SSH_AGENT_APPROVED=0
+}
 
-# Manual loop avoids getopts consuming --help before subcommand dispatch sees it.
-# -n and -a are mutually exclusive; -a optionally takes a NAME argument.
-# Known tool commands are not consumed as NAME after -a.
-_KNOWN_CMDS=(claude aider bash logs status version --version update uninstall help --help -h)
-_CONTAINER_NAME="faradai"
-_MODE="auto"   # auto | create | attach
-
-_args=("$@")
-_remaining=()
-_i=0
-while (( _i < ${#_args[@]} )); do
-  case "${_args[_i]}" in
-    -n)
-      [[ "${_MODE}" == "attach" ]] && { echo "faradai: -n and -a are mutually exclusive" >&2; exit 1; }
-      _i=$(( _i + 1 ))
-      if (( _i >= ${#_args[@]} )) || [[ "${_args[_i]}" == -* ]]; then
-        echo "faradai: -n requires a NAME argument (e.g. faradai -n myproject)" >&2; exit 1
-      fi
-      _CONTAINER_NAME="faradai-${_args[_i]}"
-      _MODE="create"
+# _dispatch_meta_commands CMD_ARGS...
+#
+# Reads:  $@ (CMD_ARGS), _FARADAI_VERSION
+# Writes: nothing — exits or execs if matched, returns otherwise
+#
+# Handles commands that do not require Docker or image state.
+_dispatch_meta_commands() {
+  case "${1:-}" in
+    --help|-h|help)
+      _usage
+      exit 0
       ;;
-    -a)
-      [[ "${_MODE}" == "create" ]] && { echo "faradai: -n and -a are mutually exclusive" >&2; exit 1; }
-      _MODE="attach"
-      # Consume the next arg as NAME only if it is not a known command or flag.
-      _next="${_args[$(( _i + 1 ))]:-}"
-      _is_cmd=false
-      for _cmd in "${_KNOWN_CMDS[@]}"; do
-        [[ "${_next}" == "${_cmd}" ]] && { _is_cmd=true; break; }
-      done
-
-      if [[ -n "${_next}" && "${_next}" != -* && "${_is_cmd}" == "false" ]]; then
-        _CONTAINER_NAME="faradai-${_next}"
-        _i=$(( _i + 1 ))
-      fi
+    version|--version)
+      echo "faradai ${_FARADAI_VERSION}"
+      exit 0
       ;;
-    *)
-      _remaining+=("${_args[_i]}")
+    update)
+      _update_faradai "${@:2}"
+      exit 0
+      ;;
+    uninstall)
+      exec /usr/local/bin/uninstall-faradai
       ;;
   esac
-  _i=$(( _i + 1 ))
-done
+}
 
-# ${array[@]+expansion} guards against set -u errors on empty arrays.
-set -- "${_remaining[@]+"${_remaining[@]}"}"
+# _preflight_docker
+#
+# Reads:  nothing
+# Writes: nothing — exits if Docker is unavailable
+_preflight_docker() {
+  command -v docker > /dev/null 2>&1 || _die "docker is not installed or not in PATH"
+  docker info > /dev/null 2>&1 || _die "Docker daemon is not running"
+}
 
-# ── subcommand dispatch ────────────────────────────────────────────────────────
+# _dispatch_docker_metadata_commands CMD_ARGS...
+#
+# Reads:  $@ (CMD_ARGS), _CONTAINER_NAME
+# Writes: nothing — exits or execs if matched, returns otherwise
+#
+# Handles commands that need Docker but not a running container or image.
+_dispatch_docker_metadata_commands() {
+  case "${1:-}" in
+    logs)
+      exec docker logs "${_CONTAINER_NAME}" "${@:2}"
+      ;;
+    status)
+      local _fmt=$'name:    {{slice .Name 1}}\nstate:   {{.State.Status}}\nstarted: {{.State.StartedAt}}\nimage:   {{.Config.Image}}'
+      docker inspect "${_CONTAINER_NAME}" --format "${_fmt}" 2>/dev/null \
+        || _die "container '${_CONTAINER_NAME}' not found"
+      exit 0
+      ;;
+  esac
+}
 
-case "${1:-}" in
-  --help|-h|help)
-    _usage
-    exit 0
-    ;;
-  version|--version)
-    echo "faradai ${_FARADAI_VERSION}"
-    exit 0
-    ;;
-  update)
-    _update_faradai "${@:2}"
-    exit 0
-    ;;
-  uninstall)
-    exec /usr/local/bin/uninstall-faradai
-    ;;
-esac
+# _ensure_image_ready
+#
+# Reads:  USER (via _check_image_user)
+# Writes: nothing — exits on failure
+_ensure_image_ready() {
+  docker image inspect faradai:latest > /dev/null 2>&1 \
+    || _die "image not found — run './install.sh' to build it"
+  _check_image_user
+}
 
-# ── docker pre-flight ──────────────────────────────────────────────────────────
+# _resolve_workdir
+#
+# Reads:  FARADAI_WORKDIR (optional)
+# Writes: FARADAI_WORKDIR
+_resolve_workdir() {
+  FARADAI_WORKDIR="${FARADAI_WORKDIR:-$(pwd)}"
+  [ -d "${FARADAI_WORKDIR}" ] || _die "FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}"
+}
 
-command -v docker > /dev/null 2>&1 || { echo "faradai: docker is not installed or not in PATH" >&2; exit 1; }
-docker info > /dev/null 2>&1 || { echo "faradai: Docker daemon is not running" >&2; exit 1; }
+# _resolve_container_state
+#
+# Reads:  _CONTAINER_NAME
+# Writes: _CONTAINER_RUNNING
+#
+# docker inspect exits non-zero if the container doesn't exist;
+# || clears the var rather than aborting under set -e.
+# Runs unconditionally (even in create mode) to keep main() branchless.
+_resolve_container_state() {
+  _CONTAINER_RUNNING="$(docker inspect --format '{{.State.Running}}' \
+    "${_CONTAINER_NAME}" 2>/dev/null)" || _CONTAINER_RUNNING=""
+}
 
-case "${1:-}" in
-  logs)
-    exec docker logs "${_CONTAINER_NAME}" "${@:2}"
-    ;;
-  status)
-    _fmt=$'name:    {{slice .Name 1}}\nstate:   {{.State.Status}}\nstarted: {{.State.StartedAt}}\nimage:   {{.Config.Image}}'
-    docker inspect "${_CONTAINER_NAME}" --format "${_fmt}" 2>/dev/null \
-      || { echo "faradai: container '${_CONTAINER_NAME}' not found" >&2; exit 1; }
-    exit 0
-    ;;
-esac
-
-docker image inspect faradai:latest > /dev/null 2>&1 || { echo "faradai: image not found — run './install.sh' to build it" >&2; exit 1; }
-_check_image_user
-
-# ── resolve workdir ────────────────────────────────────────────────────────────
-
-FARADAI_WORKDIR="${FARADAI_WORKDIR:-$(pwd)}"
-[ -d "${FARADAI_WORKDIR}" ] || { echo "faradai: FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}" >&2; exit 1; }
-
-# ── attach if already running ─────────────────────────────────────────────────
-
-# docker inspect exits non-zero if the container doesn't exist; || clears the var rather than aborting.
-_is_running="$(docker inspect --format '{{.State.Running}}' "${_CONTAINER_NAME}" 2>/dev/null)" || _is_running=""
-
-if [[ "${_MODE}" == "attach" ]]; then
-  if [[ "${_is_running}" != "true" ]]; then
-    if [[ "${_CONTAINER_NAME}" == "faradai" ]]; then
-      echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai" >&2
-    else
-      echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai -n ${_CONTAINER_NAME#faradai-}" >&2
+# _maybe_attach_existing CMD_ARGS...
+#
+# Reads:  _MODE, _CONTAINER_RUNNING, _CONTAINER_NAME
+# Writes: nothing — may exec (replacing this process) or return
+#
+# $@ = CMD_ARGS forwarded to the container; defaults to claude when empty.
+_maybe_attach_existing() {
+  if [[ "${_MODE}" == "attach" ]]; then
+    if [[ "${_CONTAINER_RUNNING}" != "true" ]]; then
+      if [[ "${_CONTAINER_NAME}" == "faradai" ]]; then
+        echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai" >&2
+      else
+        echo "faradai: no running container '${_CONTAINER_NAME}' — start one with: faradai -n ${_CONTAINER_NAME#faradai-}" >&2
+        echo "faradai:   (use -c to force creation, or omit -a to auto-detect)" >&2
+      fi
+      exit 1
     fi
-    exit 1
+    exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
   fi
-  exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
-fi
 
-if [[ "${_MODE}" == "auto" && "${_is_running}" == "true" ]]; then
-  exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
-fi
+  if [[ "${_MODE}" == "auto" && "${_CONTAINER_RUNNING}" == "true" ]]; then
+    exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
+  fi
+}
 
-# ── trust prompt ──────────────────────────────────────────────────────────────
+# _confirm_trust_workdir
+#
+# Reads:  FARADAI_TRUST_DIR, FARADAI_WORKDIR
+# Writes: nothing — exits if user declines
+_confirm_trust_workdir() {
+  if [[ "${FARADAI_TRUST_DIR:-0}" != "1" ]]; then
+    printf "faradai: mount %s into container? [y/N] " "${FARADAI_WORKDIR}"
+    local _trust_answer
+    read -r _trust_answer
+    [[ "${_trust_answer}" =~ ^[Yy]$ ]] || { echo "faradai: aborted." >&2; exit 0; }
+  fi
+}
 
-if [[ "${FARADAI_TRUST_DIR:-0}" != "1" ]]; then
-  printf "faradai: mount %s into container? [y/N] " "${FARADAI_WORKDIR}"
-  read -r _trust_answer
-  [[ "${_trust_answer}" =~ ^[Yy]$ ]] || { echo "faradai: aborted." >&2; exit 0; }
-fi
+# _prepare_container_name_for_create
+#
+# Reads:  _MODE, _CONTAINER_NAME
+# Writes: nothing — exits if create mode and container already exists
+_prepare_container_name_for_create() {
+  if [[ "${_MODE}" == "create" ]] && docker inspect "${_CONTAINER_NAME}" > /dev/null 2>&1; then
+    _die "container '${_CONTAINER_NAME}' already exists — attach with: faradai -a -n ${_CONTAINER_NAME#faradai-}"
+  fi
+}
 
-# ── create mode: error if container already exists ────────────────────────────
+# _remove_stale_container
+#
+# Reads:  _CONTAINER_NAME
+# Writes: nothing — removes any stopped or errored container with _CONTAINER_NAME
+_remove_stale_container() {
+  docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true
+}
 
-if [[ "${_MODE}" == "create" ]] && docker inspect "${_CONTAINER_NAME}" > /dev/null 2>&1; then
-  echo "faradai: container '${_CONTAINER_NAME}' already exists — attach with: faradai -a ${_CONTAINER_NAME#faradai-}" >&2
-  exit 1
-fi
-
-# ── start fresh: cleanup + trap ───────────────────────────────────────────────
-
-# Remove any stopped container so --name doesn't conflict.
-docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true
+# _setup_cleanup_trap
+#
+# Reads:  nothing
+# Writes: nothing — registers EXIT/INT/TERM trap to remove the container on abort
+#
 # Trap fires only in the narrow window before exec docker run replaces this process.
-trap _cleanup INT TERM EXIT
+_setup_cleanup_trap() {
+  trap _cleanup INT TERM EXIT
+}
 
-# ── config defaults + validation ──────────────────────────────────────────────
+# _load_runtime_config
+#
+# Reads:  FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE (optional)
+# Writes: FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE
+_load_runtime_config() {
+  FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
+  FARADAI_CPUS="${FARADAI_CPUS:-4}"
+  FARADAI_PIDS="${FARADAI_PIDS:-512}"
+  FARADAI_NETWORK_MODE="${FARADAI_NETWORK_MODE:-open}"
 
-FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
-FARADAI_CPUS="${FARADAI_CPUS:-4}"
-FARADAI_PIDS="${FARADAI_PIDS:-512}"
-FARADAI_NETWORK_MODE="${FARADAI_NETWORK_MODE:-open}"
+  _validate_memory
+  _validate_cpus
+  _validate_pids
+  _validate_network_mode
+}
 
-_validate_memory
-_validate_cpus
-_validate_pids
-_validate_network_mode
+# _debug_print_plan
+#
+# Reads:  FARADAI_DEBUG, _CONTAINER_NAME, FARADAI_WORKDIR, FARADAI_MEMORY,
+#         FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE
+# Writes: nothing (side-effects: stderr output, enables set -x)
+_debug_print_plan() {
+  if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
+    echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS} NETWORK=${FARADAI_NETWORK_MODE}" >&2
+    set -x
+  fi
+}
 
-NETWORK_ARGS=()
-[[ "${FARADAI_NETWORK_MODE}" == "none" ]] && NETWORK_ARGS=(--network none)
-
-# ── build optional mount arrays ───────────────────────────────────────────────
-
-USER="${USER:-$(whoami)}"
-
-mkdir -p "${HOME}/.config/gh"
-GH_CONFIG_ARGS=(-v "${HOME}/.config/gh:/home/${USER}/.config/gh")
-
-AIDER_CONF_MOUNT=()
-[[ -f "${HOME}/.aider.conf.yml" ]] && AIDER_CONF_MOUNT=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
-
-SSH_AGENT_ARGS=()
-if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" == "1" && -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
-  _forward_agent=1
-
-  if [[ "${FARADAI_TRUST_SSH_AGENT:-0}" != "1" ]]; then
-    echo "faradai: SSH agent socket detected. Keys that will be accessible inside the container if forwarded:" >&2
-    ssh-add -l 2>/dev/null || echo "  (no keys loaded)" >&2
-    printf "faradai: forward SSH agent into container? [y/N] "
-    read -r _ssh_agent_answer
-    [[ "${_ssh_agent_answer}" =~ ^[Yy]$ ]] || _forward_agent=0
+# _handle_ssh_agent_forwarding
+#
+# Reads:  FARADAI_ENABLE_SSH_AGENT, SSH_AUTH_SOCK, FARADAI_TRUST_SSH_AGENT
+# Writes: _SSH_AGENT_APPROVED
+#
+# Sets _SSH_AGENT_APPROVED=1 if the SSH agent should be forwarded; 0 otherwise.
+# Prompts interactively unless FARADAI_TRUST_SSH_AGENT=1.
+_handle_ssh_agent_forwarding() {
+  _SSH_AGENT_APPROVED=0
+  if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" != "1" \
+     || -z "${SSH_AUTH_SOCK:-}" \
+     || ! -S "${SSH_AUTH_SOCK}" ]]; then
+    return 0
   fi
 
-  (( _forward_agent )) && SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
+  if [[ "${FARADAI_TRUST_SSH_AGENT:-0}" == "1" ]]; then
+    _SSH_AGENT_APPROVED=1
+    return 0
+  fi
+
+  echo "faradai: SSH agent socket detected. Keys that will be accessible inside the container if forwarded:" >&2
+  ssh-add -l 2>/dev/null || echo "  (no keys loaded)" >&2
+  printf "faradai: forward SSH agent into container? [y/N] "
+  local _answer
+  read -r _answer
+  if [[ "${_answer}" =~ ^[Yy]$ ]]; then
+    _SSH_AGENT_APPROVED=1
+  fi
+}
+
+# _append_runtime_flags
+#
+# Reads:  _CONTAINER_NAME
+# Writes: DOCKER_RUN_ARGS
+_append_runtime_flags() {
+  DOCKER_RUN_ARGS+=(-it --rm --init --name "${_CONTAINER_NAME}")
+}
+
+# _append_resource_args
+#
+# Reads:  FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS
+# Writes: DOCKER_RUN_ARGS
+_append_resource_args() {
+  DOCKER_RUN_ARGS+=(
+    --memory="${FARADAI_MEMORY}"
+    --cpus="${FARADAI_CPUS}"
+    --pids-limit="${FARADAI_PIDS}"
+    --shm-size=1g
+  )
+}
+
+# _append_security_args
+#
+# Reads:  nothing
+# Writes: DOCKER_RUN_ARGS
+_append_security_args() {
+  DOCKER_RUN_ARGS+=(--cap-drop ALL --security-opt no-new-privileges:true)
+}
+
+# _append_network_args
+#
+# Reads:  FARADAI_NETWORK_MODE
+# Writes: DOCKER_RUN_ARGS
+_append_network_args() {
+  if [[ "${FARADAI_NETWORK_MODE}" == "none" ]]; then
+    DOCKER_RUN_ARGS+=(--network none)
+  fi
+}
+
+# _ensure_host_dirs
+#
+# Reads:  HOME
+# Writes: nothing — creates host directories that credential mounts depend on
+#
+# Must run before _append_credential_mount_args.
+_ensure_host_dirs() {
+  mkdir -p "${HOME}/.config/gh"
+}
+
+# _append_credential_mount_args
+#
+# Reads:  HOME, USER, SSH_AUTH_SOCK, _SSH_AGENT_APPROVED,
+#         FARADAI_MOUNT_SSH_DIR
+# Writes: DOCKER_RUN_ARGS
+#
+# Must run after _handle_ssh_agent_forwarding (reads _SSH_AGENT_APPROVED)
+# and after _ensure_host_dirs (host dirs must exist before the mounts are built).
+_append_credential_mount_args() {
+  DOCKER_RUN_ARGS+=(
+    -v "${HOME}/.claude:/home/${USER}/.claude"
+    -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro"
+    -v "${HOME}/.claude.json:/home/${USER}/.claude.json"
+    -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro"
+    -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
+  )
+
+  if [[ "${_SSH_AGENT_APPROVED}" -eq 1 ]]; then
+    DOCKER_RUN_ARGS+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
+  fi
+
+  if [[ "${FARADAI_MOUNT_SSH_DIR:-0}" == "1" ]]; then
+    DOCKER_RUN_ARGS+=(-v "${HOME}/.ssh:/home/${USER}/.ssh:ro")
+  fi
+
+  if [[ -f "${HOME}/.aider.conf.yml" ]]; then
+    DOCKER_RUN_ARGS+=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
+  fi
+}
+
+# _append_project_mount_args
+#
+# Reads:  FARADAI_WORKDIR
+# Writes: DOCKER_RUN_ARGS
+_append_project_mount_args() {
+  DOCKER_RUN_ARGS+=(-v "${FARADAI_WORKDIR}:${FARADAI_WORKDIR}")
+}
+
+# _append_extra_docker_args
+#
+# Reads:  FARADAI_DOCKER_ARGS, FARADAI_ALLOW_DEVICE, FARADAI_ALLOW_PUBLISH
+# Writes: DOCKER_RUN_ARGS
+#
+# Validates and appends user-supplied extra docker flags.
+_append_extra_docker_args() {
+  [[ -z "${FARADAI_DOCKER_ARGS:-}" ]] && return 0
+
+  local extra_args
+  # Word-split only — paths with spaces are not supported.
+  read -ra extra_args <<< "${FARADAI_DOCKER_ARGS}"
+
+  local permitted=(--env -e --label -l --hostname)
+  if [[ "${FARADAI_ALLOW_DEVICE:-0}"  == "1" ]]; then permitted+=(--device); fi
+  if [[ "${FARADAI_ALLOW_PUBLISH:-0}" == "1" ]]; then permitted+=(--publish -p); fi
+
+  local arg flag ok
+  for arg in "${extra_args[@]}"; do
+    [[ "${arg}" != -* ]] && continue
+    ok=0
+    for flag in "${permitted[@]}"; do
+      [[ "${arg}" == "${flag}" || "${arg}" == "${flag}="* ]] && { ok=1; break; }
+      # Combined short-flag form: -eFOO=bar, -lkey=val
+      [[ "${flag}" =~ ^-[^-]$ && "${arg}" =~ ^"${flag}".+ ]] && { ok=1; break; }
+    done
+    if (( !ok )); then
+      echo "faradai: FARADAI_DOCKER_ARGS flag '${arg}' is not permitted" >&2
+      echo "faradai: always permitted: --env/-e, --label/-l, --hostname" >&2
+      echo "faradai: opt-in: --device (FARADAI_ALLOW_DEVICE=1), --publish/-p (FARADAI_ALLOW_PUBLISH=1)" >&2
+      exit 1
+    fi
+  done
+
+  DOCKER_RUN_ARGS+=("${extra_args[@]}")
+}
+
+# _exec_docker_run
+#
+# Reads:  DOCKER_RUN_ARGS
+# Writes: nothing — execs docker run, replacing this process
+_exec_docker_run() {
+  exec docker run "${DOCKER_RUN_ARGS[@]}"
+}
+
+# _build_docker_run_args CMD_ARGS...
+#
+# Reads:  all FARADAI_* config globals, _CONTAINER_NAME, _SSH_AGENT_APPROVED,
+#         HOME, USER, FARADAI_WORKDIR
+# Writes: DOCKER_RUN_ARGS
+#
+# $@ = CMD_ARGS forwarded to the container after the image name.
+_build_docker_run_args() {
+  _append_runtime_flags
+  _append_resource_args
+  _append_security_args
+  _append_network_args
+  _append_credential_mount_args
+  _append_project_mount_args
+  _append_extra_docker_args
+  DOCKER_RUN_ARGS+=(-w "${FARADAI_WORKDIR}" faradai:latest "$@")
+}
+
+
+main() {
+  _init_defaults
+
+  _parse_cli_flags "$@"
+  _dispatch_meta_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+
+  _preflight_docker
+  _dispatch_docker_metadata_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+
+  _ensure_image_ready
+  _resolve_workdir
+  _resolve_container_state
+  _maybe_attach_existing "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+
+  _confirm_trust_workdir
+  _handle_ssh_agent_forwarding
+  _prepare_container_name_for_create
+  _remove_stale_container
+  _setup_cleanup_trap
+  _load_runtime_config
+
+  _ensure_host_dirs
+  _build_docker_run_args "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+
+  _debug_print_plan
+
+  _exec_docker_run
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
 fi
-
-SSH_DIR_ARGS=()
-[[ "${FARADAI_MOUNT_SSH_DIR:-0}" == "1" ]] && SSH_DIR_ARGS=(-v "${HOME}/.ssh:/home/${USER}/.ssh:ro")
-
-EXTRA_DOCKER_ARGS=()
-_build_extra_docker_args
-
-# ── debug ─────────────────────────────────────────────────────────────────────
-
-if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
-  echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS} NETWORK=${FARADAI_NETWORK_MODE}" >&2
-  set -x
-fi
-
-# ── run ───────────────────────────────────────────────────────────────────────
-
-exec docker run -it --rm \
-  --init \
-  --name "${_CONTAINER_NAME}" \
-  --memory="${FARADAI_MEMORY}" \
-  --cpus="${FARADAI_CPUS}" \
-  --pids-limit="${FARADAI_PIDS}" \
-  --shm-size=1g \
-  --cap-drop ALL \
-  --security-opt no-new-privileges:true \
-  "${NETWORK_ARGS[@]}" \
-  -v "${HOME}/.claude:/home/${USER}/.claude" \
-  -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro" \
-  -v "${HOME}/.claude.json:/home/${USER}/.claude.json" \
-  -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro" \
-  "${GH_CONFIG_ARGS[@]}" \
-  "${SSH_AGENT_ARGS[@]}" \
-  "${SSH_DIR_ARGS[@]}" \
-  -v "${FARADAI_WORKDIR}:${FARADAI_WORKDIR}" \
-  "${AIDER_CONF_MOUNT[@]}" \
-  "${EXTRA_DOCKER_ARGS[@]}" \
-  -w "${FARADAI_WORKDIR}" \
-  faradai:latest \
-  "$@"

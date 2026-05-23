@@ -1306,3 +1306,103 @@ The spike went through three passes:
 - Whether Python would be a better call — equivalent validation wins, universally readable control flow, smaller adoption ask
 
 **Outcome:** Spike committed to `spike/rash-migration`, findings and open questions posted to issue #40. No decision made on the migration; deferred until v1 feature set stabilizes per the original issue.
+
+---
+
+## Session 42 — 2026-05-23
+
+### CLI grammar change: `-n`/`-a` → `-c`/`-a`/`-n`
+
+The original CLI grammar had `-n NAME` doing double duty as both a name selector and an implicit mode selector (create mode). `-a` optionally consumed the next positional token as a container name, which required a hardcoded `_KNOWN_CMDS` list to distinguish container names from subcommand tokens.
+
+**Josiah directed** replacing this with orthogonal flags:
+- `-c` — create mode
+- `-a` — attach mode
+- `-n NAME` — name selector, independent of mode
+
+This eliminated `_KNOWN_CMDS` entirely and the lookahead logic in the `-a` case. The simplification was immediately visible: the parser went from a complex multi-case loop with lookahead to a clean flag parser where each flag does exactly one thing.
+
+README, `_usage`, and all stale error messages updated to reflect the new grammar.
+
+### External refactoring assessment and plan
+
+Josiah shared a GPT refactoring assessment alongside Sonnet's own assessment. Both identified the same core issues (no `main()`, split dispatch hidden ordering, interactive prompts tangled with config, final `docker run` coupled to every builder), but GPT's assessment was stronger in two places:
+
+1. **`$USER` ordering bug** — `_check_image_user` runs before `USER="${USER:-$(whoami)}"`, so an unset `$USER` produces a false-positive mismatch error. Sonnet missed this; GPT caught it.
+2. **Single `DOCKER_RUN_ARGS` accumulator** — GPT proposed replacing per-category arrays (`NETWORK_ARGS`, `GH_CONFIG_ARGS`, etc.) with named appender functions that all write to a single `DOCKER_RUN_ARGS` array. Cleaner than Sonnet's "keep arrays separate" position.
+
+**`REFACTOR-cli-phases.md` created** — a detailed three-pass refactor plan authored by Sonnet capturing the full architectural intent, test strategy (including what new tests become possible with a source-vs-execute guard), open decisions, and risk notes. Explicitly a forward-planning document distinct from BUILDLOG, CHANGELOG, and DECISIONLOG.
+
+### Refactoring execution — TDD throughout
+
+Josiah directed a strict TDD approach: write failing tests first, confirm they fail, implement, confirm they pass. Three passes executed in this session:
+
+**Pass 0 — test catch-up.** The existing test suite had three stale failures from the CLI grammar change. Fixed, and added tests for all new flag combinations: `-c`, `-a -n NAME`, `-c -n NAME`, `-n NAME` alone (auto mode), and the new `-a`/`-c` mutual exclusion. Reorganised the flag parser test section into four logical groups: mode flags, `-n` validation, flag combinations, stop-at-first-non-flag. Added two baseline tests that were missing entirely (bare `faradai`, `-a` alone). Suite went from 46 to 62 tests.
+
+**Pass 1 — CLI parser extraction.** Extracted the inline flag parsing block into `_parse_cli_flags`. Key decisions made during this pass:
+
+- **Stop-at-first-non-flag:** New parser stops at the first non-flag token and captures everything after as `_CMD_ARGS`. Old parser collected all non-flag tokens into `_remaining` and continued processing — meaning `faradai bash -c` would process `-c` as a flag. Tests confirmed the new behavior and pinned it.
+- **`-n` validation improved:** Added rejection of empty strings and whitespace-only names (the existing check only caught flag-looking tokens). Used `[[ -z "${arg//[[:space:]]/}" ]]` to catch all whitespace classes including tabs. Added rejection of duplicate `-n` flags (previously silent last-wins).
+- **Rename to `_parse_cli_flags`:** Josiah's idea — the name is self-documenting at the call site, making the `# ── flag parsing ──` section header redundant. Removed it.
+- **`_die` helper introduced** for consistent error formatting, to be reused by later phase functions.
+
+Tests added per discovery: empty NAME, whitespace NAME, tab NAME, duplicate `-n`, flag-after-subcommand doesn't set mode (two cases), flag order independence.
+
+**Pass 2 — phase extraction.** Wrapped the entire bottom half in `main()`, added a source-vs-execute guard, and extracted all phase functions:
+
+`_init_defaults`, `_dispatch_meta_commands`, `_preflight_docker`, `_dispatch_docker_metadata_commands`, `_ensure_image_ready`, `_resolve_workdir`, `_resolve_container_state`, `_maybe_attach_existing`, `_confirm_trust_workdir`, `_prepare_container_name_for_create`, `_setup_cleanup_trap`, `_load_runtime_config`, `_debug_print_plan`.
+
+Created `test/sourced.bats` — a new test file that sources `faradai` (safe only after the source-guard exists) and tests phase functions directly, bypassing docker mock limitations. Added 36 tests covering `_init_defaults`, `_parse_cli_flags` (direct global inspection), `_dispatch_meta_commands`, `_maybe_attach_existing` (with `_CONTAINER_RUNNING` stubbed directly — no docker mock needed), `_resolve_workdir`, `_dispatch_docker_metadata_commands`, and `_load_runtime_config`.
+
+**Key discovery during Pass 2 — `set -e` and last-statement function exit codes:**
+
+`[[ condition ]] && cmd` as the **last statement in a function** makes the function's exit code 1 when the condition is false. Under `set -e`, the caller then exits. This is silent and confusing — the function "works" if followed by any other statement, but returns failure when it's the tail.
+
+The symptom: every test expecting exit 0 failed after extracting `_load_runtime_config`. `[[ NETWORK_MODE == "none" ]] && NETWORK_ARGS=(--network none)` was the last line — harmless at the top level of the old script (more code followed it), but fatal as the tail of a function.
+
+Fix: `if [[ condition ]]; then cmd; fi`. Two lines instead of one, zero ambiguity about exit code. Applies to any `[[ ]] && cmd` or `(( )) && cmd` used as a function's final statement. Pass 3's named appender functions will all end with conditional array appends — must use `if` there.
+
+**`$USER` ordering bug fixed** in `_init_defaults`: `USER="${USER:-$(whoami)}"` now runs before any other phase, including `_check_image_user`. Regression test added to `unit.bats`: `env -u USER MOCK_IMAGE_USER="$(whoami)" "${FARADAI}"` must exit 0 (previously produced a false-positive mismatch error).
+
+**Final suite count:** 99 tests, all passing.
+
+**Pass 3 — `DOCKER_RUN_ARGS` builder extraction.** Replaced the inline mount-building block in `main()` with named appender functions that each own one policy area and write to a single `DOCKER_RUN_ARGS` accumulator:
+
+`_append_runtime_flags`, `_append_resource_args`, `_append_security_args`, `_append_network_args`, `_append_credential_mount_args`, `_append_project_mount_args`, `_append_extra_docker_args`, `_build_docker_run_args` (orchestrator), `_exec_docker_run`.
+
+Also extracted `_handle_ssh_agent_forwarding` (named to reflect it handles the decision either way, not just "confirms" the happy path), which sets `_SSH_AGENT_APPROVED` — read later by `_append_credential_mount_args`. `_SSH_AGENT_APPROVED=0` added to `_init_defaults`.
+
+`_build_extra_docker_args` (old per-category array pattern) and the `NETWORK_ARGS` block in `_load_runtime_config` removed as dead code. `unit.bats` test names updated from `_build_extra_docker_args` to `_append_extra_docker_args`.
+
+`set -e` + last-statement pitfall avoided throughout: all conditional appends in appender functions use `if [[ ]]; then; fi` rather than `[[ ]] && cmd` — the latter returns 1 as the function's exit code when the condition is false, which propagates as failure under `set -e` in the caller.
+
+`test/sourced.bats` extended with 40 new tests covering all appenders (direct `DOCKER_RUN_ARGS` inspection), `_handle_ssh_agent_forwarding` (all branches including interactive y/n via process substitution), and `_build_docker_run_args` ordering guards (`--name` before image, image before CMD_ARGS, `-w` immediately before image).
+
+**Final suite count:** 139 tests, all passing.
+
+### Near-miss: BUILDLOG overwrite
+
+When asked to update the BUILDLOG, Sonnet used `Write` instead of `Edit` — which would have replaced the entire file with only the content it had seen (sessions 1, 2, and 41; sessions 3–40 were never read). Josiah caught and rejected the tool call before it executed. The correct tool was `Edit`, appending only the new session entry. Lesson: `Write` is for new files or files read in full in the same conversation. Anything else that needs a partial update requires `Edit`.
+
+### Opus code review and coupling fixes
+
+After the refactoring passes were complete, Josiah had Opus review the script for tight coupling between functions. Opus identified 6 issues:
+
+1. `_parse_cli_flags` Reads comment did not list `_MODE`, which the function reads to detect the `-a -c` mutex.
+2. `_confirm_trust_workdir` used `_trust_answer` without `local`, leaking the variable into the global scope.
+3. `_exec_docker_run` had been inlined into `main()` by the linter, leaving a test in `sourced.bats` that called it as a function — test and code were silently diverged.
+4. `_append_credential_mount_args` contained a `mkdir -p "${HOME}/.config/gh"` side effect — a filesystem mutation embedded in a pure arg-builder function.
+5. `_setup_cleanup_trap` performed two unrelated actions: removing a stale container (`docker rm -f`) and registering the `trap`. The name implied only the second.
+6. No temporal-dependency notes on functions where ordering is load-bearing (e.g., `_append_credential_mount_args` must run after `_handle_ssh_agent_forwarding`).
+
+All six were applied. The changes were TDD-ordered where new functions were involved: failing tests for `_ensure_host_dirs` and `_remove_stale_container` were written and confirmed to fail before the implementations were added.
+
+Specific fixes:
+- **Fix 1:** `_parse_cli_flags` Reads line updated to include `_MODE (initialised by _init_defaults)`.
+- **Fix 2:** `local _trust_answer` added in `_confirm_trust_workdir`.
+- **Fix 3:** `_exec_docker_run` restored as a named function; `main()` calls it instead of inlining `exec docker run`. Test passes again.
+- **Fix 4:** `mkdir -p "${HOME}/.config/gh"` extracted to a new `_ensure_host_dirs` phase. `main()` calls `_ensure_host_dirs` immediately before `_build_docker_run_args`. `_append_credential_mount_args` is now a pure arg-builder with no side effects.
+- **Fix 5:** `_setup_cleanup_trap` split into `_remove_stale_container` (the `docker rm -f` step) and `_setup_cleanup_trap` (the `trap` registration only). `main()` calls them in sequence.
+- **Fix 6:** Temporal-dependency notes added to `_ensure_host_dirs` ("Must run before `_append_credential_mount_args`") and `_append_credential_mount_args` ("Must run after `_handle_ssh_agent_forwarding` and after `_ensure_host_dirs`").
+
+**Final suite count:** 142 tests, all passing (79 sourced + 63 unit).
