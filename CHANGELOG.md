@@ -18,3 +18,24 @@ Initial release. Core features:
 - `faradai update` pulls the latest tagged release with integrity verification; `--branch NAME` for pre-release testing
 - `shellcheck` v0.11.0 included in the image
 - 43 unit tests (bats)
+
+## [0.2.0-alpha.1] — 2026-05-23
+
+### Breaking change
+
+- CLI flag grammar replaced. Old: `faradai -a myproject` (name as positional arg to `-a`). New: `faradai -a -n myproject` (flags are orthogonal).
+  - `-c` — create mode; error if container already exists
+  - `-a` — attach mode; error if not running
+  - `-n NAME` — name selector; works with `-c`, `-a`, or auto-detect
+  - Auto mode (no flags) is unchanged
+
+### Fixed
+
+- `$USER` normalisation moved to `_init_defaults`, fixing a false-positive "image was built for a different user" error in environments where `$USER` is unset at launch time (cron, minimal service entrypoints)
+
+### Internal
+
+- Phase pipeline refactor: `main()` is now a linear sequence of named functions with explicit Reads/Writes contracts
+- Single `DOCKER_RUN_ARGS` accumulator replaces per-category arrays
+- Source-vs-execute guard enables function-level unit testing without docker mock limitations
+- 142 tests (was 43): added `test/sourced.bats` for function-level phase coverage
