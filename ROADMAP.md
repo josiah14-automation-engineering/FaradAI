@@ -42,6 +42,10 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 - [#40](https://github.com/josiah14-automation-engineering/FaradAI/issues/40) — Migrate complex Bash scripting to Rash
 - [#68](https://github.com/josiah14-automation-engineering/FaradAI/issues/68) — BUG: no pre-flight check for `~/.claude` — missing credentials produce silent mount failure
 - [#69](https://github.com/josiah14-automation-engineering/FaradAI/issues/69) — BUG: `faradai uninstall` hardcodes `/usr/local/bin/uninstall-faradai` with no existence check
+- [#70](https://github.com/josiah14-automation-engineering/FaradAI/issues/70) — refactor: document globals written by `_parse_cli_flags`
+- [#71](https://github.com/josiah14-automation-engineering/FaradAI/issues/71) — refactor: enforce or document SSH agent / credential mount temporal dependency
+- [#72](https://github.com/josiah14-automation-engineering/FaradAI/issues/72) — refactor: document `DOCKER_RUN_ARGS` mutation chain across `_append_*` functions
+- [#73](https://github.com/josiah14-automation-engineering/FaradAI/issues/73) — refactor: document intentional `set -x` scope in `_debug_print_plan`
 - git mock for `_resolve_latest_tag` / `_verify_update_tag` unit tests (no issue yet)
 
 ---
