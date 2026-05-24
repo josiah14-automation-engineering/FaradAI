@@ -1087,14 +1087,6 @@ Full smoketest run against a fresh container:
 
 ---
 
-## Session 34 — 2026-05-22
-
-### Known issues and limitations section in README
-
-Added a "Known issues and limitations" section to README covering: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, and multi-user `docker rm` name collision. Also updated the stale `gh` auth troubleshooting entry — it previously said credentials weren't persisted, which was true before #33 was fixed.
-
----
-
 ## Session 33 — 2026-05-22
 
 ### Add bats unit tests for validation and flag-parsing (#44)
@@ -1125,6 +1117,14 @@ Three subcommands added in one pass:
 ### Fix CI smoke test to exercise entrypoint.sh (#42)
 
 The existing CI smoke test used `--entrypoint /bin/bash`, bypassing `entrypoint.sh` entirely. Added a second step, "Smoke test (entrypoint dispatch)", that runs `claude --version`, `aider --version`, and `bash -c "echo ok"` through the real entrypoint — covering all three dispatch branches. Original tool-availability step retained and renamed for clarity.
+
+---
+
+## Session 34 — 2026-05-22
+
+### Known issues and limitations section in README
+
+Added a "Known issues and limitations" section to README covering: Docker filesystem I/O overhead, no GPU passthrough, local LSP limitations, and multi-user `docker rm` name collision. Also updated the stale `gh` auth troubleshooting entry — it previously said credentials weren't persisted, which was true before #33 was fixed.
 
 ---
 
@@ -1177,67 +1177,6 @@ The question arose: after the first release, should ongoing decisions continue i
 
 ---
 
-## Session 38 — 2026-05-22 17:04 UTC
-
-### Dual code review: Ring-2.6-1T and Opus; triage and issue logging
-
-Ran Ring-2.6-1T (via aider) and Opus independently on the full codebase. Each finding was validated against the actual source before logging.
-
-**Discarded findings (not real):**
-- Opus: "update clones master with no integrity check" — fixed this session before the review ran.
-- Opus: "README says working directory defaults to ~/Development/personal" — not in the file; hallucination.
-- Opus: "no shellcheck/hadolint CI" — both have been in CI since session 33; Ring confirmed them present.
-
-**Real findings logged as GitHub issues:**
-
-- **#59** — Username mismatch footgun (Opus). `USERNAME` is baked into the image at build time; the runtime script constructs mount paths from `$USER`. If a different host user runs `faradai`, all mounts land at paths that don't exist inside the container. Failure is a confusing permission error. Promoted to **Now** — likely to affect new users immediately.
-- **#60** — `trap _cleanup` is dead code (Opus). Set at line 345 immediately before `exec docker run` at line 402. Once `exec` replaces the process, the trap is gone. Container has `--rm` so Docker handles cleanup regardless. The comment acknowledges the "narrow window" but in that window no container exists yet, so `_cleanup` would silently no-op.
-- **#61** — `-v` flag unhandled; `-a -v` footgun (Ring + Opus). `-v` is not in the subcommand dispatch or `_KNOWN_CMDS`. `faradai -v` falls through to docker. `faradai -a -v` creates a container named `faradai--v`.
-- **#62** — bats-core unpinned in CI (Ring). CI clones `--depth=1` with no tag pin; can drift.
-- **#63** — `build.sh` symlink handling (Ring). `dirname "$0"` resolves to the symlink's directory, not the target's.
-- **#64** — Three documentation gaps (Ring + Opus): tmux not listed in "What's in the image"; URL casing inconsistency (`faradai` vs `FaradAI`); `.credentials.json :ro` is not explicitly noted as "not a secrecy mechanism" the way `~/.aider.conf.yml` is.
-
-ROADMAP updated: #59 moved to **Now**; #60–64 added to **Later**.
-
----
-
-## Session 40 — 2026-05-22 18:35 UTC
-
-### Username mismatch pre-flight check (#59)
-
-`USERNAME` is baked into the image at build time. The faradai script constructs all mount paths from `$USER` at runtime. If the host user running faradai differs from the user the image was built for, mounts land at paths that don't exist inside the container — the failure mode is a confusing permission error with no clear cause.
-
-**Fix:** Added `org.opencontainers.image.faradai.username="${USERNAME}"` to the Dockerfile `LABEL` block. At runtime, `_check_image_user()` reads that label via `docker image inspect --format`, compares it to `$USER`, and exits with a clear message if they differ. Images predating the label (empty value) pass silently for backward compatibility.
-
-**Implementation note:** The function is called immediately after the image existence check in the docker pre-flight section, before any mount path construction. Extracted as a standalone function following the existing `_validate_*` / `_check_*` pattern.
-
-**Tests:** Three bats tests added (46/46 pass):
-- label matches user → passes
-- label mismatches user → exits 1 with clear error
-- label absent → skips silently
-
-One test failure during development: the initial test used `MOCK_IMAGE_USER="${USER}"` and `MOCK_IMAGE_USER="otheruser"` without explicitly setting `$USER`, relying on the test environment's value. The mismatch test exited 1 but without the expected message, suggesting a different exit path was reached first. Fixed by making both tests hermetic: explicitly set `USER="testuser"` in the test env so the comparison is fully predictable regardless of the host user.
-
-The docker mock's `image)` case was extended to echo `MOCK_IMAGE_USER` when set, allowing `_check_image_user` to be unit-tested without a real image.
-
----
-
-## Session 39 — 2026-05-22 18:29 UTC
-
-### Cage framing clarification in README; remove version assumptions
-
-Opus flagged that "the AI inside has full capability, but can only reach what you explicitly mount" overstates the guarantee since network egress is open by default. Two changes:
-
-**Intro paragraph:** Reworded the cage metaphor sentence to be precise: "the cage is the filesystem boundary plus the absence of the Docker socket." Added that the agent can reach the internet freely. Described the container as running CLI-based AI coding agents generally, not just Claude Code and aider — the pattern is not specific to either. Removed "v1"/"v2" version references from the intro (and throughout README and ROADMAP) since the version roadmap isn't settled.
-
-**Security model / network section:** Made the cage boundary limitation more prominent ("This is the current boundary of the Faraday cage metaphor"), explicitly named both constraints (filesystem + no Docker socket), and linked the credential broker roadmap items (#29, #30, #31) directly rather than just referencing "v2."
-
-**Opus "update clones master" finding:** This was a stale finding — the tag-based update with integrity verification was implemented earlier in this session before the review ran. No change needed.
-
-**Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
-
----
-
 ## Session 37 — 2026-05-22 16:19 UTC
 
 ### Code fixes: combined short flags, USER subshell, uninstall data notice (#42 #46 #55)
@@ -1271,6 +1210,67 @@ The original `update` command cloned from master HEAD with no integrity check. T
 - Final stage: `COPY --chmod=755 --from=builder /tmp/shellcheck /usr/local/bin/shellcheck`. The `--chmod=755` is explicit because Docker `COPY` does not guarantee preserving the execute bit across stages.
 
 CI smoke test updated to verify `shellcheck --version`. README "What's in the image" updated.
+
+---
+
+## Session 38 — 2026-05-22 17:04 UTC
+
+### Dual code review: Ring-2.6-1T and Opus; triage and issue logging
+
+Ran Ring-2.6-1T (via aider) and Opus independently on the full codebase. Each finding was validated against the actual source before logging.
+
+**Discarded findings (not real):**
+- Opus: "update clones master with no integrity check" — fixed this session before the review ran.
+- Opus: "README says working directory defaults to ~/Development/personal" — not in the file; hallucination.
+- Opus: "no shellcheck/hadolint CI" — both have been in CI since session 33; Ring confirmed them present.
+
+**Real findings logged as GitHub issues:**
+
+- **#59** — Username mismatch footgun (Opus). `USERNAME` is baked into the image at build time; the runtime script constructs mount paths from `$USER`. If a different host user runs `faradai`, all mounts land at paths that don't exist inside the container. Failure is a confusing permission error. Promoted to **Now** — likely to affect new users immediately.
+- **#60** — `trap _cleanup` is dead code (Opus). Set at line 345 immediately before `exec docker run` at line 402. Once `exec` replaces the process, the trap is gone. Container has `--rm` so Docker handles cleanup regardless. The comment acknowledges the "narrow window" but in that window no container exists yet, so `_cleanup` would silently no-op.
+- **#61** — `-v` flag unhandled; `-a -v` footgun (Ring + Opus). `-v` is not in the subcommand dispatch or `_KNOWN_CMDS`. `faradai -v` falls through to docker. `faradai -a -v` creates a container named `faradai--v`.
+- **#62** — bats-core unpinned in CI (Ring). CI clones `--depth=1` with no tag pin; can drift.
+- **#63** — `build.sh` symlink handling (Ring). `dirname "$0"` resolves to the symlink's directory, not the target's.
+- **#64** — Three documentation gaps (Ring + Opus): tmux not listed in "What's in the image"; URL casing inconsistency (`faradai` vs `FaradAI`); `.credentials.json :ro` is not explicitly noted as "not a secrecy mechanism" the way `~/.aider.conf.yml` is.
+
+ROADMAP updated: #59 moved to **Now**; #60–64 added to **Later**.
+
+---
+
+## Session 39 — 2026-05-22 18:29 UTC
+
+### Cage framing clarification in README; remove version assumptions
+
+Opus flagged that "the AI inside has full capability, but can only reach what you explicitly mount" overstates the guarantee since network egress is open by default. Two changes:
+
+**Intro paragraph:** Reworded the cage metaphor sentence to be precise: "the cage is the filesystem boundary plus the absence of the Docker socket." Added that the agent can reach the internet freely. Described the container as running CLI-based AI coding agents generally, not just Claude Code and aider — the pattern is not specific to either. Removed "v1"/"v2" version references from the intro (and throughout README and ROADMAP) since the version roadmap isn't settled.
+
+**Security model / network section:** Made the cage boundary limitation more prominent ("This is the current boundary of the Faraday cage metaphor"), explicitly named both constraints (filesystem + no Docker socket), and linked the credential broker roadmap items (#29, #30, #31) directly rather than just referencing "v2."
+
+**Opus "update clones master" finding:** This was a stale finding — the tag-based update with integrity verification was implemented earlier in this session before the review ran. No change needed.
+
+**Resolution:** BUILDLOG.md is frozen as a historical record after `v0.1.0-alpha.1`. Significant architectural and security decisions made post-release are captured in `DECISIONLOG.md` — a terse, indexed log with one entry per decision. Task-level work continues to live in GitHub issues and commit messages. CHANGELOG and DECISIONLOG cross-reference each other.
+
+---
+
+## Session 40 — 2026-05-22 18:35 UTC
+
+### Username mismatch pre-flight check (#59)
+
+`USERNAME` is baked into the image at build time. The faradai script constructs all mount paths from `$USER` at runtime. If the host user running faradai differs from the user the image was built for, mounts land at paths that don't exist inside the container — the failure mode is a confusing permission error with no clear cause.
+
+**Fix:** Added `org.opencontainers.image.faradai.username="${USERNAME}"` to the Dockerfile `LABEL` block. At runtime, `_check_image_user()` reads that label via `docker image inspect --format`, compares it to `$USER`, and exits with a clear message if they differ. Images predating the label (empty value) pass silently for backward compatibility.
+
+**Implementation note:** The function is called immediately after the image existence check in the docker pre-flight section, before any mount path construction. Extracted as a standalone function following the existing `_validate_*` / `_check_*` pattern.
+
+**Tests:** Three bats tests added (46/46 pass):
+- label matches user → passes
+- label mismatches user → exits 1 with clear error
+- label absent → skips silently
+
+One test failure during development: the initial test used `MOCK_IMAGE_USER="${USER}"` and `MOCK_IMAGE_USER="otheruser"` without explicitly setting `$USER`, relying on the test environment's value. The mismatch test exited 1 but without the expected message, suggesting a different exit path was reached first. Fixed by making both tests hermetic: explicitly set `USER="testuser"` in the test env so the comparison is fully predictable regardless of the host user.
+
+The docker mock's `image)` case was extended to echo `MOCK_IMAGE_USER` when set, allowing `_check_image_user` to be unit-tested without a real image.
 
 ---
 
