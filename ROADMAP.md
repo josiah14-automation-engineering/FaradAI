@@ -4,6 +4,18 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ---
 
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Linux | ✅ Primary — maintainer-tested |
+| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware) |
+| Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
+| Windows (native) | ❌ Out of scope |
+| FreeBSD / OpenBSD | ❌ No Docker support |
+
+---
+
 ## Now
 
 - [#59](https://github.com/josiah14-automation-engineering/FaradAI/issues/59) — Pre-flight check: runtime `$USER` must match image's baked-in USERNAME

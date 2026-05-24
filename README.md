@@ -24,6 +24,18 @@ cd ~/my-project
 faradai                # launches Claude Code in a sandboxed container
 ```
 
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Linux | ✅ Primary — maintainer-tested |
+| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware) |
+| Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
+| Windows (native) | ❌ Out of scope |
+| FreeBSD / OpenBSD | ❌ No Docker support |
+
+macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot reproduce issues on those platforms.
+
 ## Prerequisites
 
 - Docker
