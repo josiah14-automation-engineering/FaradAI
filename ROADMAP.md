@@ -19,6 +19,7 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 ## Now
 
 - [#59](https://github.com/josiah14-automation-engineering/FaradAI/issues/59) — Pre-flight check: runtime `$USER` must match image's baked-in USERNAME
+- [#67](https://github.com/josiah14-automation-engineering/FaradAI/issues/67) — BUG: stopped container creates dead-end — `_prepare_container_name_for_create` runs before `_remove_stale_container`
 
 ---
 
@@ -39,6 +40,8 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 - [#9](https://github.com/josiah14-automation-engineering/FaradAI/issues/9) — Isolated Claude config for strict/client-work profile
 - [#10](https://github.com/josiah14-automation-engineering/FaradAI/issues/10) — Isolated aider config for strict/client-work profile
 - [#40](https://github.com/josiah14-automation-engineering/FaradAI/issues/40) — Migrate complex Bash scripting to Rash
+- [#68](https://github.com/josiah14-automation-engineering/FaradAI/issues/68) — BUG: no pre-flight check for `~/.claude` — missing credentials produce silent mount failure
+- [#69](https://github.com/josiah14-automation-engineering/FaradAI/issues/69) — BUG: `faradai uninstall` hardcodes `/usr/local/bin/uninstall-faradai` with no existence check
 - git mock for `_resolve_latest_tag` / `_verify_update_tag` unit tests (no issue yet)
 
 ---
