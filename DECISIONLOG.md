@@ -20,3 +20,23 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 
 **Unconditional `_resolve_container_state`:** Also decided during this refactor — `_resolve_container_state` runs unconditionally even in create mode. Cost is one extra `docker inspect` process spawn; gain is one fewer branch in `main()`. Documented here because the plan flagged it as a decision to make.
 
+---
+
+## 2026-05-24 — Language strategy: Go for `faradai`, Nushell for support scripts
+
+**Version scope:** forward-looking; migration not yet started
+
+**Decision:** Migrate the `faradai` script to Go. Migrate post-install support scripts (`uninstall-faradai`, and any future equivalents) to Nushell. `install.sh` becomes a minimal bash bootstrapper that downloads and verifies a pinned nu binary, then hands off to a nu script for the actual installation work. `build.sh` and `entrypoint.sh` stay bash — both are short, stable, and `build.sh` runs on the host before nu is available.
+
+**Why — Go for `faradai`:** The script has grown past 665 lines with 14+ extracted phase functions, a source guard, and a growing test suite. Bash's lack of a type system and the `set -e` / last-statement exit code footguns are active maintenance costs. Go gives a real type system, structured error handling, native unit testing, and produces a single portable binary. Contributor surface for Go is wide.
+
+**Why — Nushell for support scripts:** The primary driver is macOS portability. macOS ships BSD versions of `sed`, `grep`, `awk`, `date`, and `stat` with different flags and behaviours from their GNU counterparts on Linux. Scripts that call these tools accumulate platform-divergence landmines as they grow. Nushell eliminates this class of problem entirely: its built-in commands (`str replace`, `where`, `get`, etc.) behave identically on Linux and macOS with no dependency on system tools. Nushell is also approachable for traditional ops contributors — it reads like a shell, supports piping and command execution naturally, and is less alien than something like Rash. Python was considered and rejected: it doesn't solve the runtime dependency problem, and it's clumsy for system scripting tasks that are mostly command execution, piping, and filesystem checks.
+
+**Nushell in the container:** Nu will be installed in the faradai Docker image so that AI agents and contributors working on the project from inside a faradai box have the tool available. The same pinned nu version will be used in both the bundled binary and the container image.
+
+**Alternatives considered:**
+- Rash — more portable than bash but niche; would deter contributors unfamiliar with Lisp-adjacent syntax.
+- Python — universally available but wrong ergonomics for shell-style scripting; doesn't solve the runtime dependency problem.
+- Go for `install.sh` — would sidestep the nu bootstrapping problem but adds a second Go binary and unnecessary complexity for a short-lived installer script.
+- Keep everything in bash — acceptable today; becomes a macOS portability liability as scripts grow.
+
