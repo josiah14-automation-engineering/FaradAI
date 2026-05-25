@@ -1406,3 +1406,32 @@ Specific fixes:
 - **Fix 6:** Temporal-dependency notes added to `_ensure_host_dirs` ("Must run before `_append_credential_mount_args`") and `_append_credential_mount_args` ("Must run after `_handle_ssh_agent_forwarding` and after `_ensure_host_dirs`").
 
 **Final suite count:** 142 tests, all passing (79 sourced + 63 unit).
+
+### OpenRouter Fusion review — issues #74–#84
+
+Josiah ran an OpenRouter Fusion quorum review against three files: `faradai`, `Dockerfile`, and `README.md`. Quorum models: Ring-2.6-1T, Laguna M.1, CoBuddy. Judge model: auto. The raw fusion output was summarized by GPT, then the summary was refined in a second pass to recover findings the first pass had compressed out. The refined output was used to file issues and update the roadmap.
+
+**New issues filed (#74–#84):**
+
+- **#74** — Dockerfile ShellCheck download hardcoded to `linux.x86_64`; breaks ARM64 Linux builds. Fix: select architecture at build time via Docker `TARGETARCH`.
+- **#75** — `${var,,}` (Bash 4+ syntax) used in `faradai` CLI; macOS ships Bash 3.2 by default. Fix: portable `tr '[:upper:]' '[:lower:]'` substitution, or explicit Bash 4+ version check at startup.
+- **#76** — `~/.claude.json` and `~/.gitconfig` mounted unconditionally; Docker bind mount fails or creates spurious host directories if source files are absent on a clean machine. Fix: mount only if present; separate required paths (preflight with explicit error) from optional paths (skip if absent).
+- **#77** — `install.sh` does not `cd` to its own repo root; breaks when invoked from a temp clone during `faradai update`, which calls `install.sh` with the caller's working directory. Fix: `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"; cd "${SCRIPT_DIR}"` before any repo-relative operations.
+- **#78** — `FARADAI_WORKDIR` accepts relative paths; Docker `-v` and `-w` require absolute paths. Relative values produce invalid or silently wrong bind mounts. Fix: normalize via `cd && pwd -P`, or reject non-absolute values with a clear error.
+- **#79** — `read` used under `set -e` in prompt functions (`_confirm_trust_workdir`, `_handle_ssh_agent_forwarding`) without a TTY check; on EOF (piped input, CI) `read` returns non-zero and the script exits uncleanly. Fix: centralize prompting through a helper that checks `[[ -t 0 && -t 1 ]]` and directs non-interactive callers to the relevant `FARADAI_TRUST_*` variable.
+- **#80** — `-c` conflict error hint emits `faradai -a -n faradai` when `_CONTAINER_NAME` is the default `"faradai"`; the correct command is `faradai -a`. Fix: special-case the default container name in the conflict path, matching the pattern used elsewhere.
+- **#81** — `-n NAME` validates for blank and flag-like values but not Docker naming rules; names with invalid characters pass FaradAI's check and fail later with opaque Docker errors. Fix: validate the composed container name against `^[A-Za-z0-9][A-Za-z0-9_.-]*$`.
+- **#82** — No managed container label; uninstall must identify FaradAI containers by name pattern, which fails for non-default names and risks over- or under-scoping. Fix: add `--label dev.faradai.managed=true` at `docker run`; scope uninstall via `--filter label=dev.faradai.managed=true`. Constraint: uninstall must never remove `~/.claude`, `~/.config/gh`, or source/project directories.
+- **#83** — Exact apt package versions pinned without pinning the underlying repositories; upstream repos mutate and old versions disappear, causing future build failures. This carries maintenance cost without guaranteeing reproducibility. Fix: choose one strategy — either pin only major external tool versions and relax distro patch pins (pragmatic), or adopt snapshot repositories with checksums (strict).
+- **#84** — README docs: (1) "hard OS-level boundary" overstates the isolation guarantee — more precise: "bind-mount / namespace / cgroup boundary, stronger than prompt-only, weaker than a VM"; (2) macOS Bash version requirement not stated; (3) Docker Desktop SSH-agent socket forwarding caveat missing (distinct from general macOS caveat); (4) `logs`/`status` usefulness with `--rm` not documented; (5) "npm not included" claim unverified given NodeSource install; (6) `./build.sh` reference in Troubleshooting unverified.
+
+**Existing issues promoted:**
+
+- **#50** (`_validate_cpus`/`_validate_memory` integer-truncating upper-bound allows `128.9` CPUs and `512.9g` RAM) — moved from Later to Now; priority upgraded from low to high.
+- **#68** (no preflight check for `~/.claude` directory; missing credentials produce silent mount failure) — moved from Later to Now; `priority: high` label added.
+
+**Items the review did not surface** (already filed): #61 (`-v` short flag falls through to Docker unhandled), #42 (combined short-flag forms rejected by `_build_extra_docker_args`), #60 (`trap _cleanup` dead code), #59 (runtime `$USER` must match baked-in USERNAME).
+
+**Items the review noted as already addressed:** update flow tag-consistency check (resolves tag, clones exact ref, verifies HEAD matches — already in place); strategic future items (strict profile, per-project Claude state, credential broker) already tracked as #29–#31 in Planned.
+
+**Two-step summarization:** The first GPT summary compressed `#77` (install.sh repo-root cd) and the `entrypoint.sh` dispatch-only design principle out of the output. Both were recovered in the refinement pass.
