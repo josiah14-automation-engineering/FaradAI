@@ -9,7 +9,7 @@ case "$1" in
     [[ -n "${MOCK_IMAGE_USER:-}" ]] && echo "${MOCK_IMAGE_USER}"
     exit 0
     ;;
-  inspect) echo "false"; exit 0 ;;  # container running-state check
+  inspect) exit 0 ;;  # exits 0 (container "exists") with no output (_CONTAINER_RUNNING="")
   rm)      exit 0 ;;
   run)     exit 0 ;;
   logs)    exit 0 ;;
