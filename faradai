@@ -679,7 +679,12 @@ _handle_ssh_agent_forwarding() {
 # Reads:  _CONTAINER_NAME
 # Writes: DOCKER_RUN_ARGS
 _append_runtime_flags() {
-  DOCKER_RUN_ARGS+=(-it --rm --init --name "${_CONTAINER_NAME}")
+  DOCKER_RUN_ARGS+=(
+    -it --rm --init
+    --name "${_CONTAINER_NAME}"
+    --label "dev.faradai.managed=true"
+    --label "dev.faradai.container-name=${_CONTAINER_NAME}"
+  )
 }
 
 # _append_resource_args

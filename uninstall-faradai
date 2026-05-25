@@ -7,7 +7,7 @@ if ! command -v sudo > /dev/null 2>&1; then
 fi
 
 # If any faradai containers are currently running, ask before force-removing them.
-_running=$(docker ps --filter "name=faradai" --format "{{.Names}}" 2>/dev/null || true)
+_running=$(docker ps --filter "label=dev.faradai.managed=true" --format "{{.Names}}" 2>/dev/null || true)
 if [[ -n "${_running}" ]]; then
   echo "The following faradai containers are currently running:"
   echo "${_running}"
@@ -17,7 +17,7 @@ if [[ -n "${_running}" ]]; then
     [yY])
       while IFS= read -r _cid; do
         docker rm -f "${_cid}"
-      done < <(docker ps -q --filter "name=faradai" 2>/dev/null)
+      done < <(docker ps -q --filter "label=dev.faradai.managed=true" 2>/dev/null)
       ;;
     *) echo "Aborted."; exit 0 ;;
   esac
@@ -27,7 +27,7 @@ fi
 _items=()
 
 # Stopped containers matching faradai or faradai-*
-_stopped=$(docker ps -aq --filter "name=faradai" 2>/dev/null || true)
+_stopped=$(docker ps -aq --filter "label=dev.faradai.managed=true" 2>/dev/null || true)
 if [[ -n "${_stopped}" ]]; then
   while IFS= read -r _cid; do
     _cname=$(docker inspect --format "{{.Name}}" "${_cid}" | sed 's|^/||')
@@ -64,7 +64,7 @@ esac
 # Remove all faradai containers, the image, and the installed binaries.
 while IFS= read -r _cid; do
   docker rm -f "${_cid}" 2>/dev/null || true
-done < <(docker ps -aq --filter "name=faradai" 2>/dev/null || true)
+done < <(docker ps -aq --filter "label=dev.faradai.managed=true" 2>/dev/null || true)
 
 docker rmi faradai:latest 2>/dev/null || true
 sudo rm -f /usr/local/bin/faradai

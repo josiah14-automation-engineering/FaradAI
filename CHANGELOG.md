@@ -39,3 +39,13 @@ Initial release. Core features:
 - Single `DOCKER_RUN_ARGS` accumulator replaces per-category arrays
 - Source-vs-execute guard enables function-level unit testing without docker mock limitations
 - 142 tests (was 43): added `test/sourced.bats` for function-level phase coverage
+
+## [Unreleased]
+
+### Breaking change
+
+- `uninstall-faradai` now targets containers by label (`dev.faradai.managed=true`) instead of name pattern. Containers created before this change are not visible to uninstall; remove them manually with `docker rm -f faradai`.
+
+### Internal
+
+- All `docker run` invocations now receive `--label dev.faradai.managed=true` and `--label dev.faradai.container-name=<name>` for reliable lifecycle scoping

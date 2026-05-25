@@ -620,6 +620,18 @@ time.sleep(5)
   [ "${DOCKER_RUN_ARGS[$(( idx + 1 ))]}" = "faradai-test" ]
 }
 
+@test "_append_runtime_flags: adds managed label dev.faradai.managed=true" {
+  _init_defaults; _append_runtime_flags
+  _args_include "dev.faradai.managed=true"
+}
+
+@test "_append_runtime_flags: adds container-name label matching _CONTAINER_NAME" {
+  _init_defaults
+  _CONTAINER_NAME="faradai-myproject"
+  _append_runtime_flags
+  _args_include "dev.faradai.container-name=faradai-myproject"
+}
+
 # ── _append_resource_args ──────────────────────────────────────────────────────
 
 @test "_append_resource_args: adds --memory with FARADAI_MEMORY value" {

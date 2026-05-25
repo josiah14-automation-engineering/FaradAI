@@ -22,9 +22,9 @@ Bug fixes, polish, and infrastructure items to complete before the Go/Nushell mi
 
 ### Bug fixes & polish
 
-- [#88](https://github.com/josiah14-automation-engineering/FaradAI/issues/88) — BUG: `_ensure_host_dirs` does not create `~/.claude` — Docker may create it with root ownership on first run
+- [#87](https://github.com/josiah14-automation-engineering/FaradAI/issues/87) — BUG: `_ensure_host_dirs` does not create `~/.claude` — Docker may create it with root ownership on first run
 - [#86](https://github.com/josiah14-automation-engineering/FaradAI/issues/86) — `install.sh`: add Docker preflight check (docker present + daemon running)
-- [#87](https://github.com/josiah14-automation-engineering/FaradAI/issues/87) — refactor: document `_debug_print_plan` / `set -x` ordering dependency
+- [#89](https://github.com/josiah14-automation-engineering/FaradAI/issues/89) — refactor: document `_debug_print_plan` / `set -x` ordering dependency
 - [#69](https://github.com/josiah14-automation-engineering/FaradAI/issues/69) — BUG: `faradai uninstall` hardcodes `/usr/local/bin/uninstall-faradai` with no existence check
 - [#61](https://github.com/josiah14-automation-engineering/FaradAI/issues/61) — `-v` short flag unhandled — falls through to docker; `-a -v` creates `faradai--v`
 - [#42](https://github.com/josiah14-automation-engineering/FaradAI/issues/42) — `_build_extra_docker_args` rejects combined short-flag forms
@@ -70,7 +70,7 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 
 ### Migration acceptance criteria
 
-- [#89](https://github.com/josiah14-automation-engineering/FaradAI/issues/89) — Track Bash alpha review findings as Go/Nu migration acceptance criteria (P1–P5 checklist)
+- [#88](https://github.com/josiah14-automation-engineering/FaradAI/issues/88) — Track Bash alpha review findings as Go/Nu migration acceptance criteria (P1–P5 checklist)
 
 ### Portability
 

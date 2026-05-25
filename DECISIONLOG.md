@@ -69,3 +69,16 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 - Carry extra flags through to the fallback tool — rejected; flags like `--resume` are tool-specific and passing them through would produce confusing errors in the target tool.
 - Scope warnings to the boot target only — considered and rejected during implementation. Users who only use one agent would find unconditional warnings about the other agent noisy. However, the agent-to-agent argument (a Claude agent needs to know aider creds are missing before handing off) won out. The clean long-term fix is #85: let users declare which agents they use so warnings are scoped to declared agents. Deferred post Go/Nushell migration.
 
+
+---
+
+## 2026-05-25 — Managed container label targeting (#82)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Add `dev.faradai.managed=true` and `dev.faradai.container-name=<name>` labels to every `docker run` invocation. `uninstall-faradai` switches from `--filter "name=faradai"` name-pattern matching to `--filter "label=dev.faradai.managed=true"` for all container queries. No fallback to name-pattern matching.
+
+**Why:** Name-pattern matching is brittle: it can't find custom-named containers (`-n NAME`) that don't start with `faradai`, and it could match unrelated containers with a `faradai` prefix. Label-based targeting is exact and opt-in. Breaking the old containers is an accepted alpha trade-off.
+
+**Alternatives considered:**
+- Keep name-pattern as fallback alongside label filter — rejected. The name-pattern is the problem we're retiring; keeping it as fallback preserves the bug for existing containers and complicates the code with deduplication logic.
