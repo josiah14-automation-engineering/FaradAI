@@ -49,6 +49,24 @@ _die() {
   exit 1
 }
 
+# _init_defaults
+#
+# Reads:  USER (host env, optional)
+# Writes: USER, _MODE, _CONTAINER_NAME, _CMD_ARGS, DOCKER_RUN_ARGS
+#
+# Must run before any other phase. Normalising USER here (not later in mount
+# building) fixes a latent bug: _check_image_user compared the image label
+# against ${USER} before the old ${USER:-$(whoami)} fallback had run.
+_init_defaults() {
+  USER="${USER:-$(whoami)}"
+  _MODE="auto"
+  _CONTAINER_NAME="faradai"
+  _CMD_ARGS=()
+  DOCKER_RUN_ARGS=()
+  _SSH_AGENT_APPROVED=0
+}
+
+
 # _is_interactive
 #
 # Reads:  file descriptors 0 (stdin) and 1 (stdout)
@@ -313,23 +331,6 @@ _check_image_user() {
     echo "faradai: mount paths inside the container will not match — rebuild with: ./install.sh" >&2
     exit 1
   fi
-}
-
-# _init_defaults
-#
-# Reads:  USER (host env, optional)
-# Writes: USER, _MODE, _CONTAINER_NAME, _CMD_ARGS, DOCKER_RUN_ARGS
-#
-# Must run before any other phase. Normalising USER here (not later in mount
-# building) fixes a latent bug: _check_image_user compared the image label
-# against ${USER} before the old ${USER:-$(whoami)} fallback had run.
-_init_defaults() {
-  USER="${USER:-$(whoami)}"
-  _MODE="auto"
-  _CONTAINER_NAME="faradai"
-  _CMD_ARGS=()
-  DOCKER_RUN_ARGS=()
-  _SSH_AGENT_APPROVED=0
 }
 
 # _dispatch_meta_commands CMD_ARGS...
