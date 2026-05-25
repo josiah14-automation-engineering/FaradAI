@@ -20,11 +20,6 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 Correctness bugs, portability blockers, and refactoring for public-facing code quality.
 
-### Portability
-
-- [#74](https://github.com/josiah14-automation-engineering/FaradAI/issues/74) — BUG: Dockerfile ShellCheck download hardcoded to `linux.x86_64` — breaks ARM64 builds
-- [#75](https://github.com/josiah14-automation-engineering/FaradAI/issues/75) — BUG: Bash 4+ syntax (`${var,,}`) breaks macOS default Bash 3.2
-
 ### Correctness bugs
 
 - [#50](https://github.com/josiah14-automation-engineering/FaradAI/issues/50) — BUG: `_validate_cpus` / `_validate_memory` float upper-bound check allows 128.5 / 512.5g
@@ -40,27 +35,32 @@ Correctness bugs, portability blockers, and refactoring for public-facing code q
 ### CLI polish
 
 - [#81](https://github.com/josiah14-automation-engineering/FaradAI/issues/81) — enhancement: validate `-n NAME` as a Docker-safe container name
+- [#56](https://github.com/josiah14-automation-engineering/FaradAI/issues/56) — `entrypoint.sh` `_usage()` doesn't reflect current command surface
 
-### Refactoring
+### Refactoring and De-linting
 
 - [#70](https://github.com/josiah14-automation-engineering/FaradAI/issues/70) — refactor: document globals written by `_parse_cli_flags`
 - [#71](https://github.com/josiah14-automation-engineering/FaradAI/issues/71) — refactor: enforce or document SSH agent / credential mount temporal dependency
 - [#72](https://github.com/josiah14-automation-engineering/FaradAI/issues/72) — refactor: document `DOCKER_RUN_ARGS` mutation chain across `_append_*` functions
 - [#73](https://github.com/josiah14-automation-engineering/FaradAI/issues/73) — refactor: document intentional `set -x` scope in `_debug_print_plan`
+- [#60](https://github.com/josiah14-automation-engineering/FaradAI/issues/60) — `trap _cleanup` is dead code — remove or restructure
+
+### Portability
+
+- [#62](https://github.com/josiah14-automation-engineering/FaradAI/issues/62) — Pin bats-core to a specific tag in CI
+- [#74](https://github.com/josiah14-automation-engineering/FaradAI/issues/74) — BUG: Dockerfile ShellCheck download hardcoded to `linux.x86_64` — breaks ARM64 builds
+- [#75](https://github.com/josiah14-automation-engineering/FaradAI/issues/75) — BUG: Bash 4+ syntax (`${var,,}`) breaks macOS default Bash 3.2
 
 ---
 
 ## Later
 
-- [#60](https://github.com/josiah14-automation-engineering/FaradAI/issues/60) — `trap _cleanup` is dead code — remove or restructure
 - [#61](https://github.com/josiah14-automation-engineering/FaradAI/issues/61) — `-v` short flag unhandled — falls through to docker; `-a -v` creates `faradai--v`
-- [#62](https://github.com/josiah14-automation-engineering/FaradAI/issues/62) — Pin bats-core to a specific tag in CI
 - [#63](https://github.com/josiah14-automation-engineering/FaradAI/issues/63) — `build.sh` symlink resolution
 - [#64](https://github.com/josiah14-automation-engineering/FaradAI/issues/64) — Docs: tmux in image list, URL casing, credentials `:ro` note
 - [#45](https://github.com/josiah14-automation-engineering/FaradAI/issues/45) — `FARADAI_DEBUG=1` leaks environment variables to stderr without warning
 - [#49](https://github.com/josiah14-automation-engineering/FaradAI/issues/49) — Docker mock in tests too permissive — can't test failure paths
 - [#55](https://github.com/josiah14-automation-engineering/FaradAI/issues/55) — `USER=$(whoami)` spawns unnecessary subshell — prefer `USER=${USER:-$(whoami)}`
-- [#56](https://github.com/josiah14-automation-engineering/FaradAI/issues/56) — `entrypoint.sh` `_usage()` doesn't reflect current command surface
 - [#51](https://github.com/josiah14-automation-engineering/FaradAI/issues/51) — No shell completion (bash/zsh/fish)
 - [#82](https://github.com/josiah14-automation-engineering/FaradAI/issues/82) — enhancement: add managed container label (`dev.faradai.managed=true`) to scope uninstall
 - [#83](https://github.com/josiah14-automation-engineering/FaradAI/issues/83) — enhancement: reconsider exact apt package pin strategy — pins without snapshot repos are brittle
