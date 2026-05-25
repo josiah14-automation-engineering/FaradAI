@@ -1473,3 +1473,11 @@ Both validators used `(( int > limit ))` where `int` was the integer part of the
 **Josiah directed:** use `if !` blocks rather than trailing `|| exit 1` after awk invocations; keeps control flow explicit and avoids hiding logic after a long parameter list.
 
 3 new tests (unit.bats): `512.5g` rejects, `524288.5m` rejects, `128.5` CPUs rejects. All pre-implementation failures confirmed.
+
+### Task 5: make `~/.claude.json` and `~/.gitconfig` mounts conditional (#76)
+
+Both files were mounted unconditionally in `_append_credential_mount_args`. Docker bind-mounts a missing source as a directory, which is silent and wrong; any user without Claude Desktop (no `~/.claude.json`) or without git configured (no `~/.gitconfig`) would hit this on first run.
+
+Introduced `_maybe_mount_file <src> <dst> [<mode>]` — appends a `-v` mount only when the source file exists, silently returning 0 otherwise. Refactored `_append_credential_mount_args` to use it for all three optional file mounts: `.claude.json`, `.gitconfig`, and `.aider.conf.yml` (which was already conditional via an inline `if [[ -f ]]`).
+
+5 new tests (sourced.bats): 3 for `_maybe_mount_file` (present, absent, mode suffix) and 2 for the absent-file branches of `.claude.json` and `.gitconfig`. Two existing "always mounts" test names updated to "present — mount included". 185 tests total, all passing.

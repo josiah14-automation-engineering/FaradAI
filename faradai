@@ -712,6 +712,22 @@ _ensure_host_dirs() {
   mkdir -p "${HOME}/.config/gh"
 }
 
+# _maybe_mount_file
+#
+# Appends a -v bind-mount to DOCKER_RUN_ARGS only when the source file exists.
+# Silently returns 0 when the source is absent, so Docker never creates a
+# placeholder directory in its place.
+#
+# Usage: _maybe_mount_file <src> <dst> [<mode>]
+#   src  — absolute path on the host
+#   dst  — absolute path inside the container
+#   mode — optional mount mode (e.g. "ro"); omit for read-write
+_maybe_mount_file() {
+  local src="$1" dst="$2" mode="${3:-}"
+  [[ -f "${src}" ]] || return 0
+  DOCKER_RUN_ARGS+=(-v "${src}:${dst}${mode:+:${mode}}")
+}
+
 # _append_credential_mount_args
 #
 # Reads:  HOME, USER, SSH_AUTH_SOCK, _SSH_AGENT_APPROVED,
@@ -724,10 +740,12 @@ _append_credential_mount_args() {
   DOCKER_RUN_ARGS+=(
     -v "${HOME}/.claude:/home/${USER}/.claude"
     -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro"
-    -v "${HOME}/.claude.json:/home/${USER}/.claude.json"
-    -v "${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
   )
+
+  _maybe_mount_file "${HOME}/.claude.json"  "/home/${USER}/.claude.json"
+  _maybe_mount_file "${HOME}/.gitconfig"    "/home/${USER}/.gitconfig" "ro"
+  _maybe_mount_file "${HOME}/.aider.conf.yml" "/home/${USER}/.aider.conf.yml" "ro"
 
   if [[ "${_SSH_AGENT_APPROVED}" -eq 1 ]]; then
     DOCKER_RUN_ARGS+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)
@@ -735,10 +753,6 @@ _append_credential_mount_args() {
 
   if [[ "${FARADAI_MOUNT_SSH_DIR:-0}" == "1" ]]; then
     DOCKER_RUN_ARGS+=(-v "${HOME}/.ssh:/home/${USER}/.ssh:ro")
-  fi
-
-  if [[ -f "${HOME}/.aider.conf.yml" ]]; then
-    DOCKER_RUN_ARGS+=(-v "${HOME}/.aider.conf.yml:/home/${USER}/.aider.conf.yml:ro")
   fi
 }
 

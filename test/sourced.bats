@@ -674,6 +674,31 @@ time.sleep(5)
   [ "$status" -eq 0 ]
 }
 
+# ── _maybe_mount_file ─────────────────────────────────────────────────────────
+
+@test "_maybe_mount_file: file present — appends -v mount to DOCKER_RUN_ARGS" {
+  _setup_canon
+  local src="${BATS_TEST_TMPDIR}/mmf-present"
+  touch "${src}"
+  _maybe_mount_file "${src}" "/container/dst"
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${src}:/container/dst"* ]]
+}
+
+@test "_maybe_mount_file: file absent — DOCKER_RUN_ARGS unchanged" {
+  _setup_canon
+  local before=("${DOCKER_RUN_ARGS[@]}")
+  _maybe_mount_file "${BATS_TEST_TMPDIR}/mmf-absent" "/container/dst"
+  [[ "${DOCKER_RUN_ARGS[*]}" == "${before[*]}" ]]
+}
+
+@test "_maybe_mount_file: mode suffix — appended as :mode on the mount" {
+  _setup_canon
+  local src="${BATS_TEST_TMPDIR}/mmf-mode"
+  touch "${src}"
+  _maybe_mount_file "${src}" "/container/dst" "ro"
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${src}:/container/dst:ro"* ]]
+}
+
 # ── _append_credential_mount_args ──────────────────────────────────────────────
 
 @test "_append_credential_mount_args: always mounts ~/.claude" {
@@ -687,14 +712,28 @@ time.sleep(5)
   [[ "${DOCKER_RUN_ARGS[*]}" == *".credentials.json:ro"* ]]
 }
 
-@test "_append_credential_mount_args: always mounts ~/.claude.json" {
+@test "_append_credential_mount_args: ~/.claude.json present — mount included" {
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *"/.claude.json:"* ]]
 }
 
-@test "_append_credential_mount_args: always mounts ~/.gitconfig read-only" {
+@test "_append_credential_mount_args: ~/.claude.json absent — mount not included" {
+  _setup_canon
+  rm "${HOME}/.claude.json"
+  _append_credential_mount_args
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *"/.claude.json:"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.gitconfig present — mount included read-only" {
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *"/.gitconfig:"*":ro"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.gitconfig absent — mount not included" {
+  _setup_canon
+  rm "${HOME}/.gitconfig"
+  _append_credential_mount_args
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *"/.gitconfig:"* ]]
 }
 
 @test "_append_credential_mount_args: always mounts ~/.config/gh" {
