@@ -1435,3 +1435,5 @@ Josiah ran an OpenRouter Fusion quorum review against three files: `faradai`, `D
 **Items the review noted as already addressed:** update flow tag-consistency check (resolves tag, clones exact ref, verifies HEAD matches — already in place); strategic future items (strict profile, per-project Claude state, credential broker) already tracked as #29–#31 in Planned.
 
 **Two-step summarization:** The first GPT summary compressed `#77` (install.sh repo-root cd) and the `entrypoint.sh` dispatch-only design principle out of the output. Both were recovered in the refinement pass.
+
+**Manual roadmap adjustments (Josiah):** After the automated issue triage, three items were moved from Later to Now: #56 (`entrypoint.sh` `_usage()` stale), #60 (`trap _cleanup` dead code), #62 (pin bats-core in CI). The Now refactoring section was renamed "Refactoring and De-linting" to better reflect its scope.
