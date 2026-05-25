@@ -114,8 +114,6 @@ _prompt_choice() {
   _die "invalid selection '${answer}' -- enter a number between 1 and ${n}"
 }
 
-_cleanup() { docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true; }
-
 _validate_memory() {
   # k (kilobytes) intentionally omitted — not a realistic container memory unit
   [[ "${FARADAI_MEMORY}" =~ ^([0-9]+(\.[0-9]+)?)([mgMG])$ ]] || {
@@ -500,16 +498,6 @@ _remove_stale_container() {
   docker rm -f "${_CONTAINER_NAME}" > /dev/null
 }
 
-# _setup_cleanup_trap
-#
-# Reads:  nothing
-# Writes: nothing — registers EXIT/INT/TERM trap to remove the container on abort
-#
-# Trap fires only in the narrow window before exec docker run replaces this process.
-_setup_cleanup_trap() {
-  trap _cleanup INT TERM EXIT
-}
-
 # _load_runtime_config
 #
 # Reads:  FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE (optional)
@@ -737,7 +725,6 @@ main() {
   _handle_ssh_agent_forwarding
   _remove_stale_container
   _prepare_container_name_for_create
-  _setup_cleanup_trap
   _load_runtime_config
 
   _ensure_host_dirs

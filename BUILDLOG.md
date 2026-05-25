@@ -1455,3 +1455,7 @@ Resumed from a context-compacted session. Task 1 (#79: `_is_interactive` / `_pro
   - `"false"` → prompt via `_prompt_yes_no` with explicit state-loss warning; die if declined; `docker rm -f` if confirmed
   Comment block updated to document the three-state invariant and the ephemeral-container rationale. Added 6 tests covering all three `_CONTAINER_RUNNING` branches plus non-interactive and decline paths.
 - `main()`: swapped call order — `_remove_stale_container` now runs before `_prepare_container_name_for_create`, so a stopped container is cleaned up before the running-container conflict check. This breaks the dead-end where `-c` mode found a stopped container via `docker inspect` and printed an attach hint for an unattachable container.
+
+### Remove `_cleanup` / `_setup_cleanup_trap` dead code (#60)
+
+Josiah asked why `_cleanup` had been extracted from `_setup_cleanup_trap` given that no tests existed for either. The answer: the comment said "extracted to enhance testability" but the tests were never written. More fundamentally, the entire construct is dead code — `exec docker run` replaces the bash process before the trap can ever fire, and `--rm` already handles container removal on exit. Both functions and the `_setup_cleanup_trap` call in `main()` were deleted. 104 tests still pass. Issue #60 closed via `gh`.
