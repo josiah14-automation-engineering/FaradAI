@@ -147,20 +147,29 @@ _validate_memory() {
     echo "faradai: FARADAI_MEMORY must be greater than zero" >&2
     exit 1
   fi
-  if { [[ "${unit}" == "g" ]] && (( int > 512 )); } ||
-     { [[ "${unit}" == "m" ]] && (( int > 524288 )); }; then
-    echo "faradai: FARADAI_MEMORY '${FARADAI_MEMORY}' exceeds the 512g sanity limit" >&2
+
+  local limit
+  if [[ "${unit}" == "g" ]]; then limit=512; else limit=524288; fi
+
+  if ! awk -v v="${num}" -v lim="${limit}" -v raw="${FARADAI_MEMORY}" 'BEGIN {
+    if (v > lim) { print "faradai: FARADAI_MEMORY " raw " exceeds the 512g sanity limit" > "/dev/stderr"; exit 1 }
+  }'; then
     exit 1
   fi
 }
 
 _validate_cpus() {
-  # %.* strips the decimal so (( )) can do an integer bound check (bash can't compare floats natively).
-  if ! [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || (( ${FARADAI_CPUS%.*} > 128 )); then
+  if ! [[ "${FARADAI_CPUS}" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     echo "faradai: invalid FARADAI_CPUS '${FARADAI_CPUS}' (expected a number <= 128, e.g. 4 or 2.5)" >&2
     exit 1
   fi
-  awk -v v="${FARADAI_CPUS}" 'BEGIN { if (v <= 0) { print "faradai: FARADAI_CPUS must be greater than zero" > "/dev/stderr"; exit 1 } }' || exit 1
+
+  if ! awk -v v="${FARADAI_CPUS}" 'BEGIN {
+    if (v <= 0)  { print "faradai: FARADAI_CPUS must be greater than zero" > "/dev/stderr"; exit 1 }
+    if (v > 128) { print "faradai: invalid FARADAI_CPUS " v " (expected a number <= 128, e.g. 4 or 2.5)" > "/dev/stderr"; exit 1 }
+  }'; then
+    exit 1
+  fi
 }
 
 _validate_pids() {

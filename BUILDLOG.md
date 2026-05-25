@@ -1465,3 +1465,11 @@ Josiah asked why `_cleanup` had been extracted from `_setup_cleanup_trap` given 
 **Josiah caught:** during TDD test-writing, Josiah spotted that `_CMD_ARGS[0]` could be `"bash"` — the user explicitly booting a shell, not an AI tool. The original boot-target determination defaulted any unrecognised first arg to `"claude"`, so `faradai -c bash` would wrongly check Claude credentials and potentially trigger the recovery flow. Fixed by replacing the two-branch if/elif with a `case` that returns 0 immediately for any target that is neither `claude` nor `aider`. A 10th test was added to pin this: `_CMD_ARGS=("bash")` with Claude creds absent must return 0 silently.
 
 **`_is_interactive` fix:** changed from `[[ -t 0 && -t 1 ]]` to `[[ -t 0 && -t 2 ]]` (stdin + stderr). `_prompt_choice` writes its result to stdout and must be called via `$()`; inside `$()` stdout is not a TTY, so the old check would have fired "interactive selection required" even in a real terminal. Checking stderr is semantically correct — it stays attached to the terminal even when stdout is captured.
+
+### Task 4: fix decimal upper-bound in `_validate_cpus` / `_validate_memory` (#50)
+
+Both validators used `(( int > limit ))` where `int` was the integer part of the value (`${val%%.*}` / `${BASH_REMATCH[1]%%.*}`). This let `128.5` CPUs and `512.5g` RAM pass — the decimal was stripped before the comparison. Fixed by replacing both integer comparisons with `awk`, which compares the full float. Upper-bound check is now an `if ! awk ...; then exit 1; fi` block in both functions — explicit control flow rather than a trailing `|| exit 1`.
+
+**Josiah directed:** use `if !` blocks rather than trailing `|| exit 1` after awk invocations; keeps control flow explicit and avoids hiding logic after a long parameter list.
+
+3 new tests (unit.bats): `512.5g` rejects, `524288.5m` rejects, `128.5` CPUs rejects. All pre-implementation failures confirmed.

@@ -210,6 +210,18 @@ setup() {
   [[ "$output" == *"512g sanity limit"* ]]
 }
 
+@test "_validate_memory: rejects 512.5g (decimal exceeds sanity limit)" {
+  run env FARADAI_MEMORY=512.5g "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"512g sanity limit"* ]]
+}
+
+@test "_validate_memory: rejects 524288.5m (decimal exceeds sanity limit)" {
+  run env FARADAI_MEMORY=524288.5m "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"512g sanity limit"* ]]
+}
+
 @test "_validate_memory: accepts 512g (at sanity limit)" {
   run env FARADAI_MEMORY=512g "${FARADAI}"
   [ "$status" -eq 0 ]
@@ -247,6 +259,12 @@ setup() {
 
 @test "_validate_cpus: rejects 129 (exceeds limit)" {
   run env FARADAI_CPUS=129 "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid FARADAI_CPUS"* ]]
+}
+
+@test "_validate_cpus: rejects 128.5 (decimal exceeds limit)" {
+  run env FARADAI_CPUS=128.5 "${FARADAI}"
   [ "$status" -eq 1 ]
   [[ "$output" == *"invalid FARADAI_CPUS"* ]]
 }
