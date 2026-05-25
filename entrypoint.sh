@@ -2,10 +2,18 @@
 set -euo pipefail
 
 _usage() {
-  echo "Usage: faradai [claude|aider|bash]"
-  echo "  claude  Launch Claude Code (default)"
-  echo "  aider   Launch aider"
-  echo "  bash    Open a bash shell"
+  cat <<'EOF'
+Usage: faradai [COMMAND [ARGS...]]
+
+Commands (container-internal):
+  (none)   Launch Claude Code (default)
+  claude   Launch Claude Code; remaining args passed through
+  aider    Launch aider; remaining args passed through
+  bash     Open a bash shell
+
+Host-side commands (logs, status, version, update, uninstall) must be
+run via the faradai CLI on the host, not through the container entrypoint.
+EOF
 }
 
 case "${1:-claude}" in
