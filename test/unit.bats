@@ -11,6 +11,13 @@ setup() {
   export FARADAI_ENABLE_SSH_AGENT=0
   # Use a stable working directory that exists.
   export FARADAI_WORKDIR="${BATS_TEST_DIRNAME}"
+  # Isolate from the real home directory so tests never read or write actual
+  # agent config (~/.claude, ~/.config/gh). Without this, _preflight_credentials
+  # dies non-interactively in CI (no credentials file), and _ensure_host_dirs
+  # could create directories inside real agent config on developer machines.
+  export HOME="${BATS_TEST_TMPDIR}"
+  mkdir -p "${HOME}/.claude" "${HOME}/.config/gh"
+  touch "${HOME}/.claude/.credentials.json"
 }
 
 # ── flag parser: mode flags (-a, -c) ──────────────────────────────────────────
