@@ -49,3 +49,7 @@ Initial release. Core features:
 ### Internal
 
 - All `docker run` invocations now receive `--label dev.faradai.managed=true` and `--label dev.faradai.container-name=<name>` for reliable lifecycle scoping
+
+### Fixed
+
+- `build.sh`: `dirname "$0"` replaced with `dirname "$(readlink -f "$0")"` so invoking via symlink uses the script's real directory as the Docker build context

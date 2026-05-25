@@ -8,4 +8,4 @@ docker build \
   --build-arg USER_UID="$(id -u)" \
   --build-arg USER_GID="$(id -g)" \
   -t faradai:latest \
-  "$(cd "$(dirname "$0")" && pwd)"
+  "$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
