@@ -93,6 +93,23 @@ setup() {
   [[ "$output" == *"-n may only be specified once"* ]]
 }
 
+@test "flag parser: -n NAME with slash — invalid Docker name" {
+  run "${FARADAI}" -n "my/project"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid container name"* ]]
+}
+
+@test "flag parser: -n NAME with space — invalid Docker name" {
+  run "${FARADAI}" -n "my project"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid container name"* ]]
+}
+
+@test "flag parser: -n NAME with dots, underscores, dashes — valid Docker name" {
+  run "${FARADAI}" -n "my.proj_ect-1"
+  [ "$status" -eq 0 ]
+}
+
 # ── flag parser: flag combinations ─────────────────────────────────────────────
 
 @test "flag parser: -c -n NAME enters create mode for named container" {

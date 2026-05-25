@@ -313,7 +313,11 @@ _parse_cli_flags() {
         if (( _i >= ${#_args[@]} )) || [[ "${_args[_i]}" == -* ]] || [[ -z "${_args[_i]//[[:space:]]/}" ]]; then
           _die "-n requires a NAME argument (e.g. faradai -n myproject)"
         fi
+
         _CONTAINER_NAME="faradai-${_args[_i]}"
+        if ! [[ "${_CONTAINER_NAME}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+          _die "invalid container name '${_CONTAINER_NAME}' — Docker names must start with a letter or digit and contain only [A-Za-z0-9_.-]"
+        fi
         ;;
       *)
         # First non-flag token ends flag processing; capture rest as command args.
