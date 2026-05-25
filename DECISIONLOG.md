@@ -40,3 +40,31 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 - Go for `install.sh` — would sidestep the nu bootstrapping problem but adds a second Go binary and unnecessary complexity for a short-lived installer script.
 - Keep everything in bash — acceptable today; becomes a macOS portability liability as scripts grow.
 
+---
+
+## 2026-05-25 01:36 UTC — Ephemeral container stance; `_remove_stale_container` ordering and prompt (#67)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** FaradAI takes an ephemeral stance on containers. Stopped containers are treated as stale state from abnormal termination (daemon restart, OOM kill, external `docker stop`) and are removed before a new container is created. `_remove_stale_container` is moved before `_prepare_container_name_for_create` in `main()`. Before removing a stopped container, `_remove_stale_container` prompts the user with a warning that container-local state (packages, files outside the bind-mounted project directory) will be lost. Running containers are left untouched by `_remove_stale_container`; `_prepare_container_name_for_create` handles the running-container conflict case.
+
+**Why:** The previous ordering caused a dead-end: in `-c` (create) mode with a stopped container, `_prepare_container_name_for_create` found it via `docker inspect` and errored with an attach hint — but the container was not running and could not be attached to. With the swap, the stopped container is cleaned up first and the create proceeds. The prompt is added because stopped containers can hold meaningful state (even though `--rm` makes this an abnormal situation), and silent removal without warning would be a bad surprise.
+
+**Alternatives considered:**
+- Only block `-c` on running containers (check `_CONTAINER_RUNNING` instead of `docker inspect`) without reordering — would fix the hint but leave `_remove_stale_container` as a silent side effect.
+- Warn and remove all FaradAI containers (not just the target) before create — rejected; would destroy unrelated named sessions as a side effect of starting a new one.
+
+---
+
+## 2026-05-25 01:36 UTC — Credential preflight with interactive recovery flow (#68)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Replace a simple abort-on-missing-credentials preflight with a `_preflight_credentials` phase that: (1) always warns if Claude credentials (`~/.claude/.credentials.json`) or aider configuration (`~/.aider.conf.yml`) are absent — even when not booting into the affected tool, to support agent-to-agent workflows; (2) triggers an interactive recovery flow only when the missing credential matches the boot target. Recovery offers numbered choices via a new `_prompt_choice` helper: boot into the alternative tool (if its credentials are present), or drop into bash to troubleshoot. If neither tool's credentials are present and the user is booting into either, only bash is offered. When the user selects an alternative tool, extra flags from `_CMD_ARGS` are dropped (they are tool-specific) and the recovery message names the flags being discarded. `_preflight_credentials` runs after `_maybe_attach_existing` so it is skipped entirely in attach mode.
+
+**Why:** A bare die-on-missing-credentials approach is too blunt for a tool that supports multiple agents. Users who run both Claude and aider need to know the state of both credential sets at startup. The recovery flow avoids a dead-end where a user with a working aider setup is blocked from doing anything just because their Claude credentials have expired.
+
+**Alternatives considered:**
+- Simple preflight abort — too blunt; leaves the user with no path forward from the CLI.
+- Carry extra flags through to the fallback tool — rejected; flags like `--resume` are tool-specific and passing them through would produce confusing errors in the target tool.
+
