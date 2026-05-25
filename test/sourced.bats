@@ -832,12 +832,91 @@ time.sleep(5)
   _args_include "--network"
 }
 
+# ── _prepare_container_name_for_create ────────────────────────────────────────
+
+@test "_prepare_container_name_for_create: attach mode — no error" {
+  _init_defaults
+  _MODE="attach"
+  run _prepare_container_name_for_create
+  [ "$status" -eq 0 ]
+}
+
+@test "_prepare_container_name_for_create: create mode, default name — hint is 'faradai -a'" {
+  _init_defaults
+  _MODE="create"
+  _CONTAINER_NAME="faradai"
+  run _prepare_container_name_for_create
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"faradai -a"* ]]
+  [[ "$output" != *"faradai -a -n"* ]]
+}
+
+@test "_prepare_container_name_for_create: create mode, named container — hint includes '-n NAME'" {
+  _init_defaults
+  _MODE="create"
+  _CONTAINER_NAME="faradai-myproj"
+  run _prepare_container_name_for_create
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"faradai -a -n myproj"* ]]
+}
+
 # ── _remove_stale_container ────────────────────────────────────────────────────
 
-@test "_remove_stale_container: calls docker rm -f (mock exits 0)" {
+@test "_remove_stale_container: _CONTAINER_RUNNING empty — returns 0 silently" {
   _init_defaults
+  _CONTAINER_RUNNING=""
   run _remove_stale_container
   [ "$status" -eq 0 ]
+}
+
+@test "_remove_stale_container: _CONTAINER_RUNNING true — returns 0 silently (running, skip)" {
+  _init_defaults
+  _CONTAINER_RUNNING="true"
+  run _remove_stale_container
+  [ "$status" -eq 0 ]
+}
+
+@test "_remove_stale_container: stopped container + user confirms — exits 0" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    _CONTAINER_RUNNING='false'
+    _is_interactive() { return 0; }
+    _remove_stale_container
+  " <<< "y"
+  [ "$status" -eq 0 ]
+}
+
+@test "_remove_stale_container: stopped container + user declines — dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    _CONTAINER_RUNNING='false'
+    _is_interactive() { return 0; }
+    _remove_stale_container
+  " <<< "n"
+  [ "$status" -eq 1 ]
+}
+
+@test "_remove_stale_container: stopped container + non-interactive — dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    _CONTAINER_RUNNING='false'
+    _remove_stale_container
+  " < /dev/null
+  [ "$status" -eq 1 ]
+}
+
+@test "_remove_stale_container: stopped container — warns about state loss" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    _CONTAINER_RUNNING='false'
+    _is_interactive() { return 0; }
+    _remove_stale_container
+  " <<< "n"
+  [[ "$output" == *"container-local state will be lost"* ]]
 }
 
 # ── _exec_docker_run ───────────────────────────────────────────────────────────

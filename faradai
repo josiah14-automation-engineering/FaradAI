@@ -461,19 +461,43 @@ _confirm_trust_workdir() {
 # _prepare_container_name_for_create
 #
 # Reads:  _MODE, _CONTAINER_NAME
-# Writes: nothing — exits if create mode and container already exists
+# Writes: nothing — exits if create mode and a container with _CONTAINER_NAME already exists
+#
+# The attach hint omits -n for the default container name ("faradai") because
+# "faradai -a -n faradai" is redundant; "faradai -a" is the canonical form.
 _prepare_container_name_for_create() {
   if [[ "${_MODE}" == "create" ]] && docker inspect "${_CONTAINER_NAME}" > /dev/null 2>&1; then
-    _die "container '${_CONTAINER_NAME}' already exists — attach with: faradai -a -n ${_CONTAINER_NAME#faradai-}"
+    if [[ "${_CONTAINER_NAME}" == "faradai" ]]; then
+      _die "container '${_CONTAINER_NAME}' already exists — attach with: faradai -a"
+    else
+      _die "container '${_CONTAINER_NAME}' already exists — attach with: faradai -a -n ${_CONTAINER_NAME#faradai-}"
+    fi
   fi
 }
 
 # _remove_stale_container
 #
-# Reads:  _CONTAINER_NAME
-# Writes: nothing — removes any stopped or errored container with _CONTAINER_NAME
+# Reads:  _CONTAINER_RUNNING, _CONTAINER_NAME
+# Writes: nothing — removes a stopped container after user confirmation
+#
+# Three outcomes based on _CONTAINER_RUNNING (set by _resolve_container_state):
+#   ""      → no container found; return silently
+#   "true"  → container is running; skip (handled by _prepare_container_name_for_create)
+#   "false" → stopped container; prompt the user, then remove if confirmed
+#
+# FaradAI takes an ephemeral stance: a stopped container is stale state from
+# abnormal termination (daemon restart, OOM kill, external docker stop).
+# Any packages or files installed inside the container — outside the
+# bind-mounted project directory — will be lost on removal.
 _remove_stale_container() {
-  docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true
+  [[ -z "${_CONTAINER_RUNNING}" ]]    && return 0
+  [[ "${_CONTAINER_RUNNING}" == "true" ]] && return 0
+
+  # Stopped container — warn about state loss, then remove if confirmed.
+  _prompt_yes_no \
+    "faradai: stopped container '${_CONTAINER_NAME}' found — container-local state will be lost. Remove it?" \
+    || _die "aborted — stopped container '${_CONTAINER_NAME}' still exists"
+  docker rm -f "${_CONTAINER_NAME}" > /dev/null
 }
 
 # _setup_cleanup_trap
@@ -711,8 +735,8 @@ main() {
 
   _confirm_trust_workdir
   _handle_ssh_agent_forwarding
-  _prepare_container_name_for_create
   _remove_stale_container
+  _prepare_container_name_for_create
   _setup_cleanup_trap
   _load_runtime_config
 

@@ -1437,3 +1437,21 @@ Josiah ran an OpenRouter Fusion quorum review against three files: `faradai`, `D
 **Two-step summarization:** The first GPT summary compressed `#77` (install.sh repo-root cd) and the `entrypoint.sh` dispatch-only design principle out of the output. Both were recovered in the refinement pass.
 
 **Manual roadmap adjustments (Josiah):** After the automated issue triage, three items were moved from Later to Now: #56 (`entrypoint.sh` `_usage()` stale), #60 (`trap _cleanup` dead code), #62 (pin bats-core in CI). The Now refactoring section was renamed "Refactoring and De-linting" to better reflect its scope.
+
+### Session continuation — Task 2: fix stopped-container dead-end (#67 + #80)
+
+Resumed from a context-compacted session. Task 1 (#79: `_is_interactive` / `_prompt_yes_no` / `_prompt_choice` helpers) was already complete at the start of this session.
+
+**Context management:** Josiah asked whether tasks could be moved to a new session to reduce context window usage; the `/compact` already run was sufficient and the session continued in place.
+
+**ROADMAP.md cleanup:** The manual priority adjustments (`#56`, `#60`, `#62` → Now) had been noted in BUILDLOG but the actual ROADMAP.md edits were uncommitted. Applied as a separate docs commit.
+
+**Task 2 changes — 9 new tests, 104 total, all passing:**
+
+- `_prepare_container_name_for_create` (#80): special-cased `_CONTAINER_NAME == "faradai"` to emit `faradai -a` instead of the redundant `faradai -a -n faradai`. Added 3 tests covering attach mode (no-op), default name conflict, and named-container conflict.
+- `_remove_stale_container` (#67): rewrote to branch on `_CONTAINER_RUNNING` rather than calling `docker rm -f` unconditionally:
+  - `""` → return silently (no container found)
+  - `"true"` → return silently (running container; `_prepare_container_name_for_create` handles the conflict)
+  - `"false"` → prompt via `_prompt_yes_no` with explicit state-loss warning; die if declined; `docker rm -f` if confirmed
+  Comment block updated to document the three-state invariant and the ephemeral-container rationale. Added 6 tests covering all three `_CONTAINER_RUNNING` branches plus non-interactive and decline paths.
+- `main()`: swapped call order — `_remove_stale_container` now runs before `_prepare_container_name_for_create`, so a stopped container is cleaned up before the running-container conflict check. This breaks the dead-end where `-c` mode found a stopped container via `docker inspect` and printed an attach hint for an unattachable container.
