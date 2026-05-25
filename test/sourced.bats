@@ -332,7 +332,154 @@ _setup_canon() {
   _setup_fake_home
 }
 
-# ── _handle_ssh_agent_forwarding ──────────────────────────────────────────────
+# -- _prompt_yes_no -----------------------------------------------------------
+
+@test "_prompt_yes_no: non-interactive stdin -- dies with message" {
+  run bash -c "source '${FARADAI}'; _prompt_yes_no 'mount /dir?'" <<< "y"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"interactive confirmation required"* ]]
+}
+
+@test "_prompt_yes_no: answer y -- returns 0" {
+  _is_interactive() { return 0; }
+  _prompt_yes_no "test prompt?" < <(printf 'y\n')
+}
+
+@test "_prompt_yes_no: answer Y -- returns 0" {
+  _is_interactive() { return 0; }
+  _prompt_yes_no "test prompt?" < <(printf 'Y\n')
+}
+
+@test "_prompt_yes_no: answer n -- returns non-zero" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_yes_no 'test prompt?'
+  " <<< "n"
+  [ "$status" -ne 0 ]
+}
+
+@test "_prompt_yes_no: empty answer -- returns non-zero" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_yes_no 'test prompt?'
+  " <<< ""
+  [ "$status" -ne 0 ]
+}
+
+@test "_prompt_yes_no: EOF on stdin -- dies with message" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_yes_no 'test prompt?'
+  " < /dev/null
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"failed to read user input"* ]]
+}
+
+# -- _prompt_choice ------------------------------------------------------------
+
+@test "_prompt_choice: non-interactive stdin -- dies with message" {
+  run bash -c "source '${FARADAI}'; _prompt_choice 'Choose:' 'Option A' 'Option B'" <<< "1"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"interactive selection required"* ]]
+}
+
+@test "_prompt_choice: choice 1 of 2 -- prints 0 to stdout" {
+  _is_interactive() { return 0; }
+  local result
+  result="$(_prompt_choice "Choose:" "Option A" "Option B" < <(printf '1\n'))"
+  [ "${result}" = "0" ]
+}
+
+@test "_prompt_choice: choice 2 of 2 -- prints 1 to stdout" {
+  _is_interactive() { return 0; }
+  local result
+  result="$(_prompt_choice "Choose:" "Option A" "Option B" < <(printf '2\n'))"
+  [ "${result}" = "1" ]
+}
+
+@test "_prompt_choice: choice 0 (out of range) -- dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_choice 'Choose:' 'Option A' 'Option B'
+  " <<< "0"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid selection"* ]]
+}
+
+@test "_prompt_choice: choice 3 of 2 (out of range) -- dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_choice 'Choose:' 'Option A' 'Option B'
+  " <<< "3"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid selection"* ]]
+}
+
+@test "_prompt_choice: non-numeric input -- dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_choice 'Choose:' 'Option A' 'Option B'
+  " <<< "abc"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"invalid selection"* ]]
+}
+
+@test "_prompt_choice: EOF on stdin -- dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _is_interactive() { return 0; }
+    _prompt_choice 'Choose:' 'Option A' 'Option B'
+  " < /dev/null
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"failed to read user input"* ]]
+}
+
+# -- _confirm_trust_workdir ----------------------------------------------------
+
+@test "_confirm_trust_workdir: FARADAI_TRUST_DIR=1 -- skips prompt, returns 0" {
+  export FARADAI_TRUST_DIR=1
+  export FARADAI_WORKDIR="${BATS_TEST_TMPDIR}"
+  _confirm_trust_workdir
+}
+
+@test "_confirm_trust_workdir: answer y -- returns 0" {
+  export FARADAI_TRUST_DIR=0
+  export FARADAI_WORKDIR="${BATS_TEST_TMPDIR}"
+  _is_interactive() { return 0; }
+  _confirm_trust_workdir < <(printf 'y\n')
+}
+
+@test "_confirm_trust_workdir: answer n -- exits 0 with aborted message" {
+  run bash -c "
+    source '${FARADAI}'
+    export FARADAI_TRUST_DIR=0
+    export FARADAI_WORKDIR='${BATS_TEST_TMPDIR}'
+    _is_interactive() { return 0; }
+    _confirm_trust_workdir
+  " <<< "n"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"aborted"* ]]
+}
+
+@test "_confirm_trust_workdir: non-interactive, FARADAI_TRUST_DIR=0 -- dies naming var" {
+  run bash -c "
+    source '${FARADAI}'
+    export FARADAI_TRUST_DIR=0
+    export FARADAI_WORKDIR='${BATS_TEST_TMPDIR}'
+    _confirm_trust_workdir
+  " <<< "y"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FARADAI_TRUST_DIR"* ]]
+}
+
+
+# ── _handle_ssh_agent_forwarding ───────────────────────────���──────────────────
 
 @test "_handle_ssh_agent_forwarding: FARADAI_ENABLE_SSH_AGENT=0 — skips, _SSH_AGENT_APPROVED stays 0" {
   _init_defaults
@@ -394,8 +541,10 @@ time.sleep(5)
 
   export FARADAI_ENABLE_SSH_AGENT=1 FARADAI_TRUST_SSH_AGENT=0
   export SSH_AUTH_SOCK="${sock}"
+  # Stub _is_interactive so _prompt_yes_no proceeds despite pipe stdin.
   # Process substitution keeps _handle_ssh_agent_forwarding in the current
   # shell so _SSH_AGENT_APPROVED is visible after the call.
+  _is_interactive() { return 0; }
   _handle_ssh_agent_forwarding < <(echo "y")
   [ "${_SSH_AGENT_APPROVED}" -eq 1 ]
 
@@ -417,6 +566,8 @@ time.sleep(5)
 
   export FARADAI_ENABLE_SSH_AGENT=1 FARADAI_TRUST_SSH_AGENT=0
   export SSH_AUTH_SOCK="${sock}"
+  # Stub _is_interactive so _prompt_yes_no proceeds despite pipe stdin.
+  _is_interactive() { return 0; }
   _handle_ssh_agent_forwarding < <(echo "n")
   [ "${_SSH_AGENT_APPROVED}" -eq 0 ]
 

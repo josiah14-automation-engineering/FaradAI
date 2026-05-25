@@ -49,6 +49,71 @@ _die() {
   exit 1
 }
 
+# _is_interactive
+#
+# Reads:  file descriptors 0 (stdin) and 1 (stdout)
+# Writes: nothing — returns 0 if both are terminals, 1 otherwise
+#
+# Defined as a named function so tests can stub it out.
+_is_interactive() {
+  [[ -t 0 && -t 1 ]]
+}
+
+# _prompt_yes_no PROMPT
+#
+# Reads:  stdin (user input)
+# Writes: nothing — returns 0 if user answered y/Y, 1 otherwise
+#
+# Pure prompt mechanics: TTY guard, print, read, return. Callers own trust-var
+# bypass logic and context-specific non-interactive error messages; they should
+# check their FARADAI_TRUST_* variable and call _is_interactive before reaching
+# this function. The TTY guard here is a safety net for unchecked call sites.
+_prompt_yes_no() {
+  local prompt="${1}" answer
+  _is_interactive || _die "interactive confirmation required"
+  printf "%s [y/N] " "${prompt}" >&2
+  if ! read -r answer; then
+    _die "failed to read user input"
+  fi
+  [[ "${answer}" =~ ^[Yy]$ ]]
+}
+
+# _prompt_choice PROMPT CHOICE...
+#
+# Reads:  stdin (user input)
+# Writes: 0-indexed choice number to stdout
+#
+# Pure prompt mechanics: TTY guard, print numbered options, read, validate.
+# Prints PROMPT and numbered CHOICE options to stderr, then reads one line from
+# stdin. Validates the input is a number in [1, N]; dies on invalid input or
+# EOF. There is no auto-skip path — a choice cannot be expressed without user
+# input. Callers own any applicable trust-var check and non-interactive message.
+_prompt_choice() {
+  local prompt="${1}"
+  shift
+  local -a choices=("$@")
+  local n="${#choices[@]}" i answer
+
+  _is_interactive || _die "interactive selection required"
+
+  printf "%s\n" "${prompt}" >&2
+  for (( i = 0; i < n; i++ )); do
+    printf "  %d) %s\n" $(( i + 1 )) "${choices[i]}" >&2
+  done
+  printf "Choice [1-%d]: " "${n}" >&2
+
+  if ! read -r answer; then
+    _die "failed to read user input"
+  fi
+
+  if [[ "${answer}" =~ ^[0-9]+$ ]] && (( answer >= 1 && answer <= n )); then
+    printf '%d\n' $(( answer - 1 ))
+    return 0
+  fi
+
+  _die "invalid selection '${answer}' -- enter a number between 1 and ${n}"
+}
+
 _cleanup() { docker rm -f "${_CONTAINER_NAME}" 2>/dev/null || true; }
 
 _validate_memory() {
@@ -384,14 +449,13 @@ _maybe_attach_existing() {
 # _confirm_trust_workdir
 #
 # Reads:  FARADAI_TRUST_DIR, FARADAI_WORKDIR
-# Writes: nothing — exits if user declines
+# Writes: nothing — exits if user declines or aborts
 _confirm_trust_workdir() {
-  if [[ "${FARADAI_TRUST_DIR:-0}" != "1" ]]; then
-    printf "faradai: mount %s into container? [y/N] " "${FARADAI_WORKDIR}"
-    local _trust_answer
-    read -r _trust_answer
-    [[ "${_trust_answer}" =~ ^[Yy]$ ]] || { echo "faradai: aborted." >&2; exit 0; }
-  fi
+  [[ "${FARADAI_TRUST_DIR:-0}" == "1" ]] && return 0
+  _is_interactive \
+    || _die "interactive confirmation required — set FARADAI_TRUST_DIR=1 to skip this prompt"
+  _prompt_yes_no "faradai: mount ${FARADAI_WORKDIR} into container?" \
+    || { echo "faradai: aborted." >&2; exit 0; }
 }
 
 # _prepare_container_name_for_create
@@ -470,12 +534,12 @@ _handle_ssh_agent_forwarding() {
     return 0
   fi
 
+  _is_interactive \
+    || _die "interactive confirmation required — set FARADAI_TRUST_SSH_AGENT=1 to skip this prompt"
+
   echo "faradai: SSH agent socket detected. Keys that will be accessible inside the container if forwarded:" >&2
   ssh-add -l 2>/dev/null || echo "  (no keys loaded)" >&2
-  printf "faradai: forward SSH agent into container? [y/N] "
-  local _answer
-  read -r _answer
-  if [[ "${_answer}" =~ ^[Yy]$ ]]; then
+  if _prompt_yes_no "faradai: forward SSH agent into container?"; then
     _SSH_AGENT_APPROVED=1
   fi
 }
