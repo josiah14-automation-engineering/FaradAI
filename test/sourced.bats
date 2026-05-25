@@ -690,6 +690,14 @@ time.sleep(5)
 
 # ── _ensure_host_dirs ─────────────────────────────────────────────────────────
 
+@test "_ensure_host_dirs: creates ~/.claude when absent" {
+  export HOME="${BATS_TEST_TMPDIR}/fresh-claude-home-$$"
+  mkdir -p "${HOME}"
+  [ ! -d "${HOME}/.claude" ]
+  _ensure_host_dirs
+  [ -d "${HOME}/.claude" ]
+}
+
 @test "_ensure_host_dirs: creates ~/.config/gh when absent" {
   export HOME="${BATS_TEST_TMPDIR}/fresh-home-$$"
   mkdir -p "${HOME}"
@@ -699,9 +707,9 @@ time.sleep(5)
   [ -d "${HOME}/.config/gh" ]
 }
 
-@test "_ensure_host_dirs: succeeds idempotently when ~/.config/gh already exists" {
+@test "_ensure_host_dirs: succeeds idempotently when dirs already exist" {
   export HOME="${BATS_TEST_TMPDIR}/existing-home-$$"
-  mkdir -p "${HOME}/.config/gh"
+  mkdir -p "${HOME}/.claude" "${HOME}/.config/gh"
   run _ensure_host_dirs
   [ "$status" -eq 0 ]
 }

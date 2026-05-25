@@ -53,3 +53,15 @@ Initial release. Core features:
 ### Fixed
 
 - `build.sh`: `dirname "$0"` replaced with `dirname "$(readlink -f "$0")"` so invoking via symlink uses the script's real directory as the Docker build context
+
+### Fixed (continued)
+
+- `_ensure_host_dirs`: now creates `~/.claude` before Docker runs, preventing Docker from creating it with root ownership on first use (#87)
+- `faradai uninstall`: existence check before exec; prints a manual cleanup hint if binary is missing (#69)
+- `faradai -v`: now prints version like `--version`/`version`; `faradai -a -v` also resolves to version (#61)
+- `install.sh`: Docker presence and daemon-running preflight checks before invoking `build.sh` (#86)
+
+### Internal
+
+- `_debug_print_plan`: comment documenting intentional `set -x` / `_exec_docker_run` ordering dependency (#89)
+- `_UNINSTALL_BIN` injectable via env for testing; defaults to `/usr/local/bin/uninstall-faradai`

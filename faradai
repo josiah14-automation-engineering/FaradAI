@@ -2,6 +2,7 @@
 set -euo pipefail
 
 _FARADAI_VERSION="0.2.0-alpha.1"
+_UNINSTALL_BIN="${_UNINSTALL_BIN:-/usr/local/bin/uninstall-faradai}"
 
 # ── functions ──────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,7 @@ _dispatch_meta_commands() {
       _usage
       exit 0
       ;;
-    version|--version)
+    version|--version|-v)
       echo "faradai ${_FARADAI_VERSION}"
       exit 0
       ;;
@@ -369,7 +370,11 @@ _dispatch_meta_commands() {
       exit 0
       ;;
     uninstall)
-      exec /usr/local/bin/uninstall-faradai
+      if [[ -x "${_UNINSTALL_BIN}" ]]; then
+        exec "${_UNINSTALL_BIN}"
+      else
+        _die "uninstall-faradai not found at ${_UNINSTALL_BIN} — remove manually: sudo rm -f /usr/local/bin/faradai /usr/local/bin/uninstall-faradai"
+      fi
       ;;
   esac
 }
@@ -640,6 +645,9 @@ _load_runtime_config() {
 _debug_print_plan() {
   if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
     echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS} NETWORK=${FARADAI_NETWORK_MODE}" >&2
+    # set -x remains active intentionally: tracing the final docker run is the
+    # purpose of debug mode. _exec_docker_run must follow immediately — inserting
+    # code here will expose it to shell tracing on stderr.
     set -x
   fi
 }
@@ -725,6 +733,7 @@ _append_network_args() {
 #
 # Must run before _append_credential_mount_args.
 _ensure_host_dirs() {
+  mkdir -p "${HOME}/.claude"
   mkdir -p "${HOME}/.config/gh"
 }
 

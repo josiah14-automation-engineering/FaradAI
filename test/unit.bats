@@ -447,3 +447,22 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"--branch requires a name"* ]]
 }
+
+@test "flag parser: -v prints version and exits 0" {
+  run "${FARADAI}" -v
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"faradai"* ]]
+}
+
+@test "flag parser: -a -v prints version, not an attach error" {
+  run "${FARADAI}" -a -v
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"faradai"* ]]
+  [[ "$output" != *"no running container"* ]]
+}
+
+@test "uninstall: missing binary exits 1 with manual cleanup hint" {
+  run env _UNINSTALL_BIN=/nonexistent/path "${FARADAI}" uninstall
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"uninstall-faradai not found"* ]]
+}

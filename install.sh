@@ -6,6 +6,16 @@ if ! command -v sudo > /dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v docker > /dev/null 2>&1; then
+  echo "install.sh: docker is not installed or not in PATH" >&2
+  exit 1
+fi
+
+if ! docker info > /dev/null 2>&1; then
+  echo "install.sh: Docker daemon is not running" >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 "${SCRIPT_DIR}/build.sh"
