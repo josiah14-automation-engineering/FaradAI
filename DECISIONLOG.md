@@ -67,4 +67,5 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 **Alternatives considered:**
 - Simple preflight abort — too blunt; leaves the user with no path forward from the CLI.
 - Carry extra flags through to the fallback tool — rejected; flags like `--resume` are tool-specific and passing them through would produce confusing errors in the target tool.
+- Scope warnings to the boot target only — considered and rejected during implementation. Users who only use one agent would find unconditional warnings about the other agent noisy. However, the agent-to-agent argument (a Claude agent needs to know aider creds are missing before handing off) won out. The clean long-term fix is #85: let users declare which agents they use so warnings are scoped to declared agents. Deferred post Go/Nushell migration.
 

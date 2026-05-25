@@ -1459,3 +1459,9 @@ Resumed from a context-compacted session. Task 1 (#79: `_is_interactive` / `_pro
 ### Remove `_cleanup` / `_setup_cleanup_trap` dead code (#60)
 
 Josiah asked why `_cleanup` had been extracted from `_setup_cleanup_trap` given that no tests existed for either. The answer: the comment said "extracted to enhance testability" but the tests were never written. More fundamentally, the entire construct is dead code — `exec docker run` replaces the bash process before the trap can ever fire, and `--rm` already handles container removal on exit. Both functions and the `_setup_cleanup_trap` call in `main()` were deleted. 104 tests still pass. Issue #60 closed via `gh`.
+
+### Task 3: `_preflight_credentials` with recovery flow (#68) — in progress
+
+**Josiah caught:** during TDD test-writing, Josiah spotted that `_CMD_ARGS[0]` could be `"bash"` — the user explicitly booting a shell, not an AI tool. The original boot-target determination defaulted any unrecognised first arg to `"claude"`, so `faradai -c bash` would wrongly check Claude credentials and potentially trigger the recovery flow. Fixed by replacing the two-branch if/elif with a `case` that returns 0 immediately for any target that is neither `claude` nor `aider`. A 10th test was added to pin this: `_CMD_ARGS=("bash")` with Claude creds absent must return 0 silently.
+
+**`_is_interactive` fix:** changed from `[[ -t 0 && -t 1 ]]` to `[[ -t 0 && -t 2 ]]` (stdin + stderr). `_prompt_choice` writes its result to stdout and must be called via `$()`; inside `$()` stdout is not a TTY, so the old check would have fired "interactive selection required" even in a real terminal. Checking stderr is semantically correct — it stays attached to the terminal even when stdout is captured.

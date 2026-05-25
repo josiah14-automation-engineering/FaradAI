@@ -76,6 +76,7 @@ Correctness bugs, portability blockers, and refactoring for public-facing code q
 - [#44](https://github.com/josiah14-automation-engineering/FaradAI/issues/44) — `faradai update`: no integrity verification on cloned `install.sh`
 - [#42](https://github.com/josiah14-automation-engineering/FaradAI/issues/42) — `_build_extra_docker_args` rejects combined short-flag forms
 - [#69](https://github.com/josiah14-automation-engineering/FaradAI/issues/69) — BUG: `faradai uninstall` hardcodes `/usr/local/bin/uninstall-faradai` with no existence check
+- [#85](https://github.com/josiah14-automation-engineering/FaradAI/issues/85) — enhancement: per-user agent configuration — scope credential warnings to declared agents (deferred post Go/Nushell migration)
 - git mock for `_resolve_latest_tag` / `_verify_update_tag` unit tests (no issue yet)
 
 ---

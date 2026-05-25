@@ -919,6 +919,138 @@ time.sleep(5)
   [[ "$output" == *"container-local state will be lost"* ]]
 }
 
+# ── _preflight_credentials ────────────────────────────────────────────────────
+
+@test "_preflight_credentials: non-AI boot target (bash) — returns 0, no recovery triggered" {
+  _setup_fake_home
+  rm "${HOME}/.claude/.credentials.json"  # creds absent — would trigger recovery if checked
+  _init_defaults
+  _CMD_ARGS=("bash")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"choose an option"* ]]
+  [[ "$output" != *"switching to"* ]]
+}
+
+@test "_preflight_credentials: both creds present, default target — returns 0 silently" {
+  _setup_fake_home
+  touch "${HOME}/.aider.conf.yml"
+  _init_defaults
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_preflight_credentials: both creds present, boot aider — returns 0 silently" {
+  _setup_fake_home
+  touch "${HOME}/.aider.conf.yml"
+  _init_defaults
+  _CMD_ARGS=("aider")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_preflight_credentials: claude creds missing — warns even when booting aider" {
+  _setup_fake_home
+  rm "${HOME}/.claude/.credentials.json"
+  touch "${HOME}/.aider.conf.yml"
+  _init_defaults
+  _CMD_ARGS=("aider")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Claude credentials not found"* ]]
+}
+
+@test "_preflight_credentials: aider conf missing — warns even when booting claude" {
+  _setup_fake_home
+  _init_defaults
+  _CMD_ARGS=("claude")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"aider configuration not found"* ]]
+}
+
+@test "_preflight_credentials: claude creds missing, non-interactive — dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-ni-home'
+    mkdir -p \"\${HOME}/.claude\"
+    _CMD_ARGS=('claude')
+    _preflight_credentials
+  " < /dev/null
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"credentials missing"* ]]
+}
+
+@test "_preflight_credentials: claude creds missing, aider present, picks aider — switches and drops extra flags" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-sw-home'
+    mkdir -p \"\${HOME}/.claude\"
+    touch \"\${HOME}/.aider.conf.yml\"
+    _CMD_ARGS=('claude' '--resume')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switching to aider"* ]]
+  [[ "$output" == *"--resume"* ]]
+  [[ "$output" == *"CMD:aider"* ]]
+}
+
+@test "_preflight_credentials: claude creds missing, aider present, picks bash — switches to bash" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-bash-home'
+    mkdir -p \"\${HOME}/.claude\"
+    touch \"\${HOME}/.aider.conf.yml\"
+    _CMD_ARGS=('claude')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "2"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CMD:bash"* ]]
+}
+
+@test "_preflight_credentials: both creds missing, picks bash — switches to bash" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-none-home'
+    mkdir -p \"\${HOME}/.claude\"
+    _CMD_ARGS=('claude')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CMD:bash"* ]]
+}
+
+@test "_preflight_credentials: aider conf missing, claude present, picks claude — switches and drops extra flags" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-aider-home'
+    mkdir -p \"\${HOME}/.claude\"
+    touch \"\${HOME}/.claude/.credentials.json\"
+    _CMD_ARGS=('aider' '--no-git')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switching to claude"* ]]
+  [[ "$output" == *"--no-git"* ]]
+  [[ "$output" == *"CMD:claude"* ]]
+}
+
 # ── _exec_docker_run ───────────────────────────────────────────────────────────
 
 @test "_exec_docker_run: execs docker run with DOCKER_RUN_ARGS (mock exits 0)" {

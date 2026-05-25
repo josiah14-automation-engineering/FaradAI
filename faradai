@@ -69,12 +69,14 @@ _init_defaults() {
 
 # _is_interactive
 #
-# Reads:  file descriptors 0 (stdin) and 1 (stdout)
+# Reads:  file descriptors 0 (stdin) and 2 (stderr)
 # Writes: nothing — returns 0 if both are terminals, 1 otherwise
 #
+# Checks stdin and stderr (not stdout) so that callers invoked via $() —
+# where stdout is captured — still detect an interactive terminal correctly.
 # Defined as a named function so tests can stub it out.
 _is_interactive() {
-  [[ -t 0 && -t 1 ]]
+  [[ -t 0 && -t 2 ]]
 }
 
 # _prompt_yes_no PROMPT
@@ -445,6 +447,101 @@ _maybe_attach_existing() {
   fi
 }
 
+# _preflight_credentials
+#
+# Reads:  HOME, _CMD_ARGS
+# Writes: _CMD_ARGS — may switch boot target and drop tool-specific flags
+#
+# Always warns if Claude credentials (~/.claude/.credentials.json) or aider
+# configuration (~/.aider.conf.yml) are absent — even when not booting into
+# the affected tool, to support agent-to-agent workflows.
+#
+# Triggers an interactive recovery flow only when the missing credential
+# matches the boot target. Boot target defaults to 'claude' when _CMD_ARGS is
+# empty or its first token is not a recognised tool name ('aider').
+#
+# Recovery choices (via _prompt_choice):
+#   1) boot into the alternative tool (if its credentials are present)
+#   2) drop into bash to troubleshoot
+# When neither tool's credentials are present, only bash is offered.
+#
+# When switching to the alternative tool, extra flags from _CMD_ARGS are
+# dropped (they are tool-specific) and a message names the discarded flags.
+#
+# Naturally skipped in attach mode: _maybe_attach_existing execs before
+# this phase runs.
+_preflight_credentials() {
+  local claude_creds="${HOME}/.claude/.credentials.json"
+  local aider_conf="${HOME}/.aider.conf.yml"
+  local claude_ok=0 aider_ok=0
+
+  if [[ -f "${claude_creds}" ]]; then claude_ok=1; fi
+  if [[ -f "${aider_conf}" ]];  then aider_ok=1;  fi
+
+  # Always warn about absent credentials (supports agent-to-agent workflows).
+  if [[ "${claude_ok}" -eq 0 ]]; then
+    echo "faradai: warning: Claude credentials not found (${claude_creds})" >&2
+  fi
+  if [[ "${aider_ok}" -eq 0 ]]; then
+    echo "faradai: warning: aider configuration not found (${aider_conf})" >&2
+  fi
+
+  # Determine boot target. Return immediately for non-AI-tool targets (e.g.
+  # bash) — no credential check needed when the user is booting a plain shell.
+  local boot_target
+  case "${_CMD_ARGS[0]:-claude}" in
+    claude) boot_target="claude" ;;
+    aider)  boot_target="aider"  ;;
+    *)      return 0              ;;
+  esac
+
+  # Skip recovery if the boot target's credentials are present.
+  if [[ "${boot_target}" == "claude" && "${claude_ok}" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ "${boot_target}" == "aider" && "${aider_ok}" -eq 1 ]]; then
+    return 0
+  fi
+
+  # Boot target's credentials are missing — enter interactive recovery.
+  _is_interactive \
+    || _die "'${boot_target}' credentials missing — cannot recover non-interactively"
+
+  # Extra flags after the boot target token (tool-specific; dropped on switch).
+  local -a extra_flags=()
+  if [[ "${#_CMD_ARGS[@]}" -gt 1 ]]; then
+    extra_flags=("${_CMD_ARGS[@]:1}")
+  fi
+
+  # Build recovery choices: offer the alternative tool first if its creds exist.
+  local -a choices=()
+  local alt_tool=""
+  if [[ "${boot_target}" == "claude" && "${aider_ok}" -eq 1 ]]; then
+    alt_tool="aider"
+    choices+=("boot into aider instead")
+  elif [[ "${boot_target}" == "aider" && "${claude_ok}" -eq 1 ]]; then
+    alt_tool="claude"
+    choices+=("boot into claude instead")
+  fi
+  choices+=("drop into bash to troubleshoot")
+
+  local idx
+  idx=$(_prompt_choice \
+    "faradai: '${boot_target}' credentials missing — choose an option:" \
+    "${choices[@]}")
+
+  if [[ -n "${alt_tool}" && "${idx}" -eq 0 ]]; then
+    if [[ "${#extra_flags[@]}" -gt 0 ]]; then
+      echo "faradai: switching to ${alt_tool} (dropping tool-specific flags: ${extra_flags[*]})" >&2
+    else
+      echo "faradai: switching to ${alt_tool}" >&2
+    fi
+    _CMD_ARGS=("${alt_tool}")
+  else
+    _CMD_ARGS=("bash")
+  fi
+}
+
 # _confirm_trust_workdir
 #
 # Reads:  FARADAI_TRUST_DIR, FARADAI_WORKDIR
@@ -721,6 +818,7 @@ main() {
   _resolve_workdir
   _resolve_container_state
   _maybe_attach_existing "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+  _preflight_credentials
 
   _confirm_trust_workdir
   _handle_ssh_agent_forwarding
