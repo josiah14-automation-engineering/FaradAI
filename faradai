@@ -412,10 +412,17 @@ _ensure_image_ready() {
 # _resolve_workdir
 #
 # Reads:  FARADAI_WORKDIR (optional)
-# Writes: FARADAI_WORKDIR
+# Writes: FARADAI_WORKDIR — always an absolute, symlink-resolved path after this call
+#
+# Normalises FARADAI_WORKDIR to an absolute path via `cd && pwd -P` so that
+# relative values (e.g. "src") do not corrupt the -v and -w Docker arguments.
 _resolve_workdir() {
-  FARADAI_WORKDIR="${FARADAI_WORKDIR:-$(pwd)}"
-  [ -d "${FARADAI_WORKDIR}" ] || _die "FARADAI_WORKDIR does not exist: ${FARADAI_WORKDIR}"
+  local raw="${FARADAI_WORKDIR:-$(pwd)}"
+  local resolved
+  if ! resolved="$(cd "${raw}" 2>/dev/null && pwd -P)"; then
+    _die "FARADAI_WORKDIR '${raw}' does not exist or is not a directory"
+  fi
+  FARADAI_WORKDIR="${resolved}"
 }
 
 # _resolve_container_state

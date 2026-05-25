@@ -230,6 +230,26 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+@test "_resolve_workdir: relative path — normalized to absolute" {
+  local sub="${BATS_TEST_TMPDIR}/rw-reltest-$$"
+  mkdir -p "${sub}"
+  cd "${BATS_TEST_TMPDIR}"
+  FARADAI_WORKDIR="rw-reltest-$$"
+  _resolve_workdir
+  [[ "${FARADAI_WORKDIR}" == /* ]]
+  [[ "${FARADAI_WORKDIR}" == "${sub}" ]]
+}
+
+@test "_resolve_workdir: symlink — resolved to real path via pwd -P" {
+  local real="${BATS_TEST_TMPDIR}/rw-real-$$"
+  local link="${BATS_TEST_TMPDIR}/rw-link-$$"
+  mkdir -p "${real}"
+  ln -s "${real}" "${link}"
+  FARADAI_WORKDIR="${link}"
+  _resolve_workdir
+  [[ "${FARADAI_WORKDIR}" == "${real}" ]]
+}
+
 # ── _dispatch_docker_metadata_commands ────────────────────────────────────────
 
 @test "_dispatch_docker_metadata_commands: logs — calls docker logs (mock exits 0)" {
