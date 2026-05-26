@@ -112,3 +112,21 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 **Alternatives considered:**
 - Duplicate the snapshot RUN in each stage — rejected. The duplication is a maintenance hazard that directly contradicts the reproducibility goal of the feature.
 - Combine into one very large RUN across all stages — not possible in Docker multi-stage builds; each stage is an independent image layer graph.
+
+---
+
+## 2026-05-26 — BuildKit cache mounts rejected for npm/pipx installs (#83)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Do not use `--mount=type=cache` to accelerate npm and pipx installs in the builder stage. Rely solely on the existing GHA layer cache (`type=gha`) for build performance.
+
+**Why:** BuildKit cache mounts operate at the download artifact level — they cache tarballs and wheel files outside the image layer graph, bypassing the snapshot URL entirely on cache hits. A warm cache would serve whatever was downloaded in a previous build, making it opaque to the snapshot framework and introducing a potential source of non-determinism. A stale or poisoned cache would produce a different image without any build failure or signal.
+
+The GHA layer cache is the correct mechanism for a reproducibility-first build: it caches at the layer level. If Dockerfile inputs and build args are unchanged, the exact same layer is returned. If anything changes, the layer is rebuilt from scratch against the snapshot URL. That is the right granularity — fast when nothing changes, fully reproducible when something does.
+
+The slow build cost from invalidating the GHA cache (caused by the base stage restructure in this same feature) is a one-time expense. Subsequent builds with unchanged layers will be fast via layer cache without compromising reproducibility.
+
+**Alternatives considered:**
+- BuildKit cache mounts — rejected; bypasses the snapshot URL on warm cache hits, undermining the reproducibility guarantee.
+- Registry cache (GHCR) — not evaluated; would cache at the layer level like GHA and is worth revisiting if GHA cache eviction becomes a problem.
