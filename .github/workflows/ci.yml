@@ -29,9 +29,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - name: Install bats-core
-        run: |
-          git clone --depth=1 https://github.com/bats-core/bats-core.git test/libs/bats-core
+        with:
+          submodules: true
       - name: Run unit tests
         run: test/libs/bats-core/bin/bats test/unit.bats
 
