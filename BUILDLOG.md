@@ -1481,3 +1481,7 @@ Both files were mounted unconditionally in `_append_credential_mount_args`. Dock
 Introduced `_maybe_mount_file <src> <dst> [<mode>]` — appends a `-v` mount only when the source file exists, silently returning 0 otherwise. Refactored `_append_credential_mount_args` to use it for all three optional file mounts: `.claude.json`, `.gitconfig`, and `.aider.conf.yml` (which was already conditional via an inline `if [[ -f ]]`).
 
 5 new tests (sourced.bats): 3 for `_maybe_mount_file` (present, absent, mode suffix) and 2 for the absent-file branches of `.claude.json` and `.gitconfig`. Two existing "always mounts" test names updated to "present — mount included". 185 tests total, all passing.
+
+### Snapshot repo bootstrap: `ca-certificates` from live mirror (#83)
+
+The `base` stage installs `ca-certificates` from the default Ubuntu sources before switching apt to the snapshot URL. Standard ops/sec bootstrapping — the ubuntu:24.04 base image ships without `ca-certificates`, so HTTPS sources are unreachable until it is present. `ca-certificates` is intentionally not pulled from the snapshot: CA bundles need to be current (expired/revoked roots, newly added roots), so freezing them to a point-in-time snapshot would be actively wrong.

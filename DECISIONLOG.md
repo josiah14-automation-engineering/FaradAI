@@ -82,3 +82,33 @@ Each entry: date, version scope, the decision, why, and alternatives considered.
 
 **Alternatives considered:**
 - Keep name-pattern as fallback alongside label filter — rejected. The name-pattern is the problem we're retiring; keeping it as fallback preserves the bug for existing containers and complicates the code with deduplication logic.
+
+---
+
+## 2026-05-25 17:13 UTC — apt reproducibility strategy: Ubuntu snapshot repos (#83)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Adopt Ubuntu Snapshot Archive (`https://snapshot.ubuntu.com/ubuntu/<timestamp>`) for all Ubuntu apt sources in the Dockerfile. A single `ARG SNAPSHOT_DATE` in each build stage pins the snapshot, replacing the live `archive.ubuntu.com` and `security.ubuntu.com` mirrors. Exact package version pins (e.g. `git=1:2.43.0-1ubuntu7.3`) are preserved alongside the snapshot timestamp — together they guarantee both the package version and the repository state are reproducible. `Acquire::Check-Valid-Until "false"` is added to apt config so builds continue to work after the Release file's validity window expires. NodeSource and GitHub CLI repos remain as live third-party sources; their packages are still pinned by exact version.
+
+**Why:** Exact version pins without a snapshot repo are the worst of both worlds: you pay the maintenance cost of pinning but don't get reproducibility, because upstream repos mutate and old package versions disappear. The snapshot repo closes that gap. A build against the same `SNAPSHOT_DATE` will produce the same package set regardless of when it runs.
+
+**Alternatives considered:**
+- Option A (relax pins, accept drift) — rejected. Reproducibility matters more than reduced maintenance burden at this stage of the project.
+- Keep live mirrors with exact pins only — this is the status quo being replaced; it's brittle because a pinned version can vanish from upstream at any time.
+
+**Maintenance note:** `SNAPSHOT_DATE` must be updated whenever package version pins are bumped. The snapshot timestamp should be set to a date on or after the date the new versions became available in the Ubuntu archive.
+
+---
+
+## 2026-05-26 17:13 UTC — Shared `base` stage for snapshot configuration (#83)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Extract a `base` stage (from the same `ubuntu:24.04` digest) that owns the snapshot source configuration — removing `ubuntu.sources`, writing `sources.list` with snapshot URLs for `noble`, `noble-updates`, and `noble-security`, and setting `Acquire::Check-Valid-Until "false"`. Both `builder` and `final` use `FROM base` instead of `FROM ubuntu:24.04` directly. `ARG SNAPSHOT_DATE` and `SHELL` are declared once in `base`.
+
+**Why:** With `SNAPSHOT_DATE` declared independently in two stages, a maintainer bumping the snapshot can update one and miss the other — builder and final would silently resolve packages from different point-in-time snapshots, undermining the reproducibility guarantee. The `base` stage makes misalignment structurally impossible: one ARG, one RUN, one place to touch.
+
+**Alternatives considered:**
+- Duplicate the snapshot RUN in each stage — rejected. The duplication is a maintenance hazard that directly contradicts the reproducibility goal of the feature.
+- Combine into one very large RUN across all stages — not possible in Docker multi-stage builds; each stage is an independent image layer graph.

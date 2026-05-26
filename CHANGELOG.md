@@ -65,3 +65,5 @@ Initial release. Core features:
 
 - `_debug_print_plan`: comment documenting intentional `set -x` / `_exec_docker_run` ordering dependency (#89)
 - `_UNINSTALL_BIN` injectable via env for testing; defaults to `/usr/local/bin/uninstall-faradai`
+- Dockerfile: `base` stage extracts shared snapshot-repo configuration; `builder` and `final` both inherit `FROM base` ([DECISIONLOG](DECISIONLOG.md#2026-05-26-1713-utc--shared-base-stage-for-snapshot-configuration-83)) (#83)
+- Dockerfile: `ARG SNAPSHOT_DATE=20260522T000000Z` pins Ubuntu apt sources to a single point-in-time snapshot for reproducible builds; all existing exact package version pins preserved ([DECISIONLOG](DECISIONLOG.md#2026-05-25-1713-utc--apt-reproducibility-strategy-ubuntu-snapshot-repos-83)) (#83)

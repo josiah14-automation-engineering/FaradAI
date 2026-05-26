@@ -1,14 +1,32 @@
-FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS builder
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS base
+
+ARG SNAPSHOT_DATE=20260522T000000Z
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# ca-certificates is intentionally unpinned: the CA bundle must track current
+# trust anchors (expired/revoked/new roots), not a frozen snapshot point-in-time.
+# hadolint ignore=DL3008
+RUN apt-get update -y \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -f /etc/apt/sources.list.d/ubuntu.sources \
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble main restricted universe multiverse" > /etc/apt/sources.list \
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-updates main restricted universe multiverse" >> /etc/apt/sources.list \
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-security main restricted universe multiverse" >> /etc/apt/sources.list \
+ && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
+
+FROM base AS builder
 
 ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/home/${USERNAME}
 ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
 ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
     ca-certificates=20240203 \
@@ -40,19 +58,19 @@ RUN npm config set prefix "/home/${USERNAME}/.local" \
 RUN curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
     | tar -xz --strip-components=1 -C /tmp "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
 
-FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS final
+FROM base AS final
 
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 LABEL org.opencontainers.image.title="FaradAI" \
       org.opencontainers.image.source="https://github.com/josiah14-automation-engineering/faradai" \
       org.opencontainers.image.faradai.username="${USERNAME}"
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
