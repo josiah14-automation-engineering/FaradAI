@@ -130,3 +130,17 @@ The slow build cost from invalidating the GHA cache (caused by the base stage re
 **Alternatives considered:**
 - BuildKit cache mounts — rejected; bypasses the snapshot URL on warm cache hits, undermining the reproducibility guarantee.
 - Registry cache (GHCR) — not evaluated; would cache at the layer level like GHA and is worth revisiting if GHA cache eviction becomes a problem.
+
+---
+
+## 2026-05-27 — FreeBSD support via Podman as part of Go/Nu migration (#65)
+
+**Version scope:** post-v0.1.0-alpha, Go/Nu migration
+
+**Decision:** FreeBSD support is targeted as part of the Go/Nushell CLI migration (#65). The blocker is the container runtime: Docker is not available on FreeBSD. The migration will switch from Docker to Podman, which has native FreeBSD support. Until the migration lands, FreeBSD is explicitly unsupported (not "no Docker" — "planned"). OpenBSD remains out of scope.
+
+**Why Podman:** Podman is daemonless, rootless by default, and OCI-compatible — the same images and run flags work without modification. It is the natural drop-in replacement for Docker in environments where the Docker daemon is unavailable, including FreeBSD. The Go rewrite of `faradai` will abstract the container runtime behind a thin interface; switching the backend from `docker` to `podman` becomes a flag or compile-time choice rather than a script rewrite.
+
+**Alternatives considered:**
+- Jail-based isolation on FreeBSD without a container runtime — would require a completely separate implementation path and diverge from the OCI image model. Rejected.
+- Keep "out of scope" for FreeBSD — rejected now that a clear path exists.

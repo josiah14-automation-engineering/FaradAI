@@ -95,6 +95,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     git=1:2.43.0-1ubuntu7.3 \
     iproute2=6.1.0-1ubuntu6.3 \
     iputils-ping=3:20240117-1ubuntu0.1 \
+    jq=1.7.1-3ubuntu0.24.04.2 \
     net-tools=2.10-0.1ubuntu4.4 \
     netcat-openbsd=1.226-1ubuntu2 \
     nodejs=22.22.2-1nodesource1 \

@@ -12,7 +12,7 @@
 
 **OS-level filesystem boundary for AI coding agents.**
 
-AI coding assistants scan broadly by default. FaradAI constrains the agent's filesystem access to only the projects you mount — a hard OS-level boundary, not a behavioral guideline.
+AI coding assistants scan broadly by default. FaradAI constrains the agent's access to the host filesystem, environment variables, and process tree to only what you explicitly grant — a hard bind-mount / namespace / cgroup boundary that is stronger than prompt constraints, configuration files, and behavioral guidelines, but weaker than full VM isolation. By default, the agent has full unrestricted outbound internet access.
 
 A Docker container for running CLI-based AI coding agents — Claude Code and aider currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
 
@@ -29,12 +29,19 @@ faradai                # launches Claude Code in a sandboxed container
 | Platform | Status |
 |---|---|
 | Linux | ✅ Primary — maintainer-tested |
-| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware) |
+| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware); requires Bash 4+ and platform-specific SSH agent setup (see notes below) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
-| FreeBSD / OpenBSD | ❌ No Docker support |
+| FreeBSD | ⚠️ Planned — Docker unavailable on FreeBSD; targeted for the Go/Nushell migration via a switch from Docker to Podman (#65) |
+| OpenBSD | ❌ Out of scope |
 
 macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot reproduce issues on those platforms.
+
+**macOS: Bash version.** The `faradai` CLI uses Bash 4+ syntax. macOS ships Bash 3.2 (GPLv2). Install a modern Bash via Homebrew (`brew install bash`) and ensure it is on your `PATH`, or invoke `faradai` explicitly with `/opt/homebrew/bin/bash`. This constraint will be removed when the CLI migrates to Go or Nushell (see [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)).
+
+**FreeBSD: planned via Podman.** Docker is not available on FreeBSD. The Go/Nushell migration (#65) will switch the container runtime from Docker to Podman, which has native FreeBSD support. Until that migration lands, FreeBSD is unsupported.
+
+**macOS / Docker Desktop: SSH agent forwarding.** On native Linux, FaradAI forwards the agent socket via a direct bind mount of `$SSH_AUTH_SOCK`. Docker Desktop on macOS and Windows routes host sockets differently — the standard bind-mount approach may not work out of the box. Community-tested workarounds are tracked in [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47).
 
 ## Prerequisites
 
@@ -68,8 +75,8 @@ An optional argument selects which tool to launch:
 | `faradai claude` | Claude Code; remaining args passed through (e.g. `--resume`) |
 | `faradai aider` | aider; remaining args passed through (e.g. `--no-git`) |
 | `faradai bash` | bare shell, useful for debugging |
-| `faradai logs` | stream container logs; remaining args passed to `docker logs` (e.g. `-f`) |
-| `faradai status` | show container state, image, and start time |
+| `faradai logs` | stream container logs; remaining args passed to `docker logs` (e.g. `-f`); only useful while a container is running (containers exit with `--rm`) |
+| `faradai status` | show container state, image, and start time; only useful while a container is running (containers exit with `--rm`) |
 | `faradai version` | print the faradai CLI version |
 | `faradai update` | pull latest tagged release and reinstall |
 | `faradai uninstall` | remove all faradai containers, the image, and installed binaries |
@@ -203,13 +210,15 @@ Use the model slug from OpenRouter's model directory. The `openrouter/` prefix i
 ## What's in the image
 
 - Ubuntu 24.04
-- Node.js — runtime for Claude Code (npm not included; tools are pre-installed in the image)
+- Node.js 22 — runtime for Claude Code (npm included; tools are pre-installed in the image)
 - Claude Code CLI (`claude`)
 - aider (via pipx venv, pre-installed)
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
 - gh (GitHub CLI) — installed from GitHub's official apt repository
 - vim — available when shelling in for manual edits or troubleshooting
+- tmux — terminal multiplexer; used internally for aider ↔ Claude handoff; available when shelling in
+- jq — JSON processor; useful for inspecting API responses and tool output inside the container
 - shellcheck — shell script linter; useful for validating scripts inside the container
 - `HEALTHCHECK` — verifies `claude` and `aider` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
@@ -227,7 +236,9 @@ Credentials are kept out of environment variables and injected as mounted files 
 
 Any secret present as an environment variable is visible to the agent and will appear in tool output if commands like `env` are run. Prefer file-based credential delivery. If a key must be in the environment, scope it to a cost-limited key with a short rotation cycle.
 
-**The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to Anthropic's servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
+**The `:ro` overlay on `~/.claude/.credentials.json` is not a secrecy mechanism.** It prevents the agent from overwriting your OAuth token, but the agent can still read the file directly if instructed to. If it does, the token will be transmitted to the agent's upstream servers as part of the conversation context.
+
+**The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to the agent's upstream servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
 
 ### SSH agent forwarding
 
@@ -260,7 +271,7 @@ Your user is not in the `docker` group. Fix: `sudo usermod -aG docker $USER`, th
 `~/.claude/.credentials.json` is missing or expired. Run `claude login` on the host to refresh it, then relaunch.
 
 **Container name conflict (`faradai` already in use)**
-A stopped container is holding the name. The `faradai` script handles this automatically via `docker rm -f faradai` before each new launch. If it persists: `docker rm -f faradai` manually.
+A stopped container is holding the name. The `faradai` script handles this automatically before each new launch. If it persists: `docker ps -aq --filter "label=dev.faradai.managed=true" | xargs docker rm -f` manually.
 
 **SSH key permissions rejected**
 SSH requires key files to be `600`. Fix: `chmod 600 ~/.ssh/id_*`.
@@ -269,7 +280,7 @@ SSH requires key files to be `600`. Fix: `chmod 600 ~/.ssh/id_*`.
 Run `echo $SSH_AUTH_SOCK` inside the container — it should return `/ssh-agent`. If empty, the agent was not forwarded at launch. See [Host SSH agent setup](#host-ssh-agent-setup) for instructions. If your keys are passphrase-protected, run `ssh-add` on the host before starting the container.
 
 **aider not found inside the container**
-The image predates the least-privilege install fix (Session 7). Rebuild: `./build.sh && ./install.sh`.
+The image was built before aider was included. Rebuild: `./build.sh && ./install.sh`.
 
 **Wrong model slug in `~/.aider.conf.yml`**
 aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
@@ -296,10 +307,10 @@ The container pattern is not specific to Claude Code or aider — any CLI-based 
 
 ## Testing
 
-Tests use [bats-core](https://github.com/bats-core/bats-core). Install it once:
+Tests use [bats-core v1.9.0](https://github.com/bats-core/bats-core/releases/tag/v1.9.0), pinned as a git submodule. After cloning the repo, initialise it once:
 
 ```bash
-git clone --depth=1 https://github.com/bats-core/bats-core test/libs/bats-core
+git submodule update --init
 ```
 
 Then run:
@@ -313,7 +324,7 @@ Two test suites:
 - **`test/unit.bats`** — integration tests that execute the `faradai` script as a subprocess. Covers the `-c`/`-a`/`-n` flag parser, the `_append_extra_docker_args` allowlist, and the validators (`_validate_memory/cpus/pids/network_mode`).
 - **`test/sourced.bats`** — function-level tests that source the script directly (safe via the source-vs-execute guard). Tests each phase function in isolation: `_init_defaults`, `_parse_cli_flags`, `_dispatch_meta_commands`, `_maybe_attach_existing`, `_handle_ssh_agent_forwarding`, all `_append_*` arg-builders, and `_build_docker_run_args` ordering guards.
 
-Docker is mocked via `test/helpers/` — no running daemon required. `test/libs/` is gitignored.
+Docker is mocked via `test/helpers/` — no running daemon required.
 
 ---
 

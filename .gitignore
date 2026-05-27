@@ -8,6 +8,9 @@ __pycache__/
 # Claude Code
 .claude/
 
+# Private session resume helper (not part of the project)
+resume-faradai
+
 # Vim
 *.swp
 *.swo
