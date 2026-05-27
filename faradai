@@ -771,9 +771,11 @@ _maybe_mount_file() {
 _append_credential_mount_args() {
   DOCKER_RUN_ARGS+=(
     -v "${HOME}/.claude:/home/${USER}/.claude"
-    -v "${HOME}/.claude/.credentials.json:/home/${USER}/.claude/.credentials.json:ro"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
   )
+
+  _maybe_mount_file "${HOME}/.claude/.credentials.json" \
+    "/home/${USER}/.claude/.credentials.json" "ro"
 
   _maybe_mount_file "${HOME}/.claude.json"  "/home/${USER}/.claude.json"
   _maybe_mount_file "${HOME}/.gitconfig"    "/home/${USER}/.gitconfig" "ro"

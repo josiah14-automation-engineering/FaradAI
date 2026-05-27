@@ -815,9 +815,16 @@ time.sleep(5)
   [[ "${DOCKER_RUN_ARGS[*]}" == *"/.claude:"* ]]
 }
 
-@test "_append_credential_mount_args: always mounts ~/.claude/.credentials.json read-only" {
+@test "_append_credential_mount_args: ~/.claude/.credentials.json present — mount included read-only" {
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *".credentials.json:ro"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.claude/.credentials.json absent — mount not included" {
+  _setup_canon
+  rm "${HOME}/.claude/.credentials.json"
+  _append_credential_mount_args
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *".credentials.json"* ]]
 }
 
 @test "_append_credential_mount_args: ~/.claude.json present — mount included" {
