@@ -133,6 +133,25 @@ The slow build cost from invalidating the GHA cache (caused by the base stage re
 
 ---
 
+## 2026-05-27 — `faradai update` integrity model: trust warning, GPG signing deferred (#44)
+
+**Version scope:** pre-release correctness fixes
+
+**Decision:** Add trust-model disclosure to `faradai update` output. The existing `_verify_update_tag` check (which verifies that the cloned HEAD carries the expected tag via `git describe --exact-match --tags HEAD`) is retained as the primary integrity mechanism. A notice is now printed after the tag check passes, stating explicitly that: the tag was verified over HTTPS; no GPG signature is present; the user is trusting GitHub's infrastructure and the repository maintainer. For `--branch` updates (which skip tag verification entirely), two warnings are printed upfront: that branch tips are mutable and that no integrity check is performed.
+
+GPG-signed tags are deferred until the formal release process is established. When adopted, every release tag will be signed with the maintainer's key (`git tag -s`), the public key will be published in the repository and on a separate channel, and `faradai update` will verify the signature with `git verify-tag` before proceeding. The `--branch` path will remain permanently unsigned.
+
+**Why deferred:** GPG signing requires infrastructure that doesn't yet exist: a stable maintainer key, a published verification procedure, and a reliable key distribution channel. Implementing signing before the release process exists would produce a brittle check that breaks on first use. The tag-verification mechanism already prevents the most common update attacks (MITM drift between `ls-remote` query and clone); the remaining threat — a GitHub account or infrastructure compromise — is not meaningfully blocked by in-band SHA256 checksums (which an attacker with repo write access could also update).
+
+**SHA256SUMS considered and rejected:** A `SHA256SUMS` file in the repository offers no additional protection against repository-level compromise — an attacker with write access to the repo also controls `SHA256SUMS`. It would only be meaningful if published on a separate channel (out-of-band), which requires the same publication infrastructure as a GPG key. Rejected until that infrastructure is in place.
+
+**Alternatives considered:**
+- In-repo SHA256SUMS — rejected; same trust level as the code itself if the repo is compromised.
+- SHA256SUMS in GitHub Release assets — offers slightly stronger protection (assets are immutable once a release is published); worth revisiting once a formal release process exists.
+- Immediate GPG signing — rejected for pre-alpha; the signing infrastructure doesn't exist and a broken signing check is worse than a disclosure-only approach.
+
+---
+
 ## 2026-05-27 — FreeBSD support via Podman as part of Go/Nu migration (#65)
 
 **Version scope:** post-v0.1.0-alpha, Go/Nu migration

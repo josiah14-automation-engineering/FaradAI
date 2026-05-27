@@ -225,6 +225,8 @@ _update_faradai() {
 
     ref="${2}"
     echo "faradai: updating from branch '${ref}' — not a tagged release" >&2
+    echo "faradai: warning: branch tips are mutable; no integrity check is performed on branch updates" >&2
+    echo "faradai: warning: you are trusting GitHub's infrastructure and the repository maintainer" >&2
 
     if ! git clone --depth=1 --branch "${ref}" "${repo}" "${update_dir}"; then
       echo "faradai: git clone failed — check your network connection and try again" >&2
@@ -248,6 +250,8 @@ _update_faradai() {
     if ! _verify_update_tag "${update_dir}" "${latest_tag}"; then
       return 1
     fi
+
+    echo "faradai: trust: git tag verified over HTTPS — no GPG signature; you are trusting GitHub's infrastructure and the repository maintainer" >&2
 
   fi
 

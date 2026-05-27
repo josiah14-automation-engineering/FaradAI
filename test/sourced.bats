@@ -355,6 +355,18 @@ _setup_fake_home() {
         "${HOME}/.gitconfig"
 }
 
+# _make_test_repo DIR TAG
+# Creates a minimal git repo at DIR with one empty commit tagged TAG.
+# Uses lightweight tags (git tag, not git tag -a) — no peeled ^{} refs.
+_make_test_repo() {
+  local dir="${1}" tag="${2}"
+  git init -q "${dir}"
+  git -C "${dir}" config user.email "test@faradai.test"
+  git -C "${dir}" config user.name "Faradai Test"
+  git -C "${dir}" commit -q --allow-empty -m "init"
+  git -C "${dir}" tag "${tag}"
+}
+
 # _setup_canon
 # Initialise all globals to a canonical state for integration tests.
 _setup_canon() {
@@ -1220,4 +1232,69 @@ time.sleep(5)
   _build_docker_run_args
   run _exec_docker_run
   [ "$status" -eq 0 ]
+}
+
+# ── _verify_update_tag ────────────────────────────────────────────────────────
+
+@test "_verify_update_tag: HEAD carries the expected tag — returns 0" {
+  local repo="${BATS_TEST_TMPDIR}/vut-match-$$"
+  _make_test_repo "${repo}" "v1.2.3"
+  run _verify_update_tag "${repo}" "v1.2.3"
+  [ "$status" -eq 0 ]
+}
+
+@test "_verify_update_tag: HEAD carries a different tag — exits 1 with expected/got message" {
+  local repo="${BATS_TEST_TMPDIR}/vut-mismatch-$$"
+  _make_test_repo "${repo}" "v1.2.3"
+  run _verify_update_tag "${repo}" "v9.9.9"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"expected 'v9.9.9'"* ]]
+  [[ "$output" == *"got 'v1.2.3'"* ]]
+}
+
+@test "_verify_update_tag: HEAD has no tag — exits 1 with 'not a tagged commit'" {
+  local repo="${BATS_TEST_TMPDIR}/vut-notag-$$"
+  git init -q "${repo}"
+  git -C "${repo}" config user.email "test@faradai.test"
+  git -C "${repo}" config user.name "Faradai Test"
+  git -C "${repo}" commit -q --allow-empty -m "init"
+  run _verify_update_tag "${repo}" "v1.0.0"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not a tagged commit"* ]]
+}
+
+# ── _resolve_latest_tag ────────────────────────────────────────────────────────
+
+@test "_resolve_latest_tag: single v* tag — returns that tag" {
+  local repo="${BATS_TEST_TMPDIR}/rlt-one-$$"
+  _make_test_repo "${repo}" "v0.1.0"
+  local result
+  result="$(_resolve_latest_tag "${repo}")"
+  [ "${result}" = "v0.1.0" ]
+}
+
+@test "_resolve_latest_tag: multiple v* tags — returns the highest semver tag" {
+  local repo="${BATS_TEST_TMPDIR}/rlt-multi-$$"
+  git init -q "${repo}"
+  git -C "${repo}" config user.email "test@faradai.test"
+  git -C "${repo}" config user.name "Faradai Test"
+  git -C "${repo}" commit -q --allow-empty -m "v1"
+  git -C "${repo}" tag v0.1.0
+  git -C "${repo}" commit -q --allow-empty -m "v2"
+  git -C "${repo}" tag v0.9.0
+  git -C "${repo}" commit -q --allow-empty -m "v3"
+  git -C "${repo}" tag v0.2.0
+  local result
+  result="$(_resolve_latest_tag "${repo}")"
+  [ "${result}" = "v0.9.0" ]
+}
+
+@test "_resolve_latest_tag: no v* tags — returns 1" {
+  local repo="${BATS_TEST_TMPDIR}/rlt-notags-$$"
+  git init -q "${repo}"
+  git -C "${repo}" config user.email "test@faradai.test"
+  git -C "${repo}" config user.name "Faradai Test"
+  git -C "${repo}" commit -q --allow-empty -m "init"
+  run _resolve_latest_tag "${repo}"
+  [ "$status" -eq 1 ]
 }
