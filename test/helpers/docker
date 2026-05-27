@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Mock docker for unit tests. Handles only the calls faradai makes during
 # pre-flight and container lifecycle; docker run exits 0 without doing anything.
+#
+# Controllable via environment variables (set per-test):
+#
+#   MOCK_IMAGE_USER           — value echoed by 'docker image inspect'; simulates
+#                               the faradai.username label on the built image
+#   MOCK_DOCKER_INSPECT_EXIT  — exit code for 'docker inspect' (default 0);
+#                               set to 1 to simulate container-not-found
+#   MOCK_DOCKER_INSPECT_RUNNING — output for 'docker inspect' (default "");
+#                               set to "true" or "false" to control running state
 case "$1" in
   info)    exit 0 ;;
   image)
@@ -9,7 +18,12 @@ case "$1" in
     [[ -n "${MOCK_IMAGE_USER:-}" ]] && echo "${MOCK_IMAGE_USER}"
     exit 0
     ;;
-  inspect) exit 0 ;;  # exits 0 (container "exists") with no output (_CONTAINER_RUNNING="")
+  inspect)
+    # Exit code controls whether the container exists.
+    # Output controls whether it is running.
+    [[ -n "${MOCK_DOCKER_INSPECT_RUNNING:-}" ]] && echo "${MOCK_DOCKER_INSPECT_RUNNING}"
+    exit "${MOCK_DOCKER_INSPECT_EXIT:-0}"
+    ;;
   rm)      exit 0 ;;
   run)     exit 0 ;;
   logs)    exit 0 ;;

@@ -473,3 +473,71 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"uninstall-faradai not found"* ]]
 }
+
+# ── _resolve_container_state (inspect failure paths) ──────────────────────────
+
+@test "_resolve_container_state: inspect exit 1 clears running state; auto mode proceeds to docker run" {
+  # MOCK_DOCKER_INSPECT_EXIT=1 simulates the container-not-found path.
+  # _CONTAINER_RUNNING is cleared; auto mode finds nothing to attach and falls
+  # through to docker run (mock exits 0).
+  run env MOCK_DOCKER_INSPECT_EXIT=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+}
+
+@test "_resolve_container_state: inspect exit 1; attach mode reports no running container" {
+  # Same not-found condition, but -a requires a running container → must fail.
+  run env MOCK_DOCKER_INSPECT_EXIT=1 "${FARADAI}" -a
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no running container 'faradai'"* ]]
+}
+
+@test "_resolve_container_state: inspect exit 1 with -n NAME; attach mode reports correct container name" {
+  # Error message must reference the resolved container name, not the bare name.
+  run env MOCK_DOCKER_INSPECT_EXIT=1 "${FARADAI}" -a -n myproject
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no running container 'faradai-myproject'"* ]]
+}
+
+@test "_resolve_container_state: inspect returns 'true'; auto mode attaches to running container" {
+  # MOCK_DOCKER_INSPECT_RUNNING=true → _CONTAINER_RUNNING="true".
+  # _maybe_attach_existing fires exec docker exec; mock wildcard case exits 0.
+  run env MOCK_DOCKER_INSPECT_RUNNING=true "${FARADAI}"
+  [ "$status" -eq 0 ]
+}
+
+@test "_resolve_container_state: inspect returns 'false'; auto mode prompts to remove stopped container" {
+  # MOCK_DOCKER_INSPECT_RUNNING=false → _CONTAINER_RUNNING="false".
+  # _remove_stale_container calls _prompt_yes_no, which requires an interactive
+  # terminal; bats is non-interactive so _die fires with "interactive confirmation".
+  run env MOCK_DOCKER_INSPECT_RUNNING=false "${FARADAI}"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"interactive confirmation required"* ]]
+}
+
+@test "_resolve_container_state: inspect exit 1; create mode sees no conflict and proceeds to docker run" {
+  # _prepare_container_name_for_create calls docker inspect directly; exit 1
+  # means the container does not exist, so create mode must proceed without error.
+  run env MOCK_DOCKER_INSPECT_EXIT=1 "${FARADAI}" -c
+  [ "$status" -eq 0 ]
+}
+
+# ── _debug_print_plan (FARADAI_DEBUG=1) ───────────────────────────────────────
+
+@test "_debug_print_plan: FARADAI_DEBUG=1 warns that expanded variables may contain secrets" {
+  run env FARADAI_DEBUG=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING: debug mode active"* ]]
+  [[ "$output" == *"secrets or API keys"* ]]
+}
+
+@test "_debug_print_plan: FARADAI_DEBUG=1 warns that AI agents transmit output to upstream servers" {
+  run env FARADAI_DEBUG=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"transmit it to upstream servers"* ]]
+}
+
+@test "_debug_print_plan: FARADAI_DEBUG=0 does not print debug warning" {
+  run env FARADAI_DEBUG=0 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"WARNING: debug mode active"* ]]
+}

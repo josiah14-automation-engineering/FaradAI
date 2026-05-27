@@ -644,6 +644,7 @@ _load_runtime_config() {
 # Writes: nothing (side-effects: stderr output, enables set -x)
 _debug_print_plan() {
   if [[ "${FARADAI_DEBUG:-0}" == "1" ]]; then
+    echo "faradai: WARNING: debug mode active — all expanded shell variables, including any that contain secrets or API keys, will be printed to stderr; any AI agent reading this output will transmit it to upstream servers for inference" >&2
     echo "faradai: CONTAINER=${_CONTAINER_NAME} WORKDIR=${FARADAI_WORKDIR} MEMORY=${FARADAI_MEMORY} CPUS=${FARADAI_CPUS} PIDS=${FARADAI_PIDS} NETWORK=${FARADAI_NETWORK_MODE}" >&2
     # set -x remains active intentionally: tracing the final docker run is the
     # purpose of debug mode. _exec_docker_run must follow immediately — inserting

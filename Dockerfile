@@ -20,6 +20,7 @@ FROM base AS builder
 
 ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
+ARG TARGETARCH
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -55,7 +56,12 @@ RUN npm config set prefix "/home/${USERNAME}/.local" \
  && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} + \
  && rm -rf /home/${USERNAME}/.cache
 
-RUN curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) _SC_ARCH="x86_64" ;; \
+      arm64) _SC_ARCH="aarch64" ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${_SC_ARCH}.tar.gz" \
     | tar -xz --strip-components=1 -C /tmp "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
 
 FROM base AS final
