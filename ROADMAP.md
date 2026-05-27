@@ -120,3 +120,4 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 - [#31](https://github.com/josiah14-automation-engineering/FaradAI/issues/31) — Broker network mode (`FARADAI_NETWORK_MODE=broker`, depends on #29)
 - [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) — Language strategy: migrate faradai to Go, support scripts to Nushell
 - [#66](https://github.com/josiah14-automation-engineering/FaradAI/issues/66) — Post-v1.0.0: polyparadigm translation experiment
+- [#93](https://github.com/josiah14-automation-engineering/FaradAI/issues/93) — Spike: mirror repo on Radicle for decentralized resilience
