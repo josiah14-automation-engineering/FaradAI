@@ -53,7 +53,7 @@ _die() {
 # _init_defaults
 #
 # Reads:  USER (host env, optional)
-# Writes: USER, _MODE, _CONTAINER_NAME, _CMD_ARGS, DOCKER_RUN_ARGS
+# Writes: USER, _MODE, _CONTAINER_NAME, _CMD_ARGS, DOCKER_RUN_ARGS, _SSH_AGENT_APPROVED
 #
 # Must run before any other phase. Normalising USER here (not later in mount
 # building) fixes a latent bug: _check_image_user compared the image label
@@ -660,6 +660,8 @@ _debug_print_plan() {
 #
 # Sets _SSH_AGENT_APPROVED=1 if the SSH agent should be forwarded; 0 otherwise.
 # Prompts interactively unless FARADAI_TRUST_SSH_AGENT=1.
+# Must run before _append_credential_mount_args, which reads _SSH_AGENT_APPROVED
+# to decide whether to add the SSH agent socket mount to DOCKER_RUN_ARGS.
 _handle_ssh_agent_forwarding() {
   _SSH_AGENT_APPROVED=0
   if [[ "${FARADAI_ENABLE_SSH_AGENT:-1}" != "1" \
@@ -842,6 +844,13 @@ _exec_docker_run() {
 # Writes: DOCKER_RUN_ARGS
 #
 # $@ = CMD_ARGS forwarded to the container after the image name.
+#
+# Ordering constraint: docker run parses positionally — all OPTIONS must
+# precede IMAGE, and CMD_ARGS must follow it. Every _append_* call builds
+# OPTIONS; the IMAGE name and CMD_ARGS are appended last by the inline
+# statement below. _append_extra_docker_args is placed after the volume
+# mounts so that user-supplied flags cannot interleave with credential or
+# project mounts.
 _build_docker_run_args() {
   _append_runtime_flags
   _append_resource_args

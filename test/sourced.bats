@@ -57,6 +57,20 @@ setup() {
   [ "${#DOCKER_RUN_ARGS[@]}" -eq 0 ]
 }
 
+@test "_init_defaults: _SSH_AGENT_APPROVED initialised to 0" {
+  # _SSH_AGENT_APPROVED is listed in the # Writes block; verify it is reset.
+  _SSH_AGENT_APPROVED=99
+  _init_defaults
+  [ "${_SSH_AGENT_APPROVED}" -eq 0 ]
+}
+
+@test "_init_defaults: _SSH_AGENT_APPROVED reset to 0 on second call" {
+  _init_defaults
+  _SSH_AGENT_APPROVED=1
+  _init_defaults
+  [ "${_SSH_AGENT_APPROVED}" -eq 0 ]
+}
+
 # ── _parse_cli_flags (sourced — asserts globals directly) ──────────────────────
 
 @test "_parse_cli_flags: no args — mode=auto, name=faradai, CMD_ARGS empty" {
@@ -594,6 +608,48 @@ time.sleep(5)
   kill "${_spid}" 2>/dev/null || true
 }
 
+# ── _handle_ssh_agent_forwarding → _append_credential_mount_args (ordering) ───
+#
+# Integration guard for the temporal dependency documented in both function
+# headers: _SSH_AGENT_APPROVED must be set by _handle_ssh_agent_forwarding
+# before _append_credential_mount_args reads it to build the socket mount.
+
+@test "_handle_ssh_agent_forwarding → _append_credential_mount_args: approved socket is mounted" {
+  _setup_canon
+  local sock="${BATS_TEST_TMPDIR}/ssh-order-$$.sock"
+  python3 -c "
+import socket, time
+s = socket.socket(socket.AF_UNIX)
+s.bind('${sock}')
+s.listen(1)
+time.sleep(5)
+" &
+  local _spid=$!
+  sleep 0.1
+
+  export FARADAI_ENABLE_SSH_AGENT=1 FARADAI_TRUST_SSH_AGENT=1
+  export SSH_AUTH_SOCK="${sock}"
+
+  _handle_ssh_agent_forwarding
+  _append_credential_mount_args
+
+  kill "${_spid}" 2>/dev/null || true
+
+  [ "${_SSH_AGENT_APPROVED}" -eq 1 ]
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"/ssh-agent"* ]]
+}
+
+@test "_handle_ssh_agent_forwarding → _append_credential_mount_args: denied agent leaves socket unmounted" {
+  # _SSH_AGENT_APPROVED=0 after _handle_ssh_agent_forwarding (no socket) means
+  # _append_credential_mount_args must not add the SSH socket mount.
+  _setup_canon
+  export FARADAI_ENABLE_SSH_AGENT=0
+  _handle_ssh_agent_forwarding
+  _append_credential_mount_args
+  [ "${_SSH_AGENT_APPROVED}" -eq 0 ]
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *"/ssh-agent"* ]]
+}
+
 # ── _append_runtime_flags ──────────────────────────────────────────────────────
 
 @test "_append_runtime_flags: adds -it" {
@@ -909,6 +965,33 @@ time.sleep(5)
   export FARADAI_WORKDIR="${BATS_TEST_TMPDIR}"
   _build_docker_run_args
   _args_include "--network"
+}
+
+@test "_build_docker_run_args: all -v mounts appear before faradai:latest" {
+  # Docker parses positionally: every -v must be in the OPTIONS section,
+  # before IMAGE. A -v after the image would be treated as CMD_ARGS.
+  _setup_canon; _setup_fake_home
+  _build_docker_run_args
+  local image_idx i
+  image_idx="$(_arg_index "faradai:latest")"
+  for i in "${!DOCKER_RUN_ARGS[@]}"; do
+    if [[ "${DOCKER_RUN_ARGS[$i]}" == "-v" ]] && (( i >= image_idx )); then
+      echo "Found -v at index $i, at or after faradai:latest at ${image_idx}" >&2
+      return 1
+    fi
+  done
+}
+
+@test "_build_docker_run_args: FARADAI_DOCKER_ARGS extra flags appear before faradai:latest" {
+  # User-supplied extra flags (validated by _append_extra_docker_args) must
+  # land in the OPTIONS section, not after IMAGE where they become CMD_ARGS.
+  _setup_canon; _setup_fake_home
+  export FARADAI_DOCKER_ARGS="--env FOO=bar"
+  _build_docker_run_args
+  local image_idx env_idx
+  image_idx="$(_arg_index "faradai:latest")"
+  env_idx="$(_arg_index "--env")"
+  (( env_idx < image_idx ))
 }
 
 # ── _prepare_container_name_for_create ────────────────────────────────────────
