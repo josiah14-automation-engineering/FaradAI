@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-_FARADAI_VERSION="0.2.0-alpha.1"
+_FARADAI_VERSION="0.3.0-alpha.1"
 _UNINSTALL_BIN="${_UNINSTALL_BIN:-/usr/local/bin/uninstall-faradai}"
 
 # ── functions ──────────────────────────────────────────────────────────────────

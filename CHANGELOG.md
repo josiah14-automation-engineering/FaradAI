@@ -4,8 +4,6 @@ All notable user-facing changes to FaradAI are documented here. For architectura
 
 ---
 
-## [Unreleased]
-
 ## [0.1.0-alpha.1] — 2026-05-22
 
 Initial release. Core features:
@@ -40,30 +38,39 @@ Initial release. Core features:
 - Source-vs-execute guard enables function-level unit testing without docker mock limitations
 - 142 tests (was 43): added `test/sourced.bats` for function-level phase coverage
 
-## [Unreleased]
+## [0.3.0-alpha.1] — 2026-05-27
 
 ### Breaking change
 
 - `uninstall-faradai` now targets containers by label (`dev.faradai.managed=true`) instead of name pattern. Containers created before this change are not visible to uninstall; remove them manually with `docker rm -f faradai`.
 
-### Internal
+### Added
 
-- All `docker run` invocations now receive `--label dev.faradai.managed=true` and `--label dev.faradai.container-name=<name>` for reliable lifecycle scoping
+- `jq` 1.7.1 included in the container image — available to agents and scripts running inside the container
+
+### Security
+
+- `faradai update` (tagged path) now prints a trust notice after tag verification passes: the update is verified by git tag over HTTPS but carries no GPG signature; you are trusting GitHub's infrastructure and the repository maintainer. GPG signing deferred until the formal release process is established ([DECISIONLOG](DECISIONLOG.md#2026-05-27--faradai-update-integrity-model-trust-warning-gpg-signing-deferred-44)) (#44)
+- `faradai update --branch` gains two upfront warnings: branch tips are mutable; no integrity check is performed on branch updates (#44)
 
 ### Fixed
 
 - `build.sh`: `dirname "$0"` replaced with `dirname "$(readlink -f "$0")"` so invoking via symlink uses the script's real directory as the Docker build context
-
-### Fixed (continued)
-
 - `_ensure_host_dirs`: now creates `~/.claude` before Docker runs, preventing Docker from creating it with root ownership on first use (#87)
 - `faradai uninstall`: existence check before exec; prints a manual cleanup hint if binary is missing (#69)
 - `faradai -v`: now prints version like `--version`/`version`; `faradai -a -v` also resolves to version (#61)
 - `install.sh`: Docker presence and daemon-running preflight checks before invoking `build.sh` (#86)
+- ARM64 support: ShellCheck binary download in the Dockerfile now uses `TARGETARCH` to select the correct archive (`amd64` → `x86_64`, `arm64` → `aarch64`); ARM64 builds previously silently downloaded the x86_64 binary (#74)
+- `FARADAI_DEBUG=1` now prints an explicit warning to stderr before enabling `set -x`, stating that expanded shell variables may contain secrets or API keys and that AI agents reading this output will transmit it to their upstream inference servers (#45)
 
 ### Internal
 
+- All `docker run` invocations now receive `--label dev.faradai.managed=true` and `--label dev.faradai.container-name=<name>` for reliable lifecycle scoping
 - `_debug_print_plan`: comment documenting intentional `set -x` / `_exec_docker_run` ordering dependency (#89)
 - `_UNINSTALL_BIN` injectable via env for testing; defaults to `/usr/local/bin/uninstall-faradai`
 - Dockerfile: `base` stage extracts shared snapshot-repo configuration; `builder` and `final` both inherit `FROM base` ([DECISIONLOG](DECISIONLOG.md#2026-05-26-1713-utc--shared-base-stage-for-snapshot-configuration-83)) (#83)
 - Dockerfile: `ARG SNAPSHOT_DATE=20260522T000000Z` pins Ubuntu apt sources to a single point-in-time snapshot for reproducible builds; all existing exact package version pins preserved ([DECISIONLOG](DECISIONLOG.md#2026-05-25-1713-utc--apt-reproducibility-strategy-ubuntu-snapshot-repos-83)) (#83)
+- `test/libs/bats-core` added as git submodule at v1.9.0; tests now run via `test/libs/bats-core/bin/bats` (#62)
+- 217 tests (was 142): new coverage for `_verify_update_tag`, `_resolve_latest_tag`, `_resolve_container_state` failure paths, `_debug_print_plan`, `_init_defaults` reset, SSH agent forwarding pipeline integration, and `_build_docker_run_args` OPTIONS-before-IMAGE ordering
+
+## [Unreleased]
