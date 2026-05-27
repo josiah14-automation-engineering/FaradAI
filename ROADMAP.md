@@ -83,6 +83,11 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 - [#72](https://github.com/josiah14-automation-engineering/FaradAI/issues/72) — refactor: document `DOCKER_RUN_ARGS` mutation chain across `_append_*` functions
 - [#73](https://github.com/josiah14-automation-engineering/FaradAI/issues/73) — refactor: document intentional `set -x` scope in `_debug_print_plan`
 
+### Security
+
+- [#90](https://github.com/josiah14-automation-engineering/FaradAI/issues/90) — security: `install.sh` copies scripts to `/usr/local/bin` without post-clone integrity check
+- [#91](https://github.com/josiah14-automation-engineering/FaradAI/issues/91) — security: `FARADAI_ALLOW_PUBLISH` / `FARADAI_ALLOW_DEVICE` enable host access with no secondary confirmation
+
 ### Features
 
 - [#85](https://github.com/josiah14-automation-engineering/FaradAI/issues/85) — enhancement: per-user agent configuration — scope credential warnings to declared agents
