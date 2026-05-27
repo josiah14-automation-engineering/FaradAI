@@ -87,6 +87,7 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 
 - [#90](https://github.com/josiah14-automation-engineering/FaradAI/issues/90) — security: `install.sh` copies scripts to `/usr/local/bin` without post-clone integrity check
 - [#91](https://github.com/josiah14-automation-engineering/FaradAI/issues/91) — security: `FARADAI_ALLOW_PUBLISH` / `FARADAI_ALLOW_DEVICE` enable host access with no secondary confirmation
+- [#92](https://github.com/josiah14-automation-engineering/FaradAI/issues/92) — Spike: investigate LSM/seccomp hardening (SELinux, AppArmor, seccomp profiles)
 
 ### Features
 
