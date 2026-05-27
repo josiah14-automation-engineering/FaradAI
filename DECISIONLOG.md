@@ -163,3 +163,15 @@ GPG-signed tags are deferred until the formal release process is established. Wh
 **Alternatives considered:**
 - Jail-based isolation on FreeBSD without a container runtime — would require a completely separate implementation path and diverge from the OCI image model. Rejected.
 - Keep "out of scope" for FreeBSD — rejected now that a clear path exists.
+
+---
+
+## 2026-05-27 04:47 UTC — Migration implementation strategy: Josiah writes all code; Emacs Systems IDE first (#65)
+
+**Version scope:** Go/Nu/Podman migration
+
+**Decision:** Josiah will implement the entire Go/Nushell/Podman migration (#65) by hand. AI assistance is scoped to guidance, concept explanation, design discussion, documentation interpretation, code review, issue tracking, and test running. AI will not produce Go, Nushell, or Podman integration code.
+
+The first milestone before any migration code is written is setting up a Systems IDE in Emacs configured for Go and Nushell development (LSP, tooling, etc.).
+
+**Why:** The migration is an intentional learning vehicle. Josiah wants to build working knowledge of Go, Nushell, and Podman through hands-on implementation rather than accepting generated code. Passive review of AI-produced code would not serve that goal.
