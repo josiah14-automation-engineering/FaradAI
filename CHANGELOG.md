@@ -62,6 +62,7 @@ Initial release. Core features:
 - `install.sh`: Docker presence and daemon-running preflight checks before invoking `build.sh` (#86)
 - ARM64 support: ShellCheck binary download in the Dockerfile now uses `TARGETARCH` to select the correct archive (`amd64` → `x86_64`, `arm64` → `aarch64`); ARM64 builds previously silently downloaded the x86_64 binary (#74)
 - `FARADAI_DEBUG=1` now prints an explicit warning to stderr before enabling `set -x`, stating that expanded shell variables may contain secrets or API keys and that AI agents reading this output will transmit it to their upstream inference servers (#45)
+- `_append_credential_mount_args`: `~/.claude/.credentials.json` overlay now uses `_maybe_mount_file` instead of an unconditional `-v` mount. When the file is absent Docker was silently creating it as a directory, corrupting the host path and preventing Claude from ever writing credentials there
 
 ### Internal
 
