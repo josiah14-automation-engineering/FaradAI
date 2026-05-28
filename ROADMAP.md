@@ -18,70 +18,15 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ## Now
 
-Bug fixes, polish, and infrastructure items to complete before the Go/Nushell migration.
+### Features
 
-### Bug fixes & polish
-
-- [#87](https://github.com/josiah14-automation-engineering/FaradAI/issues/87) — BUG: `_ensure_host_dirs` does not create `~/.claude` — Docker may create it with root ownership on first run
-- [#86](https://github.com/josiah14-automation-engineering/FaradAI/issues/86) — `install.sh`: add Docker preflight check (docker present + daemon running)
-- [#89](https://github.com/josiah14-automation-engineering/FaradAI/issues/89) — refactor: document `_debug_print_plan` / `set -x` ordering dependency
-- [#69](https://github.com/josiah14-automation-engineering/FaradAI/issues/69) — BUG: `faradai uninstall` hardcodes `/usr/local/bin/uninstall-faradai` with no existence check
-- [#61](https://github.com/josiah14-automation-engineering/FaradAI/issues/61) — `-v` short flag unhandled — falls through to docker; `-a -v` creates `faradai--v`
-- [#42](https://github.com/josiah14-automation-engineering/FaradAI/issues/42) — `_build_extra_docker_args` rejects combined short-flag forms
-- [#63](https://github.com/josiah14-automation-engineering/FaradAI/issues/63) — `build.sh` uses `dirname "$0"` which doesn't resolve symlinks
-- [#82](https://github.com/josiah14-automation-engineering/FaradAI/issues/82) — enhancement: add managed container label (`dev.faradai.managed=true`) to scope uninstall
-- [#56](https://github.com/josiah14-automation-engineering/FaradAI/issues/56) — `entrypoint.sh` `_usage()` doesn't reflect current command surface
-
-### Needs discussion first
-
-- [#83](https://github.com/josiah14-automation-engineering/FaradAI/issues/83) — enhancement: reconsider exact apt package pin strategy — pins without snapshot repos are brittle
-
-### Infrastructure
-
-- [#62](https://github.com/josiah14-automation-engineering/FaradAI/issues/62) — Pin bats-core to a specific tag in CI
-
----
-
-## Later
-
-Lower-priority items to complete before the Go/Nushell migration.
-
-### Docs
-
-- [#84](https://github.com/josiah14-automation-engineering/FaradAI/issues/84) — docs: security boundary wording, macOS Bash/SSH-agent caveats, logs/status with `--rm`, npm claim
-- [#64](https://github.com/josiah14-automation-engineering/FaradAI/issues/64) — Docs: tmux in image list, URL casing, credentials `:ro` note
-- [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47) — SSH agent forwarding not covered in Troubleshooting section
-- [#46](https://github.com/josiah14-automation-engineering/FaradAI/issues/46) — `uninstall-faradai`: document user data that persists after uninstall
-- [#48](https://github.com/josiah14-automation-engineering/FaradAI/issues/48) — No CHANGELOG.md
-
-### Other
-
-- [#45](https://github.com/josiah14-automation-engineering/FaradAI/issues/45) — `FARADAI_DEBUG=1` leaks environment variables to stderr without warning
-- [#49](https://github.com/josiah14-automation-engineering/FaradAI/issues/49) — Docker mock in tests too permissive — can't test failure paths
-- [#55](https://github.com/josiah14-automation-engineering/FaradAI/issues/55) — `USER=$(whoami)` spawns unnecessary subshell — prefer `USER=${USER:-$(whoami)}`
-- [#44](https://github.com/josiah14-automation-engineering/FaradAI/issues/44) — `faradai update`: no integrity verification on cloned `install.sh`
-- git mock for `_resolve_latest_tag` / `_verify_update_tag` unit tests (no issue yet)
+- [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Nushell/Podman migration
 
 ---
 
 ## After Go/Nushell Migration
 
 Items deferred until after #65. The Bash-specific refactors may become irrelevant entirely.
-
-### Migration acceptance criteria
-
-- [#88](https://github.com/josiah14-automation-engineering/FaradAI/issues/88) — Track Bash alpha review findings as Go/Nu migration acceptance criteria (P1–P5 checklist)
-
-### Portability
-
-- [#74](https://github.com/josiah14-automation-engineering/FaradAI/issues/74) — BUG: Dockerfile ShellCheck download hardcoded to `linux.x86_64` — breaks ARM64 builds
-
-### Refactoring (may become irrelevant)
-
-- [#70](https://github.com/josiah14-automation-engineering/FaradAI/issues/70) — refactor: document globals written by `_parse_cli_flags`
-- [#71](https://github.com/josiah14-automation-engineering/FaradAI/issues/71) — refactor: enforce or document SSH agent / credential mount temporal dependency
-- [#72](https://github.com/josiah14-automation-engineering/FaradAI/issues/72) — refactor: document `DOCKER_RUN_ARGS` mutation chain across `_append_*` functions
-- [#73](https://github.com/josiah14-automation-engineering/FaradAI/issues/73) — refactor: document intentional `set -x` scope in `_debug_print_plan`
 
 ### Security
 
@@ -110,6 +55,14 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 ## Won't Fix
 
 - [#75](https://github.com/josiah14-automation-engineering/FaradAI/issues/75) — BUG: Bash 4+ syntax (`${var,,}`) breaks macOS default Bash 3.2 — portability addressed by Go/Nushell migration (#65)
+
+---
+
+## R&D
+
+Educational explorations that don't directly advance the project but may surface ideas worth pulling in.
+
+- [#40](https://github.com/josiah14-automation-engineering/FaradAI/issues/40) — Migrate complex Bash scripting to Rash — paradigm-first design exploration; may motivate targeted changes (e.g. miniKanren in select places) but not a direct project deliverable
 
 ---
 
