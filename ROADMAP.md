@@ -18,6 +18,10 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ## Now
 
+### Maintenance
+
+- [#96](https://github.com/josiah14-automation-engineering/FaradAI/issues/96) — chore: bump Claude Code 2.1.143 → 2.1.167
+
 ### Features
 
 - [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Nushell/Podman migration
