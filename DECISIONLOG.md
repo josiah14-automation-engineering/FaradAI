@@ -175,3 +175,17 @@ GPG-signed tags are deferred until the formal release process is established. Wh
 The first milestone before any migration code is written is setting up a Systems IDE in Emacs configured for Go and Nushell development (LSP, tooling, etc.).
 
 **Why:** The migration is an intentional learning vehicle. Josiah wants to build working knowledge of Go, Nushell, and Podman through hands-on implementation rather than accepting generated code. Passive review of AI-produced code would not serve that goal.
+
+---
+
+## 2026-06-13 — Tool install layer split and ARG-based version pinning (#96)
+
+**Version scope:** 0.3.0-alpha.2
+
+**Decision:** Split the single `RUN` layer that installed both aider and Claude Code into two separate `RUN` layers — aider first, Claude Code second. Promote both version pins from inline literals to `ARG AIDER_VERSION` and `ARG CLAUDE_CODE_VERSION` declared in the `builder` stage.
+
+**Why:** Claude Code releases significantly more frequently than aider. With a combined layer, any Claude Code version bump invalidates the entire layer and forces a full aider reinstall on every rebuild. The split ensures the aider layer stays cached across Claude Code updates. The ARG promotion moves both version pins to a single, obvious location at the top of the `builder` stage, eliminating the need to grep the install commands to find what's pinned.
+
+**Alternatives considered:**
+- Keep combined layer, accept reinstall cost — rejected; the aider install is slow and there is no reason to pay that cost for unrelated Claude Code bumps.
+- ARGs only, no layer split — would improve discoverability but not build time; both changes together solve the full problem.

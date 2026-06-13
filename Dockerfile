@@ -21,6 +21,8 @@ FROM base AS builder
 ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
 ARG TARGETARCH
+ARG AIDER_VERSION=0.86.2
+ARG CLAUDE_CODE_VERSION=2.1.177
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -49,11 +51,12 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && mkdir -p /home/${USERNAME}
 
 RUN npm config set prefix "/home/${USERNAME}/.local" \
- && npm install -g @anthropic-ai/claude-code@2.1.177 \
- && pipx install aider-chat==0.86.2 \
+ && pipx install aider-chat==${AIDER_VERSION} \
  && pipx runpip aider-chat cache purge \
+ && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} +
+
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm cache clean --force \
- && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} + \
  && rm -rf /home/${USERNAME}/.cache
 
 RUN case "${TARGETARCH:-amd64}" in \
