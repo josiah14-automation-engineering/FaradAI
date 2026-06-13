@@ -49,7 +49,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && mkdir -p /home/${USERNAME}
 
 RUN npm config set prefix "/home/${USERNAME}/.local" \
- && npm install -g @anthropic-ai/claude-code@2.1.143 \
+ && npm install -g @anthropic-ai/claude-code@2.1.177 \
  && pipx install aider-chat==0.86.2 \
  && pipx runpip aider-chat cache purge \
  && npm cache clean --force \
