@@ -75,6 +75,7 @@ Educational explorations that don't directly advance the project but may surface
 
 ## Planned
 
+- [#101](https://github.com/josiah14-automation-engineering/FaradAI/issues/101) — Spike: FOSS agent and self-hosted model backend ecosystem — investigation and integration path toward model-agnostic FaradAI (see also #97)
 - [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29) — Credential broker / proxy sidecar
 - [#30](https://github.com/josiah14-automation-engineering/FaradAI/issues/30) — Per-project policy / config support
 - [#31](https://github.com/josiah14-automation-engineering/FaradAI/issues/31) — Broker network mode (`FARADAI_NETWORK_MODE=broker`, depends on #29)
