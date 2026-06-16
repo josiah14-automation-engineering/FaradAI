@@ -55,6 +55,7 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 
 - [#57](https://github.com/josiah14-automation-engineering/FaradAI/issues/57) — `build.sh --network=host` gives build container full host network access (accepted tradeoff, documented)
 - [#58](https://github.com/josiah14-automation-engineering/FaradAI/issues/58) — Credential overlay `:ro` prevents writes but not reads (tracked via #29)
+- [#100](https://github.com/josiah14-automation-engineering/FaradAI/issues/100) — enhancement: broker-mediated Nix integration — stricter container policy, host-side gcroot management, IDE container `gcroots/auto` decision (v2 architecture; builds on #99's concluded spike)
 
 ---
 
