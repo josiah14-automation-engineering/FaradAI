@@ -74,4 +74,8 @@ Initial release. Core features:
 - `test/libs/bats-core` added as git submodule at v1.9.0; tests now run via `test/libs/bats-core/bin/bats` (#62)
 - 217 tests (was 142): new coverage for `_verify_update_tag`, `_resolve_latest_tag`, `_resolve_container_state` failure paths, `_debug_print_plan`, `_init_defaults` reset, SSH agent forwarding pipeline integration, and `_build_docker_run_args` OPTIONS-before-IMAGE ordering
 
-## [Unreleased]
+## [0.4.0-alpha.1] — 2026-06-16
+
+### Added
+
+- `FARADAI_MOUNT_NIX_STORE`: opt-in (default `0`) bind-mount of the host's `/nix` store, `~/.config/nix`, and `~/.local/state/nix`, enabling flake-defined devShells (e.g. `nix develop`) inside the container. `/nix/store`, `~/.config/nix`, `~/.local/state/nix`, and `/nix/var/nix/profiles` are read-only; the rest of `/nix/var/nix` (Nix's mutable bookkeeping — `db`, `gcroots`, `temproots`, `gc.lock`, …) is writable on top, which Nix requires for any store-touching operation including read-only `nix develop`. Store *contents* stay immutable regardless. The image ships a `~/.nix-profile` symlink and `PATH` entry that resolve into the host's store when mounted, so the container always uses the host's Nix version — no separate version pin to maintain ([DECISIONLOG](DECISIONLOG.md#2026-06-15-1526-utc--faradai-shares-the-hosts-nix-store-blast-radius-controlled-by-filesystem-permissions-not-nix-config-99), [2026-06-16](DECISIONLOG.md)) (#99)

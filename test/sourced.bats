@@ -907,6 +907,45 @@ time.sleep(5)
   [[ "${DOCKER_RUN_ARGS[*]}" == *"${FARADAI_WORKDIR}:${FARADAI_WORKDIR}"* ]]
 }
 
+# ── _append_nix_mount_args ───────────────────────────────────────────────────────
+
+@test "_append_nix_mount_args: FARADAI_MOUNT_NIX_STORE unset — no mounts added" {
+  _setup_canon
+  unset FARADAI_MOUNT_NIX_STORE  # don't inherit an ambient value (e.g. when run inside a nix-enabled FaradAI container)
+  _append_nix_mount_args
+  [ "${#DOCKER_RUN_ARGS[@]}" -eq 0 ]
+}
+
+@test "_append_nix_mount_args: FARADAI_MOUNT_NIX_STORE=0 — no mounts added" {
+  _setup_canon
+  export FARADAI_MOUNT_NIX_STORE=0
+  _append_nix_mount_args
+  [ "${#DOCKER_RUN_ARGS[@]}" -eq 0 ]
+}
+
+@test "_append_nix_mount_args: FARADAI_MOUNT_NIX_STORE=1 — /nix mounted read-only" {
+  _setup_canon
+  export FARADAI_MOUNT_NIX_STORE=1
+  _append_nix_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"/nix:/nix:ro"* ]]
+}
+
+@test "_append_nix_mount_args: FARADAI_MOUNT_NIX_STORE=1 — /nix/var/nix writable, profiles re-pinned read-only" {
+  _setup_canon
+  export FARADAI_MOUNT_NIX_STORE=1
+  _append_nix_mount_args
+  _arg_index "/nix/var/nix:/nix/var/nix" >/dev/null
+  _arg_index "/nix/var/nix/profiles:/nix/var/nix/profiles:ro" >/dev/null
+}
+
+@test "_append_nix_mount_args: FARADAI_MOUNT_NIX_STORE=1 — ~/.config/nix and ~/.local/state/nix mounted read-only" {
+  _setup_canon
+  export FARADAI_MOUNT_NIX_STORE=1
+  _append_nix_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.config/nix:/home/${USER}/.config/nix:ro"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.local/state/nix:/home/${USER}/.local/state/nix:ro"* ]]
+}
+
 # ── _append_extra_docker_args ──────────────────────────────────────────────────
 
 @test "_append_extra_docker_args: empty FARADAI_DOCKER_ARGS — DOCKER_RUN_ARGS unchanged" {

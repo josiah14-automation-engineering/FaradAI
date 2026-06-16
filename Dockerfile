@@ -132,6 +132,10 @@ COPY --from=builder --chown=${USER_UID}:${USER_GID} \
     /home/${USERNAME}/.local \
     /home/${USERNAME}/.local
 
+RUN ln -sf "/home/${USERNAME}/.local/state/nix/profiles/profile" "/home/${USERNAME}/.nix-profile"
+
+ENV PATH="/home/${USERNAME}/.nix-profile/bin:${PATH}"
+
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER ${USERNAME}

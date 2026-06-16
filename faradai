@@ -38,6 +38,7 @@ Environment variables:
   FARADAI_ENABLE_SSH_AGENT  Forward SSH agent socket when available (default: 1)
   FARADAI_TRUST_SSH_AGENT   Set to 1 to skip the SSH agent forwarding confirmation prompt (default: 0)
   FARADAI_MOUNT_SSH_DIR     Mount ~/.ssh read-only into the container (default: 0)
+  FARADAI_MOUNT_NIX_STORE   Mount the host's /nix store into the container (default: 0); see DECISIONLOG #99 for the read-only/read-write split
   FARADAI_DOCKER_ARGS       Extra flags appended to docker run (always: --env/-e, --label/-l, --hostname; opt-in: --device, --publish/-p)
   FARADAI_ALLOW_DEVICE      Set to 1 to permit --device in FARADAI_DOCKER_ARGS (opens host hardware to container)
   FARADAI_ALLOW_PUBLISH     Set to 1 to permit --publish/-p in FARADAI_DOCKER_ARGS (exposes container ports to host)
@@ -798,6 +799,39 @@ _append_project_mount_args() {
   DOCKER_RUN_ARGS+=(-v "${FARADAI_WORKDIR}:${FARADAI_WORKDIR}")
 }
 
+# _append_nix_mount_args
+#
+# Reads:  HOME, USER, FARADAI_MOUNT_NIX_STORE
+# Writes: DOCKER_RUN_ARGS
+#
+# Opt-in (default 0). When enabled, bind-mounts the host's /nix store so the
+# container can use flake-defined devShells built on the host. /nix/store,
+# ~/.config/nix, and ~/.local/state/nix are read-only; all of /nix/var/nix
+# (Nix's mutable bookkeeping: db, gcroots, temproots, gc.lock, builds, ...) is
+# read-write on top of the read-only /nix, EXCEPT /nix/var/nix/profiles, which
+# is re-pinned read-only (nested mount). Nix takes a lock on gc.lock and writes
+# temproots for *any* store-touching operation, including read-only
+# `nix develop`; the earlier db/gcroots/temproots-only split missed gc.lock,
+# which lives directly under /nix/var/nix and so fell on the read-only mount,
+# producing "acquiring/releasing lock: Bad file descriptor" (EROFS open -> fd
+# -1 -> lock on -1 -> EBADF). profiles stays read-only because nix develop
+# never writes it (dev-shell roots go under gcroots/auto), and a writable
+# profiles dir is the one part of the mutable state a compromised container
+# could use to tamper with the HOST's profile generations. The read-only
+# /nix/store is the load-bearing control: store *contents* stay immutable
+# regardless of writable bookkeeping. See DECISIONLOG #99.
+_append_nix_mount_args() {
+  [[ "${FARADAI_MOUNT_NIX_STORE:-0}" == "1" ]] || return 0
+
+  DOCKER_RUN_ARGS+=(
+    -v /nix:/nix:ro
+    -v /nix/var/nix:/nix/var/nix
+    -v /nix/var/nix/profiles:/nix/var/nix/profiles:ro
+    -v "${HOME}/.config/nix:/home/${USER}/.config/nix:ro"
+    -v "${HOME}/.local/state/nix:/home/${USER}/.local/state/nix:ro"
+  )
+}
+
 # _append_extra_docker_args
 #
 # Reads:  FARADAI_DOCKER_ARGS, FARADAI_ALLOW_DEVICE, FARADAI_ALLOW_PUBLISH
@@ -864,6 +898,7 @@ _build_docker_run_args() {
   _append_network_args
   _append_credential_mount_args
   _append_project_mount_args
+  _append_nix_mount_args
   _append_extra_docker_args
   DOCKER_RUN_ARGS+=(-w "${FARADAI_WORKDIR}" faradai:latest "$@")
 }

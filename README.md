@@ -129,6 +129,12 @@ By default, `faradai` auto-detects whether a container named `faradai` is alread
 | `FARADAI_TRUST_SSH_AGENT` | `0` | set to `1` to skip the SSH agent forwarding confirmation prompt |
 | `FARADAI_MOUNT_SSH_DIR` | `0` | mount `~/.ssh` read-only into the container |
 
+**Nix**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FARADAI_MOUNT_NIX_STORE` | `0` | bind-mount the host's `/nix` store, `~/.config/nix`, and `~/.local/state/nix` into the container, enabling flake-defined devShells (`nix develop`, `nix build`, ...) |
+
 **Docker extras**
 
 | Variable | Default | Description |
@@ -160,11 +166,16 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
 | `$SSH_AUTH_SOCK` | `/ssh-agent` | read-only | SSH agent socket — forwarded automatically when present; set `FARADAI_ENABLE_SSH_AGENT=0` to disable |
 | `~/.ssh/` | `~/.ssh/` | read-only | SSH key files — opt-in via `FARADAI_MOUNT_SSH_DIR=1`; not needed when agent forwarding is active |
+| `/nix` | `/nix` | read-only, except `/nix/var/nix` (read-write) with `/nix/var/nix/profiles` re-pinned read-only | Nix store — opt-in via `FARADAI_MOUNT_NIX_STORE=1` |
+| `~/.config/nix/` | `~/.config/nix/` | read-only | Nix config — opt-in via `FARADAI_MOUNT_NIX_STORE=1` |
+| `~/.local/state/nix/` | `~/.local/state/nix/` | read-only | Nix profile/state — opt-in via `FARADAI_MOUNT_NIX_STORE=1` |
 | `$FARADAI_WORKDIR` | `$FARADAI_WORKDIR` | read-write | Your project files — the primary work surface |
 
 The working directory defaults to the current directory (`pwd`) at launch time, mounted at the same path inside the container so all project-relative references, memory files, and tooling behave identically inside and outside.
 
 > **SSH agent forwarding:** When `$SSH_AUTH_SOCK` is set and points to a live socket, FaradAI forwards it into the container at `/ssh-agent`. Common Git hosts (GitHub, GitLab, Bitbucket) are pre-registered in the image's `known_hosts`. Set `FARADAI_ENABLE_SSH_AGENT=0` to disable, or `FARADAI_MOUNT_SSH_DIR=1` to use key files directly instead.
+
+> **Nix store sharing:** When `FARADAI_MOUNT_NIX_STORE=1`, the image's `~/.nix-profile` symlink resolves into the host's mounted `/nix/var/nix/profiles`, putting the host's `nix` on `PATH` — the container has no Nix of its own, so its Nix version always matches the host's. `/nix/store` is read-only (blocks both adding and removing store paths from inside the container). All of `/nix/var/nix` — Nix's mutable bookkeeping (`db`, `gcroots`, `temproots`, `gc.lock`, ...) — is writable, because Nix locks and writes there for *any* store-touching operation, including read-only `nix develop`; only `/nix/var/nix/profiles` is re-pinned read-only, so a compromised container can't tamper with the host's profile generations. Store *contents* stay immutable regardless. See [DECISIONLOG](DECISIONLOG.md#2026-06-15-1526-utc--faradai-shares-the-hosts-nix-store-blast-radius-controlled-by-filesystem-permissions-not-nix-config-99) for the full rationale.
 
 #### Host SSH agent setup
 

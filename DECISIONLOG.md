@@ -189,3 +189,81 @@ The first milestone before any migration code is written is setting up a Systems
 **Alternatives considered:**
 - Keep combined layer, accept reinstall cost — rejected; the aider install is slow and there is no reason to pay that cost for unrelated Claude Code bumps.
 - ARGs only, no layer split — would improve discoverability but not build time; both changes together solve the full problem.
+
+---
+
+## 2026-06-13 16:48 UTC — OpenCode and Codex CLI prioritized for agent expansion; Cursor/Copilot deferred to remote-container spike (#97, #98)
+
+**Version scope:** post-0.3.0-alpha.2, roadmap planning
+
+**Decision:** OpenCode and Codex CLI are the next agents to add to FaradAI, bundled into a single ticket (#97). Cursor and GitHub Copilot — both IDE-centric agents — are deferred to a post-Go/Nu/Podman-migration spike (#98) investigating a Dev Containers-style remote development model.
+
+**Why:** OpenCode and Codex CLI are both terminal/CLI-based like Claude Code and aider, so they fit FaradAI's existing "agent in a box" container model with no architectural change — same install/version-pin pattern, same credential-mount approach. OpenCode is currently the most-adopted open-source coding agent; Codex CLI extends that reach to the OpenAI ecosystem. Both are comparatively trivial additions, so they're tracked together rather than as separate tickets. Cursor and Copilot are IDE-integrated; supporting them well would require running an extension host as a service and exposing a port for the host IDE to connect to (the Dev Containers model). That is a significant departure from FaradAI's current ephemeral, no-exposed-ports, terminal-in/terminal-out security posture — every defense-in-depth control in the README assumes that shape — and deserves its own design doc once the Podman migration (#65) settles what port-exposure and service-isolation options are actually available.
+
+**Alternatives considered:**
+- Pursue Cursor/Copilot support now via the Dev Containers model — rejected; the security posture shift is large enough to warrant its own design conversation, and Podman's rootless mode (landing via #65) changes the available options, so designing this against the current Docker setup risks rework.
+- Bundle OpenCode/Codex and the remote-container spike into the same milestone — rejected; both terminal agents are low-effort and unblocked today, while the spike is a multi-week investigation gated on #65. Splitting them lets the terminal-agent additions ship independently.
+- Separate tickets for OpenCode and Codex CLI — rejected; both are the same category of low-effort terminal-agent addition following an identical pattern, so tracking them together avoids ticket sprawl for near-duplicate work.
+
+---
+
+## 2026-06-15 15:26 UTC — FaradAI shares the host's `/nix` store; blast radius controlled by filesystem permissions, not Nix config (#99)
+
+**Version scope:** post-0.3.0-alpha.2, R&D — Nix integration spike (#99); implementation not yet started
+
+**Decision:** FaradAI bind-mounts the host's `/nix` (store, profile, config) rather than installing an independent Nix. Within that mount: `/nix/store`, `~/.config/nix`, and `~/.local/state/nix` are **read-only** for agent sessions; `/nix/var/nix/db`, `/nix/var/nix/gcroots`, and `/nix/var/nix/temproots` are **read-write**. Agent-session `nix` additionally defaults to `--offline`/restricted `substituters` as defense-in-depth. FaradAI pins a `NIX_VERSION` matching the host and the docker-emacs IDE containers, which already share `/nix` via the same bind-mount pattern.
+
+**Why — share, not an independent store:** The immediate driver is letting agent sessions use flake-defined devShells (e.g. project-pinned Mercury tooling) without a from-scratch Nix install in the FaradAI image. Sharing `/nix` gets store dedup with the host and IDE containers for free, at the cost of needing a coordinated `NIX_VERSION` across all consumers of the shared `/nix/var/nix/db`.
+
+**Why — `/nix/store` read-only is the load-bearing control, not `--offline`:** Filesystem permissions are OS-enforced and can't be routed around by passing different flags to `nix`. Read-only `/nix/store` blocks *both* directions of "agent changes installed software": `nix build` / `nix flake update` / anything needing a path not already present fails on `EROFS` (can't add), and `nix-collect-garbage`/GC can't unlink existing paths (can't remove). Read-only `~/.config/nix` additionally prevents the agent from editing `nix.conf` to remove the `--offline` default. `--offline` itself remains as a second layer.
+
+**Why `/nix/var/nix/db` is read-write, not read-only:** Nix's `db.sqlite` runs in WAL mode, and per SQLite's own docs a WAL-mode database "cannot generally be opened from read-only media because even ordinary reads... require recovery-like operations." Nix's `read-only`/`immutable=1` local-store setting doesn't close this for us: [NixOS/nix#2196](https://github.com/NixOS/nix/issues/2196) found the implementation incomplete (some `sqlite3_open_v2()` call sites still pass `SQLITE_OPEN_READWRITE` regardless of the flag) and was closed stale, unfixed; separately, `immutable=1` assumes no concurrent writers, which is false here (host + IDE containers actively write the same `db.sqlite`). This doesn't weaken the design — a writable-but-possibly-stale `db.sqlite` can't make files appear in or vanish from a read-only `/nix/store`, so it's inert from a "can the agent change installed software" standpoint. Full research trail in the #99 comments.
+
+**Alternatives considered:**
+- Independent Nix install for FaradAI (no store sharing) — rejected; loses dedup and reopens "does FaradAI need Nix at all" without answering it.
+- `--offline`/config-level restriction as the *primary* mechanism, no read-only mounts — rejected; it's agent-editable state (`nix.conf`), not an OS-enforced boundary. Demoted to defense-in-depth.
+- `/nix/var/nix/db` read-only via `immutable=1` — investigated and rejected per the WAL findings above. Closed line of inquiry, not a TODO.
+
+---
+
+## 2026-06-15 16:20 UTC — Nix mount toggle implemented host-mount-only; no baked-in Nix, no `NIX_VERSION` pin (#99)
+
+**Version scope:** post-0.3.0-alpha.2 — implements the 2026-06-15 15:26 UTC decision (#99)
+
+**Decision:** `FARADAI_MOUNT_NIX_STORE` (default `0`) gates a new `_append_nix_mount_args` function implementing the read-only/read-write split from the prior entry. The Dockerfile adds only a `~/.nix-profile -> ~/.local/state/nix/profiles/profile` symlink and a `PATH` entry — both dangling/harmless when the toggle is off. This refines the prior entry's assumption of a baked-in `nix-source` stage and a `NIX_VERSION` pin (mirroring docker-emacs systems-ide): **neither exists**. The container has no Nix of its own; `nix` is available only when the toggle is on, resolving entirely through the host's mounted `/nix/store` and profile chain.
+
+**Why — drop the baked-in stage and `NIX_VERSION` pin:** The shared `/nix/var/nix/db` (read-write per the prior entry's WAL finding) is written by whatever Nix version touches it. A baked-in FaradAI-image Nix that drifts from the host's version would mean *two* Nix versions writing the same `db.sqlite` — reintroducing the cross-version-db hazard the shared-store decision exists to dedup away, one layer down, plus an ongoing manual version-sync chore. Host-mount-only means there is only ever one Nix version touching the shared db (the host's), and the container tracks host Nix upgrades automatically with zero FaradAI-side changes.
+
+**Why — `NIX_CONFIG`/`--offline` defense-in-depth was evaluated and not added:** `NIX_CONFIG` is a plain environment variable; the agent's own shell can `export`/`unset` it for itself and anything it spawns, so it provides no enforcement — only a default that a deliberate agent bypasses trivially. The load-bearing controls are unchanged from the prior entry and already exist: `/nix/store:ro` (kernel `EROFS`, unaffected by any `nix.conf`/`NIX_CONFIG`/CLI combination) plus the existing `--cap-drop ALL` in `_append_security_args`, which already drops `CAP_SYS_ADMIN` and therefore blocks `mount -o remount,rw` from inside the container regardless of who's asking.
+
+**Why — per-tool (Nix-only) network restriction was not pursued:** Investigated whether `nix` specifically could be denied network access while other tools (git, npm, curl) retain it. Not expressible at the kernel level — network namespaces, netfilter `-m owner --uid-owner`, and seccomp all operate on process/UID/namespace, not "which binary," and every tool in a FaradAI session shares one UID and one network namespace. Giving `nix` its own UID or netns is a real architectural change, not in scope here. For the current use case this is moot: `nix develop` against an already-realized closure needs no network at all, so `FARADAI_NETWORK_MODE=none` is already compatible with the expected workflow. The general point — that per-tool network policy requires an application-layer mediator, not a kernel-layer one — is recorded on [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29) for the credential-broker migration, which is exactly that kind of mediator.
+
+**Alternatives considered:**
+- Baked-in `nix-source` stage (`FROM josiah14/nix:2.34.7-ubuntu-24.04 AS nix-source`) + `COPY --from=nix-source` of `/nix`, `~/.config/nix`, `~/.local/state/nix`, plus a `NIX_VERSION` ARG, mirroring docker-emacs systems-ide — drafted, then reverted. Rejected per the cross-version-db reasoning above.
+- `NIX_CONFIG="substituters =\ntarball-ttl = ..."` as a container-launch env var approximating `--offline` — investigated, not implemented; not an enforcement boundary, and the prior entry already correctly demotes `--offline` to defense-in-depth, which on inspection has no teeth here regardless of mechanism.
+- Per-tool network isolation for `nix` via netns/seccomp/UID separation — investigated, not pursued; disproportionate to the actual need and not kernel-expressible at single-tool granularity. Tracked on #29 instead.
+
+**Forward reference:** #29 (credential broker) gets a note on how agent-session `nix` fetch traffic fits the broker model if read-only `/nix` ever needs a controlled exception.
+
+---
+
+## 2026-06-16 — `nix develop` lock fix: all of `/nix/var/nix` read-write (profiles re-pinned read-only); `LD_PRELOAD` shim tried and removed (#99)
+
+**Version scope:** post-0.3.0-alpha.2 — fixes the read-only/read-write split from the 2026-06-15 entries (#99)
+
+**Decision:** `_append_nix_mount_args` now mounts **all of `/nix/var/nix` read-write** (replacing the `db`/`gcroots`/`temproots`-only sub-mounts), with **`/nix/var/nix/profiles` re-pinned read-only** via a nested bind-mount. `/nix/store`, `~/.config/nix`, and `~/.local/state/nix` stay read-only as before. The `LD_PRELOAD` C shim drafted to work around this (`nix-temproots-fix.{c,map}`, a `shim` build stage, a container-wide `ENV LD_PRELOAD`) is **removed** — it never addressed the real cause.
+
+**Root cause (misdiagnosed first):** `FARADAI_MOUNT_NIX_STORE=1 nix develop` failed with `error: acquiring/releasing lock: Bad file descriptor`. The prior split made `db`/`gcroots`/`temproots` writable but **missed `/nix/var/nix/gc.lock`**, which lives directly under `/nix/var/nix` and so fell on the read-only `/nix` mount. Nix opens `gc.lock` `O_RDWR|O_CREAT` for any store-touching operation (it locks GC out while registering temproots); on the read-only mount that `open` returns `EROFS`, leaving fd `-1`, and the subsequent lock on `-1` surfaces as `EBADF`. A low-overhead `LD_PRELOAD` trace (logging `open*` returns + errno) caught it: `open64(".../temproots/<pid>") = 11` (success) immediately followed by `open64(".../gc.lock") = -1 EROFS`. `strace` had hidden the failure — under it, evaluation hit cache and never re-copied the dirty flake tree, so `addTempRoot`/`gc.lock` was never reached (a caching Heisenbug, not a ptrace timing effect).
+
+**Why all of `/nix/var/nix`, not just `gc.lock`:** `/nix/var/nix` is Nix's mutable *bookkeeping* (db, gcroots, temproots, gc.lock, profiles, builds), distinct from package *contents* in `/nix/store`. Carving out individual sub-paths is what produced this bug (forgot one), and a single-file bind-mount of `gc.lock` is fragile — it binds to the current inode and breaks if Nix ever recreates the file. Mounting the whole state dir matches the real boundary ("Nix's mutable state is writable; the store is not") and is robust against future state files.
+
+**Why this does not weaken the load-bearing guarantee:** `/nix/store` stays read-only (kernel `EROFS`) and `--cap-drop ALL` blocks `mount -o remount,rw`, so store *contents* remain immutable — the agent still cannot add, alter, or delete installed software. Writable `/nix/var/nix` only exposes mutable bookkeeping; the worst a compromised container can do is corrupt shared Nix state → DoS/cleanup for host + sibling containers (recoverable via `nix-store --verify --repair` / `db.bak`), never code injection. Most of that risk (writable `db`) already existed.
+
+**Why `profiles` is re-pinned read-only:** it is the one part of `/nix/var/nix` a compromised container could use to tamper with the **host's** profile generations (redirecting them among already-built store paths). `nix develop` never writes `profiles` — dev-shell GC roots go under `gcroots/auto/` — so pinning it read-only costs nothing and removes that vector. Same bet #99 already makes with `~/.local/state/nix:ro`.
+
+**The shim detour (recorded so it isn't re-attempted):** before `gc.lock` was found, the failure was misattributed to a supposed Nix 2.34.x bug — opening `temproots` `O_RDONLY` then write-locking → `EBADF`. An `LD_PRELOAD` shim was built to flip `O_RDONLY→O_RDWR`, including glibc symbol-versioning (`.symver` + version script) so it would intercept `open64@GLIBC_2.2.5`. It never worked because the premise was false: `ctypes` probes proved this kernel accepts a write lock (`F_SETLK`, `F_OFD_SETLK`, `F_OFD_SETLKW`) on an `O_RDONLY` fd, and the real `temproots` open is already `O_RDWR`. No `open()` flag change can fix an `EROFS` open regardless. Removed entirely — dead code plus a container-wide `LD_PRELOAD` blast radius for zero benefit.
+
+**Alternatives considered:**
+- Forward the host `nix-daemon` socket into the container so container-`nix` writes via the host daemon — **rejected**; the daemon has write access to the real store, so this routes around the read-only `/nix/store` boundary entirely (Josiah caught this and pulled the plug). #99's whole premise is that the boundary is kernel-enforced, not delegated.
+- `LD_PRELOAD` `open`-flag shim — built, disproven, removed (above).
+- `gc.lock`-only writable file bind-mount (narrowest surface) — viable but fragile (inode rebind) and reopens whack-a-mole; rejected for the whole-dir mount with a `profiles` carve-out.

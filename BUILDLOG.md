@@ -1485,3 +1485,94 @@ Introduced `_maybe_mount_file <src> <dst> [<mode>]` — appends a `-v` mount onl
 ### Snapshot repo bootstrap: `ca-certificates` from live mirror (#83)
 
 The `base` stage installs `ca-certificates` from the default Ubuntu sources before switching apt to the snapshot URL. Standard ops/sec bootstrapping — the ubuntu:24.04 base image ships without `ca-certificates`, so HTTPS sources are unreachable until it is present. `ca-certificates` is intentionally not pulled from the snapshot: CA bundles need to be current (expired/revoked roots, newly added roots), so freezing them to a point-in-time snapshot would be actively wrong.
+
+---
+
+## Nix in the cage: a "Bad file descriptor" whodunit — 2026-06-16 (#99)
+
+> The BUILDLOG stopped tracking every change after 0.3.0-alpha.1; entries since are selective. This one is here on purpose — the debugging arc is a good story and a candidate blog post, so it's written as a narrative rather than a terse changelog line.
+
+### Setup
+
+With `FARADAI_MOUNT_NIX_STORE=1`, `nix develop` against the PPN95 flake died inside the container with:
+
+```
+error: acquiring/releasing lock: Bad file descriptor
+```
+
+The same flake, the same shared `/nix`, worked fine on the host. So: what does running inside the cage change, and why does a *lock*, of all things, come back `EBADF`?
+
+### Wrong theory #1 — "it's a Nix bug" (and the security tripwire)
+
+The error reads like a classic POSIX gotcha: open a file `O_RDONLY`, then ask for a write lock, and the kernel hands you `EBADF`. Plausible story: Nix opens a `temproots` GC-root file read-only and write-locks it. The tidy fix seemed to be forwarding the host's `nix-daemon` socket into the container so container-`nix` could lock via the host.
+
+**Josiah killed that immediately, and correctly:** the daemon can *write the real store*. Routing container operations through it would tunnel straight past the read-only `/nix/store` mount that the entire #99 design exists to enforce — it would have "worked" by quietly demolishing the security boundary. He also asked the question that should have slowed me down sooner: *"is this really a bug, or how Nix is supposed to behave?"*
+
+### Wrong theory #2 — the `LD_PRELOAD` shim (and a glibc rabbit hole)
+
+If the store mount must stay read-only, the workaround had to live in userspace. Plan: an `LD_PRELOAD` shim intercepting `open*` to flip `O_RDONLY → O_RDWR` for temproots lock files.
+
+This spawned its own sub-saga. The first shim did nothing — libnixstore imports *versioned* glibc symbols (`open64@GLIBC_2.2.5`), and an unversioned `LD_PRELOAD` symbol doesn't satisfy a versioned import; the loader skips it. Making interception actually happen meant `.symver` assembler directives, a linker version script declaring the `GLIBC_*` version nodes, and `dlvsym(RTLD_NEXT, …)` to fetch the real versioned symbol. A lot of machinery — and it still didn't fix the lock.
+
+### The disproof — `ctypes` says the premise is false
+
+Before iterating the shim a fourth time, I stopped theorizing and tested the actual claim on the actual kernel with a few lines of Python `ctypes`: open a temproots-style file `O_RDONLY`, then try to write-lock it every way Nix might.
+
+```
+O_RDONLY + flock(LOCK_EX)      -> 0  (ok)
+O_RDONLY + fcntl(F_SETLK)      -> 0  (ok)
+O_RDONLY + fcntl(F_OFD_SETLK)  -> 0  (ok)
+O_RDONLY + fcntl(F_OFD_SETLKW) -> 0  (ok)
+```
+
+All of them succeed. This kernel does **not** enforce the "fd must be writable for a write lock" rule. The whole `O_RDONLY` theory — and therefore the shim built on it — was dead. No `open()` flag change was ever going to matter.
+
+### The red herring — `strace` makes the bug vanish
+
+To see what Nix *actually* does, I reached for `strace` (added to the image as a temporary block; `--cap-drop ALL` was a worry, but a fork + `PTRACE_TRACEME` probe confirmed Docker's default seccomp permits `ptrace` for a child you spawned). Under strace:
+
+```
+openat(…/temproots/455320, O_RDWR|O_CREAT|O_CLOEXEC) = 10
+flock(10</…/temproots/455320>, LOCK_EX)              = 0
+exit=0
+```
+
+It *succeeded.* The temproots open was already `O_RDWR` (not `O_RDONLY` — second nail in the shim's coffin), the flock worked, and `nix develop` ran clean. A Heisenbug: the bug disappears under observation.
+
+The cause wasn't ptrace timing — it was caching. When Nix doesn't need to re-copy the dirty flake tree into the store, it never calls `addTempRoot`, never touches the lock path, and trivially succeeds. The strace run happened to hit cache.
+
+### The catch — the discarded shim becomes the right tool
+
+Here's the turn. `strace` was the *wrong* instrument precisely because it changed the outcome. What I needed was a tracer that *doesn't* perturb the run — and the shim, built on a wrong theory and useless as a fix, was perfect for it: an in-process `open*` interceptor with negligible overhead. I gutted the flag-flipping and made it log every `open*` call's path, flags, return value, and errno behind `NIX_SHIM_DEBUG=1`. With it loaded the failure reproduced (unlike under strace), and the log was unambiguous:
+
+```
+open64 …/temproots/476       flags=O_RDWR|O_CREAT|O_CLOEXEC  ret=11   (ok)
+open64 …/nix/var/nix/gc.lock  flags=O_RDWR|O_CREAT|O_CLOEXEC  ret=-1  errno=30 (Read-only file system)
+```
+
+### Root cause
+
+`temproots` was never the problem — it opens fine (fd 11). The very next call, on **`/nix/var/nix/gc.lock`**, fails with `EROFS`. `gc.lock` sits *directly* under `/nix/var/nix`, and the original mount split only carved out `db`, `gcroots`, and `temproots` as writable — so `gc.lock` landed on the read-only `/nix` mount. Nix opens it `O_RDWR|O_CREAT` for any store-touching operation; the read-only filesystem returns `EROFS`; Nix is left holding fd `-1`; and the lock on `-1` is what finally surfaces as `acquiring/releasing lock: Bad file descriptor`.
+
+Two layers of misleading signal had kept this hidden: the error *string* points at "lock," not "open" (the lock didn't fail — it inherited a `-1` fd), and Nix's own `-vvvv` log prints `acquiring write lock on "…/temproots/…"` immediately before dying — the last thing that *succeeded*, not the thing that failed.
+
+### Fix
+
+`_append_nix_mount_args` now mounts **all of `/nix/var/nix` read-write** (Nix's mutable bookkeeping is one unit; enumerating individual subdirs is exactly what dropped `gc.lock`), with **`/nix/var/nix/profiles` re-pinned read-only** via a nested bind-mount — **Josiah's refinement**: `nix develop` never writes `profiles`, and a writable `profiles` is the one part of the mutable state a compromised container could use to tamper with the *host's* profile generations. `/nix/store` stays read-only; store *contents* remain immutable, which is the guarantee that ever mattered. The shim, its build stage, the `LD_PRELOAD` env, and the temporary `strace` block are all removed. Security reasoning in DECISIONLOG (2026-06-16, #99).
+
+### Lessons (blog material)
+
+- **Read the error as a lead, not a verdict.** "acquiring/releasing lock: Bad file descriptor" is three steps downstream of the real event — a failed `open`. The lock didn't fail; it inherited a `-1` fd.
+- **Test the premise before building on it.** A 20-line `ctypes` probe would have killed the `O_RDONLY` theory — and the entire shim — on day one.
+- **The observer can erase the bug.** `strace` reshapes execution; here it dodged the failing code path entirely. Reach for the lowest-perturbation instrument that still *reproduces* the failure — which turned out to be the very shim I'd written for the wrong reason.
+- **A "precise" security carve-out had a hole.** Enumerating writable subpaths (`db`/`gcroots`/`temproots`) felt exact but silently omitted `gc.lock`. Modeling the boundary as "the *store* is immutable; its *bookkeeping* is not" is both more correct and more robust.
+
+### Verified (rebuilt image, fresh container)
+
+Confirmed end-to-end with `FARADAI_MOUNT_NIX_STORE=1`:
+
+- Mount layout in effect: `/nix` ro, `/nix/var/nix` rw, `/nix/var/nix/profiles` ro, config/state ro; `LD_PRELOAD` empty (shim gone); `gc.lock` now writable.
+- `nix develop <PPN95> -c true` → `exit=0` (the `EBADF` is gone).
+- The dev shell is genuinely usable, not just entered: `mmc` resolves to `/nix/store/8hnhk6d8w7gag0y7yc6mq5mlpvq6w3sp-mercury-22.01.8/bin/mmc` and `mmc --version` prints `Mercury Compiler, version 22.01.8`.
+- The `profiles`-read-only bet held — no `EROFS` pointing at `…/profiles/…`.
+- The read-only `/nix/store` boundary is confirmed intact and load-bearing: runs emit `error (ignored): creating directory "/nix/store/…": Read-only file system` — Nix trying to cache into the store, refused by the kernel, **degrading gracefully** rather than failing. Exactly the #99 guarantee: store contents immutable, workflow still works.
