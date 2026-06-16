@@ -1576,3 +1576,72 @@ Confirmed end-to-end with `FARADAI_MOUNT_NIX_STORE=1`:
 - The dev shell is genuinely usable, not just entered: `mmc` resolves to `/nix/store/8hnhk6d8w7gag0y7yc6mq5mlpvq6w3sp-mercury-22.01.8/bin/mmc` and `mmc --version` prints `Mercury Compiler, version 22.01.8`.
 - The `profiles`-read-only bet held — no `EROFS` pointing at `…/profiles/…`.
 - The read-only `/nix/store` boundary is confirmed intact and load-bearing: runs emit `error (ignored): creating directory "/nix/store/…": Read-only file system` — Nix trying to cache into the store, refused by the kernel, **degrading gracefully** rather than failing. Exactly the #99 guarantee: store contents immutable, workflow still works.
+
+---
+
+## The pattern leaves the cage: Nix mount strategy propagates to the Doom Emacs IDEs — 2026-06-16
+
+> Also a blog-post candidate. The #99 narrative is about *finding* the right mount split; this one is about what happens when a hard-won pattern gets applied somewhere else and reveals a new design gap.
+
+### The prior state
+
+The docker-emacs IDE launchers — mercury-ide's `host/logic-languages-ide` and systems-ide's `run.sh` — had been mounting the host Nix store since the 2026-06-15 session that first wired them up. The mounts were simple and unconditional:
+
+```bash
+-v /nix:/nix
+-v "${HOME}/.local/state/nix:..."
+-v "${HOME}/.config/nix:..."
+```
+
+Unconditional. No `:ro`. Three paths, no split. This was the "it works, ship it" state — the focus at the time was getting the shared store *functional*, and it was: `nix develop` worked, smoketests passed 7/7. The security nuance of the faradai DECISIONLOG #99 mount split simply hadn't been applied yet.
+
+### Bringing the pattern across
+
+The fix is mechanical once you have the pattern. Replace the three unconditional mounts with:
+
+```bash
+nix_mounts=()
+if [[ -d /nix ]] && [[ "${MOUNT_HOST_NIX:-1}" == "1" ]]; then
+  nix_mounts+=(
+    -v /nix:/nix:ro
+    -v /nix/var/nix:/nix/var/nix
+    -v /nix/var/nix/profiles:/nix/var/nix/profiles:ro
+    -v "${HOME}/.config/nix:...:ro"
+    -v "${HOME}/.local/state/nix:...:ro"
+  )
+fi
+```
+
+Five mounts instead of three. The `/nix/var/nix` rw override and the `profiles` re-pin are straight copies of `_append_nix_mount_args`. The Dockerfiles are untouched — the `nix-source` COPY stage keeps baking a full working `/nix` into the image regardless of what the launcher does.
+
+### The new gap the copy-paste exposed
+
+Applying the pattern mechanically raised a question that hadn't come up in faradai: **what if `/nix` exists on the host but is broken?**
+
+In faradai, `FARADAI_MOUNT_NIX_STORE` defaults to `0`. The host Nix mount is opt-in. You only turn it on when you know the host store is healthy. The guard `[[ -d /nix ]]` is therefore rarely, if ever, tested against a bad store.
+
+The IDE launchers are different. They auto-detect — the intent is that the IDEs *just work* with the host store when it's there. Auto-detection means the guard fires on anything that looks like a `/nix` directory, including a corrupt one, a half-upgraded one, a store that passed the SQLite schema version boundary mid-operation.
+
+`[[ -d /nix ]]` cannot distinguish healthy from sick. The directory exists in all cases.
+
+Josiah caught this gap directly: the baked-in store is exactly the fallback you want in that scenario, but you can't reach it if the sick host store always wins the auto-detection race. The fix is an escape hatch: `MOUNT_HOST_NIX=0` skips the host mounts entirely and falls back to the container's own store, without touching the host filesystem. A corrupted `/nix` doesn't need to be renamed, moved, or rebuilt before the IDE can be used.
+
+### What the baked-in store actually is
+
+This is worth naming explicitly, because the Dockerfile pattern makes it invisible at the launcher level.
+
+Both IDE Dockerfiles pull from `josiah14/nix:2.34.7-ubuntu-24.04` via a `nix-source` build stage and `COPY --from=nix-source` the entire `/nix` tree, `~/.config/nix`, `~/.local/state/nix`, and `~/.config/direnv` into the final image. The result is a container that has a complete, working Nix installation at the image layer — `nix`, `nil`, `direnv`, `nix-direnv`, `bats`, the whole profile. The container *can* run `nix develop` purely from its own store, with no host involvement.
+
+When the launcher mounts `/nix` from the host, Docker stacks the bind mount on top of the image layer. The image-layer `/nix` is still there; it's just shadowed. When no bind mount is active, the image layer wins, and the container runs on the version of Nix that was current when the image was built.
+
+This is a useful property that the unconditional-mount design had accidentally hidden: **the fallback was always there.** The conditional detection plus `MOUNT_HOST_NIX=0` just makes it reachable.
+
+### The mount progression, summarized
+
+| Stage | What the IDE launchers did | Status |
+|---|---|---|
+| Before 2026-06-15 | No host Nix mount; container used baked-in store | Slow (rebuild on every `nix develop`) |
+| 2026-06-15 | Unconditional `/nix`, state, config mounts (rw) | Fast; store write-unprotected |
+| 2026-06-16 | Conditional detection; #99 RO/RW split; `MOUNT_HOST_NIX=0` | Fast; store immutable; fallback reachable |
+
+The faradai `gc.lock` debugging arc provided both the correct mount topology and the understanding of *why* it's correct — the mutable bookkeeping must be writable, the store contents must not be. Neither the topology nor the reasoning had to be re-derived when porting the pattern to the IDEs. The hard work was done once, in the right place, and then carried across.
