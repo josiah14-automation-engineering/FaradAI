@@ -6,15 +6,18 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # ca-certificates is intentionally unpinned: the CA bundle must track current
 # trust anchors (expired/revoked/new roots), not a frozen snapshot point-in-time.
+# FaradAI's pinned packages use main or universe; omit restricted because the
+# Ubuntu Snapshot service can leave that metadata unavailable for hours.
 # hadolint ignore=DL3008
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && rm -f /etc/apt/sources.list.d/ubuntu.sources \
- && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble main restricted universe multiverse" > /etc/apt/sources.list \
- && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-updates main restricted universe multiverse" >> /etc/apt/sources.list \
- && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-security main restricted universe multiverse" >> /etc/apt/sources.list \
- && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble main universe multiverse" > /etc/apt/sources.list \
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-updates main universe multiverse" >> /etc/apt/sources.list \
+ && echo "deb https://snapshot.ubuntu.com/ubuntu/${SNAPSHOT_DATE} noble-security main universe multiverse" >> /etc/apt/sources.list \
+ && echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99snapshot \
+ && echo 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99snapshot
 
 FROM base AS builder
 
@@ -23,6 +26,7 @@ ARG SHELLCHECK_VERSION=v0.11.0
 ARG TARGETARCH
 ARG AIDER_VERSION=0.86.2
 ARG CLAUDE_CODE_VERSION=2.1.177
+ARG CODEX_VERSION=0.141.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -32,7 +36,7 @@ ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
 ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates=20240203 \
+    ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
     gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
@@ -54,6 +58,10 @@ RUN npm config set prefix "/home/${USERNAME}/.local" \
  && pipx install aider-chat==${AIDER_VERSION} \
  && pipx runpip aider-chat cache purge \
  && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} +
+
+RUN npm install -g @openai/codex@${CODEX_VERSION} \
+ && npm cache clean --force \
+ && rm -rf /home/${USERNAME}/.cache
 
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm cache clean --force \
@@ -84,7 +92,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates=20240203 \
+    ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
     gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
@@ -100,7 +108,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     bind9-dnsutils=1:9.18.39-0ubuntu0.24.04.5 \
-    gh=2.92.0 \
+    gh=2.95.0 \
     git=1:2.43.0-1ubuntu7.3 \
     iproute2=6.1.0-1ubuntu6.3 \
     iputils-ping=3:20240117-1ubuntu0.1 \
@@ -119,8 +127,8 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && rm -f /usr/share/keyrings/githubcli-archive-keyring.gpg \
  && rm -f /etc/apt/sources.list.d/github-cli.list \
  && rm -rf /var/lib/apt/lists/* \
- && userdel -r ubuntu 2>/dev/null || true \
- && groupdel ubuntu 2>/dev/null || true \
+ && { userdel -r ubuntu 2>/dev/null || true; } \
+ && { groupdel ubuntu 2>/dev/null || true; } \
  && groupadd --gid ${USER_GID} ${USERNAME} \
  && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
 
@@ -148,7 +156,7 @@ RUN mkdir -p "/home/${USERNAME}/.ssh" \
  && chmod 600 "/home/${USERNAME}/.ssh/known_hosts"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD claude --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
+    CMD claude --version > /dev/null 2>&1 && codex --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
 
 WORKDIR /home/${USERNAME}
 

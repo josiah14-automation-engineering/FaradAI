@@ -14,7 +14,7 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's access to the host filesystem, environment variables, and process tree to only what you explicitly grant — a hard bind-mount / namespace / cgroup boundary that is stronger than prompt constraints, configuration files, and behavioral guidelines, but weaker than full VM isolation. By default, the agent has full unrestricted outbound internet access.
 
-A Docker container for running CLI-based AI coding agents — Claude Code and aider currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
+A Docker container for running CLI-based AI coding agents — Claude Code, Codex, and aider currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
 
 ## Quickstart
 
@@ -47,6 +47,7 @@ macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot 
 
 - Docker
 - A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
+- A Codex login session on the host (`codex login` — file-based credentials live in `~/.codex/auth.json`)
 - An `~/.aider.conf.yml` on the host with your OpenRouter API key (optional — for aider; skipped if the file does not exist)
 
 ## Install
@@ -73,6 +74,7 @@ An optional argument selects which tool to launch:
 |---------|--------|
 | `faradai` | Claude Code (default) |
 | `faradai claude` | Claude Code; remaining args passed through (e.g. `--resume`) |
+| `faradai codex` | Codex; remaining args passed through (e.g. `--resume`) |
 | `faradai aider` | aider; remaining args passed through (e.g. `--no-git`) |
 | `faradai bash` | bare shell, useful for debugging |
 | `faradai logs` | stream container logs; remaining args passed to `docker logs` (e.g. `-f`); only useful while a container is running (containers exit with `--rm`) |
@@ -161,6 +163,7 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.claude/` | `~/.claude/` | read-write | Claude Code — settings, memory, conversation history |
 | `~/.claude/.credentials.json` | `~/.claude/.credentials.json` | read-only | Claude Code — OAuth token, overlaid `:ro` on top of the directory mount to protect it from writes |
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
+| `~/.codex/` | `~/.codex/` | read-write | Codex — login cache, configuration, sessions, and local state; requires file-based credential storage |
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
@@ -218,11 +221,23 @@ api-key: openrouter=<your-key>
 
 Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
 
+### Codex configuration
+
+FaradAI mounts `~/.codex/` read-write so Codex can reuse and refresh its login cache and retain local sessions. Configure Codex to use file-based credentials on the host; OS keyring credentials are not available inside the container:
+
+```toml
+# ~/.codex/config.toml
+cli_auth_credentials_store = "file"
+```
+
+Then sign in on the host with `codex login`. `~/.codex/auth.json` contains access tokens; treat the entire mounted directory as sensitive.
+
 ## What's in the image
 
 - Ubuntu 24.04
 - Node.js 22 — runtime for Claude Code (npm included; tools are pre-installed in the image)
 - Claude Code CLI (`claude`)
+- Codex CLI (`codex`)
 - aider (via pipx venv, pre-installed)
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
@@ -231,18 +246,19 @@ Use the model slug from OpenRouter's model directory. The `openrouter/` prefix i
 - tmux — terminal multiplexer; used internally for aider ↔ Claude handoff; available when shelling in
 - jq — JSON processor; useful for inspecting API responses and tool output inside the container
 - shellcheck — shell script linter; useful for validating scripts inside the container
-- `HEALTHCHECK` — verifies `claude` and `aider` are runnable every 30s; useful for orchestration environments
+- `HEALTHCHECK` — verifies `claude`, `codex`, and `aider` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
 
 ## Security model
 
-**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
+**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude` and `~/.codex`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
 
 **The Faraday cage is a filesystem, environment, and process boundary — plus the absence of the Docker socket.** Host processes are invisible inside the container (no `--pid=host`), and host environment variables do not leak in; everything in the container's environment was explicitly injected at launch. What the cage does not protect against: outbound network access is unrestricted (the agent can reach the internet freely — no egress filtering), and any secret passed as an environment variable is visible to the agent.
 
 Credentials are kept out of environment variables and injected as mounted files instead:
 
 - Claude Code: OAuth token in `~/.claude/.credentials.json` (`:ro` overlay)
+- Codex: access tokens and local state in `~/.codex/` (read-write)
 - Aider: API key in `~/.aider.conf.yml` (`:ro`)
 
 Any secret present as an environment variable is visible to the agent and will appear in tool output if commands like `env` are run. Prefer file-based credential delivery. If a key must be in the environment, scope it to a cost-limited key with a short rotation cycle.
@@ -250,6 +266,8 @@ Any secret present as an environment variable is visible to the agent and will a
 **The `:ro` overlay on `~/.claude/.credentials.json` is not a secrecy mechanism.** It prevents the agent from overwriting your OAuth token, but the agent can still read the file directly if instructed to. If it does, the token will be transmitted to the agent's upstream servers as part of the conversation context.
 
 **The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to the agent's upstream servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
+
+**The writable `~/.codex/` mount is not a secrecy mechanism.** It includes `auth.json` when file-based credential storage is enabled. Codex can read, modify, or delete its host state, including access tokens. This supports token refresh and session persistence; a credential broker is the intended longer-term containment mechanism.
 
 ### SSH agent forwarding
 
@@ -314,7 +332,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Future work
 
-The container pattern is not specific to Claude Code or aider — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
+The container pattern is not specific to Claude Code, Codex, or aider — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
 
 ## Testing
 
@@ -365,10 +383,11 @@ This removes all faradai containers, the image, and the installed binaries. The 
 |------|----------|
 | `~/.claude/` | Claude Code settings, memory, and conversation history |
 | `~/.claude.json` | Claude Code top-level config |
+| `~/.codex/` | Codex configuration, login cache, sessions, and local state |
 | `~/.config/gh/` | GitHub CLI auth tokens |
 | faradai source directory | Wherever you cloned the repo |
 
-**Updating pinned tool versions:** `@anthropic-ai/claude-code` and `aider-chat` are pinned in the Dockerfile. To update them, edit the version strings in the `RUN npm install` and `pipx install` lines and rebuild.
+**Updating pinned tool versions:** `@anthropic-ai/claude-code`, `@openai/codex`, and `aider-chat` are pinned in the Dockerfile. To update them, edit the version arguments and rebuild.
 
 ---
 

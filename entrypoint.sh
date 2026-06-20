@@ -8,6 +8,7 @@ Usage: faradai [COMMAND [ARGS...]]
 Commands (container-internal):
   (none)   Launch Claude Code (default)
   claude   Launch Claude Code; remaining args passed through
+  codex    Launch Codex; remaining args passed through
   aider    Launch aider; remaining args passed through
   bash     Open a bash shell
 
@@ -19,6 +20,9 @@ EOF
 case "${1:-claude}" in
   claude)
     exec claude "${@:2}"
+    ;;
+  codex)
+    exec codex "${@:2}"
     ;;
   aider)
     exec aider "${@:2}"

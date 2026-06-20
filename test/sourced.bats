@@ -106,6 +106,15 @@ setup() {
   [ "${#_CMD_ARGS[@]}" -eq 2 ]
 }
 
+@test "_parse_cli_flags: codex --resume — mode=auto, CMD_ARGS=(codex --resume)" {
+  _init_defaults
+  _parse_cli_flags codex --resume
+  [ "${_MODE}" = "auto" ]
+  [ "${_CMD_ARGS[0]}" = "codex" ]
+  [ "${_CMD_ARGS[1]}" = "--resume" ]
+  [ "${#_CMD_ARGS[@]}" -eq 2 ]
+}
+
 @test "_parse_cli_flags: -a bash --some-arg — attach mode, full CMD_ARGS preserved" {
   _init_defaults
   _parse_cli_flags -a bash --some-arg
@@ -350,9 +359,9 @@ _arg_index() {
 # satisfies _append_credential_mount_args without touching real home files.
 _setup_fake_home() {
   export HOME="${BATS_TEST_TMPDIR}/home"
-  mkdir -p "${HOME}/.claude" "${HOME}/.config/gh"
+  mkdir -p "${HOME}/.claude" "${HOME}/.codex" "${HOME}/.config/gh"
   touch "${HOME}/.claude/.credentials.json" "${HOME}/.claude.json" \
-        "${HOME}/.gitconfig"
+        "${HOME}/.codex/auth.json" "${HOME}/.gitconfig"
 }
 
 # _make_test_repo DIR TAG
@@ -766,6 +775,14 @@ time.sleep(5)
   [ -d "${HOME}/.claude" ]
 }
 
+@test "_ensure_host_dirs: creates ~/.codex when absent" {
+  export HOME="${BATS_TEST_TMPDIR}/fresh-codex-home-$$"
+  mkdir -p "${HOME}"
+  [ ! -d "${HOME}/.codex" ]
+  _ensure_host_dirs
+  [ -d "${HOME}/.codex" ]
+}
+
 @test "_ensure_host_dirs: creates ~/.config/gh when absent" {
   export HOME="${BATS_TEST_TMPDIR}/fresh-home-$$"
   mkdir -p "${HOME}"
@@ -813,6 +830,12 @@ time.sleep(5)
   _setup_canon; _append_credential_mount_args
   _args_include "-v"
   [[ "${DOCKER_RUN_ARGS[*]}" == *"/.claude:"* ]]
+}
+
+@test "_append_credential_mount_args: always mounts ~/.codex read-write" {
+  _setup_canon; _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.codex:/home/${USER}/.codex"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.codex:/home/${USER}/.codex:ro"* ]]
 }
 
 @test "_append_credential_mount_args: ~/.claude/.credentials.json present — mount included read-only" {
@@ -1002,6 +1025,16 @@ time.sleep(5)
   [ "${DOCKER_RUN_ARGS[${last_idx}]}" = "--resume" ]
 }
 
+@test "_build_docker_run_args: codex command and arguments follow faradai:latest" {
+  _setup_canon; _setup_fake_home
+  _build_docker_run_args codex --resume
+  local image_idx last_idx
+  image_idx="$(_arg_index "faradai:latest")"
+  last_idx=$(( ${#DOCKER_RUN_ARGS[@]} - 1 ))
+  [ "${DOCKER_RUN_ARGS[$(( image_idx + 1 ))]}" = "codex" ]
+  [ "${DOCKER_RUN_ARGS[${last_idx}]}" = "--resume" ]
+}
+
 @test "_build_docker_run_args: security flags always present" {
   _setup_canon; _setup_fake_home
   _build_docker_run_args
@@ -1152,7 +1185,7 @@ time.sleep(5)
   [[ "$output" != *"switching to"* ]]
 }
 
-@test "_preflight_credentials: both creds present, default target — returns 0 silently" {
+@test "_preflight_credentials: all credentials present, default target — returns 0 silently" {
   _setup_fake_home
   touch "${HOME}/.aider.conf.yml"
   _init_defaults
@@ -1166,6 +1199,16 @@ time.sleep(5)
   touch "${HOME}/.aider.conf.yml"
   _init_defaults
   _CMD_ARGS=("aider")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_preflight_credentials: all credentials present, boot codex — returns 0 silently" {
+  _setup_fake_home
+  touch "${HOME}/.aider.conf.yml"
+  _init_defaults
+  _CMD_ARGS=("codex")
   run _preflight_credentials
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -1191,6 +1234,16 @@ time.sleep(5)
   [[ "$output" == *"aider configuration not found"* ]]
 }
 
+@test "_preflight_credentials: codex credentials missing — warns even when booting claude" {
+  _setup_fake_home
+  rm "${HOME}/.codex/auth.json"
+  _init_defaults
+  _CMD_ARGS=("claude")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Codex credentials not found"* ]]
+}
+
 @test "_preflight_credentials: claude creds missing, non-interactive — dies" {
   run bash -c "
     source '${FARADAI}'
@@ -1198,6 +1251,19 @@ time.sleep(5)
     export HOME='${BATS_TEST_TMPDIR}/pc-ni-home'
     mkdir -p \"\${HOME}/.claude\"
     _CMD_ARGS=('claude')
+    _preflight_credentials
+  " < /dev/null
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"credentials missing"* ]]
+}
+
+@test "_preflight_credentials: codex credentials missing, non-interactive — dies" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-codex-ni-home'
+    mkdir -p \"\${HOME}/.codex\"
+    _CMD_ARGS=('codex')
     _preflight_credentials
   " < /dev/null
   [ "$status" -eq 1 ]
@@ -1268,6 +1334,24 @@ time.sleep(5)
   [ "$status" -eq 0 ]
   [[ "$output" == *"switching to claude"* ]]
   [[ "$output" == *"--no-git"* ]]
+  [[ "$output" == *"CMD:claude"* ]]
+}
+
+@test "_preflight_credentials: codex credentials missing, claude present, picks claude — switches and drops extra flags" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-codex-sw-home'
+    mkdir -p \"\${HOME}/.claude\" \"\${HOME}/.codex\"
+    touch \"\${HOME}/.claude/.credentials.json\"
+    _CMD_ARGS=('codex' '--resume')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switching to claude"* ]]
+  [[ "$output" == *"--resume"* ]]
   [[ "$output" == *"CMD:claude"* ]]
 }
 

@@ -19,6 +19,7 @@ Flags:
 Commands:
   (none)     Launch Claude Code (default)
   claude     Launch Claude Code; remaining args passed through (e.g. --resume)
+  codex      Launch Codex; remaining args passed through (e.g. --resume)
   aider      Launch aider; remaining args passed through (e.g. --no-git)
   bash       Open a bash shell inside the container
   logs       Stream container logs; remaining args passed to docker logs (e.g. -f)
@@ -482,13 +483,14 @@ _maybe_attach_existing() {
 # Reads:  HOME, _CMD_ARGS
 # Writes: _CMD_ARGS — may switch boot target and drop tool-specific flags
 #
-# Always warns if Claude credentials (~/.claude/.credentials.json) or aider
-# configuration (~/.aider.conf.yml) are absent — even when not booting into
-# the affected tool, to support agent-to-agent workflows.
+# Always warns if Claude credentials (~/.claude/.credentials.json), Codex
+# credentials (~/.codex/auth.json), or aider configuration (~/.aider.conf.yml)
+# are absent — even when not booting into the affected tool, to support
+# agent-to-agent workflows.
 #
 # Triggers an interactive recovery flow only when the missing credential
 # matches the boot target. Boot target defaults to 'claude' when _CMD_ARGS is
-# empty or its first token is not a recognised tool name ('aider').
+# empty or its first token is not a recognised tool name ('codex', 'aider').
 #
 # Recovery choices (via _prompt_choice):
 #   1) boot into the alternative tool (if its credentials are present)
@@ -502,15 +504,20 @@ _maybe_attach_existing() {
 # this phase runs.
 _preflight_credentials() {
   local claude_creds="${HOME}/.claude/.credentials.json"
+  local codex_creds="${HOME}/.codex/auth.json"
   local aider_conf="${HOME}/.aider.conf.yml"
-  local claude_ok=0 aider_ok=0
+  local claude_ok=0 codex_ok=0 aider_ok=0
 
   if [[ -f "${claude_creds}" ]]; then claude_ok=1; fi
+  if [[ -f "${codex_creds}" ]]; then codex_ok=1; fi
   if [[ -f "${aider_conf}" ]];  then aider_ok=1;  fi
 
   # Always warn about absent credentials (supports agent-to-agent workflows).
   if [[ "${claude_ok}" -eq 0 ]]; then
     echo "faradai: warning: Claude credentials not found (${claude_creds})" >&2
+  fi
+  if [[ "${codex_ok}" -eq 0 ]]; then
+    echo "faradai: warning: Codex credentials not found (${codex_creds})" >&2
   fi
   if [[ "${aider_ok}" -eq 0 ]]; then
     echo "faradai: warning: aider configuration not found (${aider_conf})" >&2
@@ -521,12 +528,16 @@ _preflight_credentials() {
   local boot_target
   case "${_CMD_ARGS[0]:-claude}" in
     claude) boot_target="claude" ;;
+    codex)  boot_target="codex"  ;;
     aider)  boot_target="aider"  ;;
     *)      return 0              ;;
   esac
 
   # Skip recovery if the boot target's credentials are present.
   if [[ "${boot_target}" == "claude" && "${claude_ok}" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ "${boot_target}" == "codex" && "${codex_ok}" -eq 1 ]]; then
     return 0
   fi
   if [[ "${boot_target}" == "aider" && "${aider_ok}" -eq 1 ]]; then
@@ -543,15 +554,20 @@ _preflight_credentials() {
     extra_flags=("${_CMD_ARGS[@]:1}")
   fi
 
-  # Build recovery choices: offer the alternative tool first if its creds exist.
+  # Build recovery choices from every alternative tool with credentials.
   local -a choices=()
-  local alt_tool=""
-  if [[ "${boot_target}" == "claude" && "${aider_ok}" -eq 1 ]]; then
-    alt_tool="aider"
-    choices+=("boot into aider instead")
-  elif [[ "${boot_target}" == "aider" && "${claude_ok}" -eq 1 ]]; then
-    alt_tool="claude"
+  local -a alt_tools=()
+  if [[ "${boot_target}" != "claude" && "${claude_ok}" -eq 1 ]]; then
+    alt_tools+=("claude")
     choices+=("boot into claude instead")
+  fi
+  if [[ "${boot_target}" != "codex" && "${codex_ok}" -eq 1 ]]; then
+    alt_tools+=("codex")
+    choices+=("boot into codex instead")
+  fi
+  if [[ "${boot_target}" != "aider" && "${aider_ok}" -eq 1 ]]; then
+    alt_tools+=("aider")
+    choices+=("boot into aider instead")
   fi
   choices+=("drop into bash to troubleshoot")
 
@@ -560,7 +576,8 @@ _preflight_credentials() {
     "faradai: '${boot_target}' credentials missing — choose an option:" \
     "${choices[@]}")
 
-  if [[ -n "${alt_tool}" && "${idx}" -eq 0 ]]; then
+  if (( idx < ${#alt_tools[@]} )); then
+    local alt_tool="${alt_tools[idx]}"
     if [[ "${#extra_flags[@]}" -gt 0 ]]; then
       echo "faradai: switching to ${alt_tool} (dropping tool-specific flags: ${extra_flags[*]})" >&2
     else
@@ -742,6 +759,7 @@ _append_network_args() {
 # Must run before _append_credential_mount_args.
 _ensure_host_dirs() {
   mkdir -p "${HOME}/.claude"
+  mkdir -p "${HOME}/.codex"
   mkdir -p "${HOME}/.config/gh"
 }
 
@@ -772,6 +790,7 @@ _maybe_mount_file() {
 _append_credential_mount_args() {
   DOCKER_RUN_ARGS+=(
     -v "${HOME}/.claude:/home/${USER}/.claude"
+    -v "${HOME}/.codex:/home/${USER}/.codex"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
   )
 
