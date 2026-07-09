@@ -74,6 +74,25 @@ Initial release. Core features:
 - `test/libs/bats-core` added as git submodule at v1.9.0; tests now run via `test/libs/bats-core/bin/bats` (#62)
 - 217 tests (was 142): new coverage for `_verify_update_tag`, `_resolve_latest_tag`, `_resolve_container_state` failure paths, `_debug_print_plan`, `_init_defaults` reset, SSH agent forwarding pipeline integration, and `_build_docker_run_args` OPTIONS-before-IMAGE ordering
 
+## [0.5.0-alpha.1] — 2026-07-09
+
+### Added
+
+- ARM64 (Apple Silicon / aarch64 Linux) is now a maintainer-tested platform — validated with a native build and smoke test on an M2 Mac running Asahi Linux. CI now builds and smoke-tests both `amd64` and `arm64` images on every push/PR.
+- OpenCode CLI (`opencode`) support, closing out #97 (the other half, Codex, shipped separately). New host prerequisite: `opencode auth login`, with credentials mounted read-write from `~/.local/share/opencode/`. Same dispatch/preflight-credentials/HEALTHCHECK treatment as Claude Code/Codex/aider.
+
+### Changed
+
+- Claude Code bumped `2.1.177` → `2.1.205`.
+
+### Fixed
+
+- `gh`: the `cli.github.com` apt repo only ever serves the latest release, silently breaking the `gh=X.Y.Z` version pin whenever upstream ships a new version — on every architecture, not just ARM64. `gh` is now installed from a pinned GitHub Releases `.deb` instead, restoring reproducibility; bumped `2.95.0` → `2.96.0` in the process ([DECISIONLOG](DECISIONLOG.md#2026-07-08-1530-utc--gh-installed-from-a-pinned-github-releases-deb-not-the-cligithubcom-apt-repo)).
+
+### Internal
+
+- `_preflight_credentials` refactored from four copy-pasted per-tool blocks into a single data-driven loop over a tool→credential-path table — adding OpenCode as a 4th tool would otherwise have meant a 5th round of copy-paste.
+
 ## [0.4.0-alpha.1] — 2026-06-16
 
 ### Added

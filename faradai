@@ -21,6 +21,7 @@ Commands:
   claude     Launch Claude Code; remaining args passed through (e.g. --resume)
   codex      Launch Codex; remaining args passed through (e.g. --resume)
   aider      Launch aider; remaining args passed through (e.g. --no-git)
+  opencode   Launch OpenCode; remaining args passed through
   bash       Open a bash shell inside the container
   logs       Stream container logs; remaining args passed to docker logs (e.g. -f)
   status     Show container state, image, and start time
@@ -483,19 +484,22 @@ _maybe_attach_existing() {
 # Reads:  HOME, _CMD_ARGS
 # Writes: _CMD_ARGS — may switch boot target and drop tool-specific flags
 #
-# Always warns if Claude credentials (~/.claude/.credentials.json), Codex
-# credentials (~/.codex/auth.json), or aider configuration (~/.aider.conf.yml)
-# are absent — even when not booting into the affected tool, to support
-# agent-to-agent workflows.
+# Always warns if any known tool's credentials are absent — even when not
+# booting into the affected tool, to support agent-to-agent workflows. The
+# _TOOL_ORDER / _TOOL_CREDENTIAL_PATH / _TOOL_CREDENTIAL_LABEL tables just
+# below are the single source of truth for which tools this function
+# knows about and where to find each one's credentials; adding a new tool
+# means adding one entry to each table, not touching the logic beneath
+# them. _TOOL_ORDER also fixes warning/recovery-choice display order.
 #
 # Triggers an interactive recovery flow only when the missing credential
-# matches the boot target. Boot target defaults to 'claude' when _CMD_ARGS is
-# empty or its first token is not a recognised tool name ('codex', 'aider').
+# matches the boot target. Boot target defaults to 'claude' when _CMD_ARGS
+# is empty or its first token doesn't name a tool in _TOOL_ORDER.
 #
 # Recovery choices (via _prompt_choice):
-#   1) boot into the alternative tool (if its credentials are present)
+#   1) boot into any other tool that has credentials
 #   2) drop into bash to troubleshoot
-# When neither tool's credentials are present, only bash is offered.
+# When no other tool has credentials, only bash is offered.
 #
 # When switching to the alternative tool, extra flags from _CMD_ARGS are
 # dropped (they are tool-specific) and a message names the discarded flags.
@@ -503,46 +507,43 @@ _maybe_attach_existing() {
 # Naturally skipped in attach mode: _maybe_attach_existing execs before
 # this phase runs.
 _preflight_credentials() {
-  local claude_creds="${HOME}/.claude/.credentials.json"
-  local codex_creds="${HOME}/.codex/auth.json"
-  local aider_conf="${HOME}/.aider.conf.yml"
-  local claude_ok=0 codex_ok=0 aider_ok=0
+  local -a _TOOL_ORDER=(claude codex aider opencode)
+  local -A _TOOL_CREDENTIAL_PATH=(
+    [claude]="${HOME}/.claude/.credentials.json"
+    [codex]="${HOME}/.codex/auth.json"
+    [aider]="${HOME}/.aider.conf.yml"
+    [opencode]="${HOME}/.local/share/opencode/auth.json"
+  )
+  # Distinct from the path table: aider's is a config file, not strictly
+  # "credentials", and capitalization varies (OpenCode) — kept as data
+  # rather than derived from the tool name, so the warning text stays
+  # accurate without special-casing any one tool in the logic below.
+  local -A _TOOL_CREDENTIAL_LABEL=(
+    [claude]="Claude credentials"
+    [codex]="Codex credentials"
+    [aider]="aider configuration"
+    [opencode]="OpenCode credentials"
+  )
 
-  if [[ -f "${claude_creds}" ]]; then claude_ok=1; fi
-  if [[ -f "${codex_creds}" ]]; then codex_ok=1; fi
-  if [[ -f "${aider_conf}" ]];  then aider_ok=1;  fi
-
-  # Always warn about absent credentials (supports agent-to-agent workflows).
-  if [[ "${claude_ok}" -eq 0 ]]; then
-    echo "faradai: warning: Claude credentials not found (${claude_creds})" >&2
-  fi
-  if [[ "${codex_ok}" -eq 0 ]]; then
-    echo "faradai: warning: Codex credentials not found (${codex_creds})" >&2
-  fi
-  if [[ "${aider_ok}" -eq 0 ]]; then
-    echo "faradai: warning: aider configuration not found (${aider_conf})" >&2
-  fi
+  local -A tool_ok=()
+  local tool
+  for tool in "${_TOOL_ORDER[@]}"; do
+    if [[ -f "${_TOOL_CREDENTIAL_PATH[${tool}]}" ]]; then
+      tool_ok[${tool}]=1
+    else
+      tool_ok[${tool}]=0
+      # Always warn about absent credentials (supports agent-to-agent workflows).
+      echo "faradai: warning: ${_TOOL_CREDENTIAL_LABEL[${tool}]} not found (${_TOOL_CREDENTIAL_PATH[${tool}]})" >&2
+    fi
+  done
 
   # Determine boot target. Return immediately for non-AI-tool targets (e.g.
   # bash) — no credential check needed when the user is booting a plain shell.
-  local boot_target
-  case "${_CMD_ARGS[0]:-claude}" in
-    claude) boot_target="claude" ;;
-    codex)  boot_target="codex"  ;;
-    aider)  boot_target="aider"  ;;
-    *)      return 0              ;;
-  esac
+  local boot_target="${_CMD_ARGS[0]:-claude}"
+  [[ -v "tool_ok[${boot_target}]" ]] || return 0
 
   # Skip recovery if the boot target's credentials are present.
-  if [[ "${boot_target}" == "claude" && "${claude_ok}" -eq 1 ]]; then
-    return 0
-  fi
-  if [[ "${boot_target}" == "codex" && "${codex_ok}" -eq 1 ]]; then
-    return 0
-  fi
-  if [[ "${boot_target}" == "aider" && "${aider_ok}" -eq 1 ]]; then
-    return 0
-  fi
+  [[ "${tool_ok[${boot_target}]}" -eq 1 ]] && return 0
 
   # Boot target's credentials are missing — enter interactive recovery.
   _is_interactive \
@@ -557,18 +558,12 @@ _preflight_credentials() {
   # Build recovery choices from every alternative tool with credentials.
   local -a choices=()
   local -a alt_tools=()
-  if [[ "${boot_target}" != "claude" && "${claude_ok}" -eq 1 ]]; then
-    alt_tools+=("claude")
-    choices+=("boot into claude instead")
-  fi
-  if [[ "${boot_target}" != "codex" && "${codex_ok}" -eq 1 ]]; then
-    alt_tools+=("codex")
-    choices+=("boot into codex instead")
-  fi
-  if [[ "${boot_target}" != "aider" && "${aider_ok}" -eq 1 ]]; then
-    alt_tools+=("aider")
-    choices+=("boot into aider instead")
-  fi
+  for tool in "${_TOOL_ORDER[@]}"; do
+    if [[ "${tool}" != "${boot_target}" && "${tool_ok[${tool}]}" -eq 1 ]]; then
+      alt_tools+=("${tool}")
+      choices+=("boot into ${tool} instead")
+    fi
+  done
   choices+=("drop into bash to troubleshoot")
 
   local idx
@@ -761,6 +756,7 @@ _ensure_host_dirs() {
   mkdir -p "${HOME}/.claude"
   mkdir -p "${HOME}/.codex"
   mkdir -p "${HOME}/.config/gh"
+  mkdir -p "${HOME}/.local/share/opencode"
 }
 
 # _maybe_mount_file
@@ -792,6 +788,7 @@ _append_credential_mount_args() {
     -v "${HOME}/.claude:/home/${USER}/.claude"
     -v "${HOME}/.codex:/home/${USER}/.codex"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
+    -v "${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode"
   )
 
   _maybe_mount_file "${HOME}/.claude/.credentials.json" \

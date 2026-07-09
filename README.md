@@ -14,7 +14,7 @@
 
 AI coding assistants scan broadly by default. FaradAI constrains the agent's access to the host filesystem, environment variables, and process tree to only what you explicitly grant — a hard bind-mount / namespace / cgroup boundary that is stronger than prompt constraints, configuration files, and behavioral guidelines, but weaker than full VM isolation. By default, the agent has full unrestricted outbound internet access.
 
-A Docker container for running CLI-based AI coding agents — Claude Code, Codex, and aider currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
+A Docker container for running CLI-based AI coding agents — Claude Code, Codex, aider, and OpenCode currently, but the pattern is tool-agnostic. Named for the Faraday cage: FaradAI confines the agent's filesystem, environment, and process access to what you explicitly grant. See [Security model](#security-model) for the boundary details and tradeoffs.
 
 ## Quickstart
 
@@ -28,8 +28,8 @@ faradai                # launches Claude Code in a sandboxed container
 
 | Platform | Status |
 |---|---|
-| Linux | ✅ Primary — maintainer-tested |
-| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware); requires Bash 4+ and platform-specific SSH agent setup (see notes below) |
+| Linux | ✅ Primary — maintainer-tested (x86_64 and arm64, including Apple Silicon under Asahi Linux) |
+| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (the maintainer's Apple hardware runs Linux/Asahi, not macOS); requires Bash 4+ and platform-specific SSH agent setup (see notes below) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
 | FreeBSD | ⚠️ Planned — Docker unavailable on FreeBSD; targeted for the Go/Nushell migration via a switch from Docker to Podman (#65) |
@@ -49,6 +49,7 @@ macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot 
 - A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
 - A Codex login session on the host (`codex login` — file-based credentials live in `~/.codex/auth.json`)
 - An `~/.aider.conf.yml` on the host with your OpenRouter API key (optional — for aider; skipped if the file does not exist)
+- An OpenCode login session on the host (`opencode auth login` — credentials live in `~/.local/share/opencode/auth.json`)
 
 ## Install
 
@@ -165,6 +166,7 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
 | `~/.codex/` | `~/.codex/` | read-write | Codex — login cache, configuration, sessions, and local state; requires file-based credential storage |
 | `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
+| `~/.local/share/opencode/` | `~/.local/share/opencode/` | read-write | OpenCode — credentials (`auth.json`), session database, and local state |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
 | `$SSH_AUTH_SOCK` | `/ssh-agent` | read-only | SSH agent socket — forwarded automatically when present; set `FARADAI_ENABLE_SSH_AGENT=0` to disable |
@@ -232,6 +234,10 @@ cli_auth_credentials_store = "file"
 
 Then sign in on the host with `codex login`. `~/.codex/auth.json` contains access tokens; treat the entire mounted directory as sensitive.
 
+### OpenCode configuration
+
+FaradAI mounts `~/.local/share/opencode/` read-write so OpenCode can reuse its login and local session state. Sign in on the host with `opencode auth login` (see OpenCode's own docs for provider-specific steps, including [Zen](https://opencode.ai/docs/zen) if you use it). `~/.local/share/opencode/auth.json` contains access tokens; treat the entire mounted directory as sensitive.
+
 ## What's in the image
 
 - Ubuntu 24.04
@@ -239,6 +245,7 @@ Then sign in on the host with `codex login`. `~/.codex/auth.json` contains acces
 - Claude Code CLI (`claude`)
 - Codex CLI (`codex`)
 - aider (via pipx venv, pre-installed)
+- OpenCode CLI (`opencode`)
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
 - gh (GitHub CLI) — installed from GitHub's official apt repository
@@ -246,7 +253,7 @@ Then sign in on the host with `codex login`. `~/.codex/auth.json` contains acces
 - tmux — terminal multiplexer; used internally for aider ↔ Claude handoff; available when shelling in
 - jq — JSON processor; useful for inspecting API responses and tool output inside the container
 - shellcheck — shell script linter; useful for validating scripts inside the container
-- `HEALTHCHECK` — verifies `claude`, `codex`, and `aider` are runnable every 30s; useful for orchestration environments
+- `HEALTHCHECK` — verifies `claude`, `codex`, `aider`, and `opencode` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
 
 ## Security model
@@ -260,6 +267,7 @@ Credentials are kept out of environment variables and injected as mounted files 
 - Claude Code: OAuth token in `~/.claude/.credentials.json` (`:ro` overlay)
 - Codex: access tokens and local state in `~/.codex/` (read-write)
 - Aider: API key in `~/.aider.conf.yml` (`:ro`)
+- OpenCode: access tokens and local state in `~/.local/share/opencode/` (read-write)
 
 Any secret present as an environment variable is visible to the agent and will appear in tool output if commands like `env` are run. Prefer file-based credential delivery. If a key must be in the environment, scope it to a cost-limited key with a short rotation cycle.
 
@@ -332,7 +340,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Future work
 
-The container pattern is not specific to Claude Code, Codex, or aider — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
+The container pattern is not specific to Claude Code, Codex, aider, or OpenCode — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
 
 ## Testing
 

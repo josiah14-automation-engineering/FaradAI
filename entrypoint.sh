@@ -6,11 +6,12 @@ _usage() {
 Usage: faradai [COMMAND [ARGS...]]
 
 Commands (container-internal):
-  (none)   Launch Claude Code (default)
-  claude   Launch Claude Code; remaining args passed through
-  codex    Launch Codex; remaining args passed through
-  aider    Launch aider; remaining args passed through
-  bash     Open a bash shell
+  (none)     Launch Claude Code (default)
+  claude     Launch Claude Code; remaining args passed through
+  codex      Launch Codex; remaining args passed through
+  aider      Launch aider; remaining args passed through
+  opencode   Launch OpenCode; remaining args passed through
+  bash       Open a bash shell
 
 Host-side commands (logs, status, version, update, uninstall) must be
 run via the faradai CLI on the host, not through the container entrypoint.
@@ -26,6 +27,9 @@ case "${1:-claude}" in
     ;;
   aider)
     exec aider "${@:2}"
+    ;;
+  opencode)
+    exec opencode "${@:2}"
     ;;
   bash)
     exec bash "${@:2}"

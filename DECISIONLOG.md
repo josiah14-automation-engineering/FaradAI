@@ -267,3 +267,22 @@ The first milestone before any migration code is written is setting up a Systems
 - Forward the host `nix-daemon` socket into the container so container-`nix` writes via the host daemon — **rejected**; the daemon has write access to the real store, so this routes around the read-only `/nix/store` boundary entirely (Josiah caught this and pulled the plug). #99's whole premise is that the boundary is kernel-enforced, not delegated.
 - `LD_PRELOAD` `open`-flag shim — built, disproven, removed (above).
 - `gc.lock`-only writable file bind-mount (narrowest surface) — viable but fragile (inode rebind) and reopens whack-a-mole; rejected for the whole-dir mount with a `profiles` carve-out.
+
+---
+
+## 2026-07-08 15:30 UTC — `gh` installed from a pinned GitHub Releases `.deb`, not the `cli.github.com` apt repo
+
+**Version scope:** 0.5.0-alpha.1, discovered while validating the ARM64 build on native Apple Silicon (Asahi Linux) hardware
+
+**Decision:** `gh` is no longer installed via `apt-get install gh=${VERSION}` against the `cli.github.com/packages` apt repo. It is now downloaded directly from GitHub Releases as an architecture-specific `.deb` (`gh_${GH_VERSION}_linux_${TARGETARCH}.deb`) and installed with `apt-get install /tmp/gh.deb`. The version is promoted to `ARG GH_VERSION=2.96.0` (bumped from the previous `2.95.0` pin) in the `final` stage, alongside a new `ARG TARGETARCH` needed to select the right asset.
+
+**Why:** Rebuilding the image natively on `aarch64` surfaced `E: Version '2.95.0' for 'gh' was not found`. Investigation (`curl` against the repo's `dists/stable/main/binary-{amd64,arm64}/Packages` index) showed the `cli.github.com` apt repo only ever lists a single stanza per package — the current latest release — for both architectures. Unlike the Ubuntu snapshot repo (pinned to `SNAPSHOT_DATE`, preserves history by construction) or NodeSource (which keeps every past `nodejs` version in its index), there is no snapshot or archive for GitHub's `gh` apt repo: the moment upstream ships a new release, any exact-version pin against that repo stops resolving, on every architecture, not just the one being built at the time. This is a general staleness bug that happened to surface via the ARM64 rebuild, not an ARM64-specific issue.
+
+Before dropping the pin, confirmed there is a real alternative that preserves it: GitHub Releases retains every past release's per-architecture `.deb` asset indefinitely (verified `v2.95.0`'s `linux_amd64.deb` and `linux_arm64.deb` both still resolve to real ~13–15 MB downloads). Downloading the pinned `.deb` directly and installing it with `apt-get install <path>` (which still resolves `gh`'s runtime dependencies via the live apt lists already populated earlier in the same layer) restores exact reproducibility without depending on a repo that can't hold a version still.
+
+While making this change, bumped the pin to the current latest (`2.96.0`) rather than re-pinning the now-broken `2.95.0`, since there was no reason to ship a version already superseded upstream.
+
+**Alternatives considered:**
+- Drop the version pin and always install whatever `cli.github.com` currently serves — rejected; this trades a one-time fix for permanent loss of reproducibility (a rebuild six months from now would silently pick up whatever `gh` version is current then, with no record of what shipped). Not worth it once the Releases-`.deb` path was confirmed to work.
+- Mirror `gh` into the existing Ubuntu-snapshot-pinned apt sources — not possible; the snapshot service snapshots Ubuntu's own archive, not third-party vendor repos like GitHub's.
+- `dpkg -i` instead of `apt-get install <path>` — rejected; `apt-get install` on a local `.deb` still resolves and installs missing runtime dependencies from the configured repos, whereas `dpkg -i` would leave them unresolved and require a separate `apt-get install -f`.

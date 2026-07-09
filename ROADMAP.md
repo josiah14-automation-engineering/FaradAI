@@ -8,8 +8,8 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 | Platform | Status |
 |---|---|
-| Linux | ✅ Primary — maintainer-tested |
-| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (no Apple hardware) |
+| Linux | ✅ Primary — maintainer-tested (x86_64 and arm64) |
+| macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (maintainer's Apple hardware runs Linux/Asahi, not macOS) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
 | FreeBSD / OpenBSD | ❌ No Docker support |
@@ -25,7 +25,6 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 ### Features
 
 - [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Nushell/Podman migration
-- [#97](https://github.com/josiah14-automation-engineering/FaradAI/issues/97) — enhancement: add OpenCode and Codex CLI as supported agents
 
 ---
 

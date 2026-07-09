@@ -25,8 +25,9 @@ ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
 ARG TARGETARCH
 ARG AIDER_VERSION=0.86.2
-ARG CLAUDE_CODE_VERSION=2.1.177
+ARG CLAUDE_CODE_VERSION=2.1.205
 ARG CODEX_VERSION=0.141.0
+ARG OPENCODE_VERSION=1.17.18
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -67,6 +68,10 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
  && npm cache clean --force \
  && rm -rf /home/${USERNAME}/.cache
 
+RUN npm install -g opencode-ai@${OPENCODE_VERSION} \
+ && npm cache clean --force \
+ && rm -rf /home/${USERNAME}/.cache
+
 RUN case "${TARGETARCH:-amd64}" in \
       amd64) _SC_ARCH="x86_64" ;; \
       arm64) _SC_ARCH="aarch64" ;; \
@@ -80,6 +85,8 @@ FROM base AS final
 ARG USERNAME
 ARG USER_UID
 ARG USER_GID
+ARG TARGETARCH
+ARG GH_VERSION=2.96.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -91,6 +98,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Ubuntu 24.04 ships with a default 'ubuntu' user at UID/GID 1000 which clashes
 # with the host user if they share that UID/GID
+#
+# gh is installed differently from the packages below: unlike the Ubuntu
+# snapshot repo (pinned to SNAPSHOT_DATE) and NodeSource (which keeps every
+# past version), the cli.github.com apt repo's index only ever serves the
+# single latest release. A version-pinned `apt-get install gh=X` there breaks
+# the moment upstream cuts a new release out from under the pin (this is what
+# broke this build). GitHub Releases keeps every past version's per-arch .deb
+# indefinitely, so downloading the pinned .deb directly is the only way to
+# keep gh reproducible — see DECISIONLOG.
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
@@ -100,15 +116,9 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
  && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
     | tee /etc/apt/sources.list.d/nodesource.list > /dev/null \
- && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
- && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     bind9-dnsutils=1:9.18.39-0ubuntu0.24.04.5 \
-    gh=2.95.0 \
     git=1:2.43.0-1ubuntu7.3 \
     iproute2=6.1.0-1ubuntu6.3 \
     iputils-ping=3:20240117-1ubuntu0.1 \
@@ -122,10 +132,16 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     python3-venv=3.12.3-0ubuntu2.1 \
     tmux=3.4-1ubuntu0.1 \
     vim=2:9.1.0016-1ubuntu7.13 \
+ && case "${TARGETARCH:-amd64}" in \
+      amd64|arm64) : ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/gh.deb \
+    "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}.deb" \
+ && apt-get install -y /tmp/gh.deb \
+ && rm -f /tmp/gh.deb \
  && apt-get purge -y gnupg \
  && apt-get autoremove -y \
- && rm -f /usr/share/keyrings/githubcli-archive-keyring.gpg \
- && rm -f /etc/apt/sources.list.d/github-cli.list \
  && rm -rf /var/lib/apt/lists/* \
  && { userdel -r ubuntu 2>/dev/null || true; } \
  && { groupdel ubuntu 2>/dev/null || true; } \
@@ -156,7 +172,7 @@ RUN mkdir -p "/home/${USERNAME}/.ssh" \
  && chmod 600 "/home/${USERNAME}/.ssh/known_hosts"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD claude --version > /dev/null 2>&1 && codex --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1
+    CMD claude --version > /dev/null 2>&1 && codex --version > /dev/null 2>&1 && aider --version > /dev/null 2>&1 && opencode --version > /dev/null 2>&1
 
 WORKDIR /home/${USERNAME}
 

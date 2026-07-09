@@ -1645,3 +1645,51 @@ This is a useful property that the unconditional-mount design had accidentally h
 | 2026-06-16 | Conditional detection; #99 RO/RW split; `MOUNT_HOST_NIX=0` | Fast; store immutable; fallback reachable |
 
 The faradai `gc.lock` debugging arc provided both the correct mount topology and the understanding of *why* it's correct — the mutable bookkeeping must be writable, the store contents must not be. Neither the topology nor the reasoning had to be re-derived when porting the pattern to the IDEs. The hard work was done once, in the right place, and then carried across.
+
+---
+
+## ARM64 goes from "architecturally supported" to maintainer-tested — 2026-07-08 15:48 UTC (#74)
+
+### Setup
+
+Josiah moved to a new M2 machine running Asahi Linux — `aarch64` natively, not Docker Desktop on macOS. The README's platform table had never accounted for this shape: it only distinguished "Linux" (primary, maintainer-tested) from "macOS (Docker Desktop)" (best-effort, explicitly caveated as untested for lack of Apple hardware). Linux-on-Apple-Silicon didn't fit either row cleanly, and there was no CI coverage proving an ARM64 build actually worked — the `build` job in `ci.yml` only ever ran on `ubuntu-24.04` (amd64) GitHub-hosted runners.
+
+Scope agreed upfront: not just a local fix, but validating the build for real and then officially adopting ARM64 — docs and CI included.
+
+### What was already in place
+
+Before touching anything, an audit turned up more groundwork than expected:
+
+- The Dockerfile's `TARGETARCH` case statement (from #74, already logged in CHANGELOG 0.4.0-alpha.1) already mapped `arm64` → `aarch64` for the ShellCheck binary download.
+- `skopeo inspect --raw` against the pinned base image digest (`ubuntu:24.04@sha256:c4a8d55...`) confirmed it's a full multi-arch manifest list including `arm64v8` — safe as-is.
+- The versioned apt packages come from multi-arch repos (Ubuntu snapshot, NodeSource, GitHub CLI) — no reason to expect them to be arch-specific.
+- `faradai`, `install.sh`, `entrypoint.sh` are pure Bash/Docker wrappers with zero architecture-specific logic.
+
+So the working theory going in was that the build would mostly "just work," and the real gap was CI coverage and documentation, not the Dockerfile itself.
+
+### The build fails — but not where expected
+
+The first native `./build.sh` run on the M2 failed in the `final` stage:
+
+```
+E: Version '2.95.0' for 'gh' was not found
+```
+
+Not an ARM64 bug. Querying `cli.github.com/packages/dists/stable/main/binary-{amd64,arm64}/Packages` directly showed exactly one stanza for `gh` on *both* architectures — whatever the current latest release is (`2.96.0` at the time). Unlike the Ubuntu snapshot repo (pinned to `SNAPSHOT_DATE`, preserves history by construction) or NodeSource (which keeps every past `nodejs` version), GitHub's own apt repo for `gh` has no history at all: the moment upstream cuts a new release, any exact-version pin against it stops resolving, on every architecture. The Dockerfile's `gh=2.95.0` pin had simply aged out between when it was set and today — this would have broken an amd64 build today too, ARM64 had nothing to do with it.
+
+### Fix: pin via GitHub Releases instead of the apt repo
+
+Before giving up on pinning `gh` at all, checked whether GitHub Releases keeps old per-arch assets around. It does, indefinitely — `v2.95.0`'s `gh_2.95.0_linux_amd64.deb` and `gh_2.95.0_linux_arm64.deb` both still resolved to real ~13-15MB downloads. So the fix wasn't "always install latest," it was "stop asking the wrong repo for old versions": download the pinned `.deb` directly from GitHub Releases and `apt-get install` it locally, the same pattern the Dockerfile already used for ShellCheck. Added `ARG GH_VERSION` and `ARG TARGETARCH` to the `final` stage (only `builder` had `TARGETARCH` before), removed the now-unneeded `cli.github.com` keyring/sources-list setup, and — since a fresh pin was being set anyway — bumped to the current latest, `2.96.0`. Full reasoning in [DECISIONLOG](DECISIONLOG.md#2026-07-08-1530-utc--gh-installed-from-a-pinned-github-releases-deb-not-the-cligithubcom-apt-repo).
+
+### Verified
+
+Rebuilt clean on the M2 (`aarch64`, Docker Engine reporting `linux/arm64` natively — no QEMU involved). Second build succeeded end to end. Smoke-tested the same checks CI runs:
+
+- Tool availability: `claude`, `gh` (now `2.96.0`), `aider`, `shellcheck`, `git`, `python3`, `node` all resolve inside the container; `uname -m` reports `aarch64`.
+- Entrypoint dispatch: `faradai:latest claude --version`, `aider --version`, and `bash -c "echo ok"` all work.
+
+### Docs and CI
+
+With a verified build in hand: README and ROADMAP platform tables now read "Linux ✅ Primary — maintainer-tested (x86_64 and arm64, including Apple Silicon under Asahi Linux)," and the macOS row was corrected to be precise about *why* it's still untested — the maintainer's Apple hardware runs Linux, not macOS, so the Docker Desktop path remains unverified. `ci.yml`'s `build` job became a matrix over `{amd64: ubuntu-24.04, arm64: ubuntu-24.04-arm}` — both native GitHub-hosted runners (the repo is public, so ARM64 hosted runners are free; no QEMU emulation needed), with the `type=gha` cache scoped per-arch so the two legs don't clobber each other's cache entries.
+
+Released as `0.5.0-alpha.1` — Josiah's call: ARM64 support is the headline feature of the release (minor bump), with the `gh` pin fix folded in as a supporting fix rather than its own release.

@@ -364,6 +364,16 @@ _setup_fake_home() {
         "${HOME}/.codex/auth.json" "${HOME}/.gitconfig"
 }
 
+# _add_optional_tool_credentials
+# _setup_fake_home leaves aider and opencode absent by default (unlike
+# claude/codex); tests that want every tool considered configured call
+# this afterward instead of repeating the touch/mkdir pair per tool.
+_add_optional_tool_credentials() {
+  touch "${HOME}/.aider.conf.yml"
+  mkdir -p "${HOME}/.local/share/opencode"
+  touch "${HOME}/.local/share/opencode/auth.json"
+}
+
 # _make_test_repo DIR TAG
 # Creates a minimal git repo at DIR with one empty commit tagged TAG.
 # Uses lightweight tags (git tag, not git tag -a) — no peeled ^{} refs.
@@ -792,6 +802,14 @@ time.sleep(5)
   [ -d "${HOME}/.config/gh" ]
 }
 
+@test "_ensure_host_dirs: creates ~/.local/share/opencode when absent" {
+  export HOME="${BATS_TEST_TMPDIR}/fresh-opencode-home-$$"
+  mkdir -p "${HOME}"
+  [ ! -d "${HOME}/.local/share/opencode" ]
+  _ensure_host_dirs
+  [ -d "${HOME}/.local/share/opencode" ]
+}
+
 @test "_ensure_host_dirs: succeeds idempotently when dirs already exist" {
   export HOME="${BATS_TEST_TMPDIR}/existing-home-$$"
   mkdir -p "${HOME}/.claude" "${HOME}/.config/gh"
@@ -836,6 +854,12 @@ time.sleep(5)
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.codex:/home/${USER}/.codex"* ]]
   [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.codex:/home/${USER}/.codex:ro"* ]]
+}
+
+@test "_append_credential_mount_args: always mounts ~/.local/share/opencode read-write" {
+  _setup_canon; _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode:ro"* ]]
 }
 
 @test "_append_credential_mount_args: ~/.claude/.credentials.json present — mount included read-only" {
@@ -1187,7 +1211,7 @@ time.sleep(5)
 
 @test "_preflight_credentials: all credentials present, default target — returns 0 silently" {
   _setup_fake_home
-  touch "${HOME}/.aider.conf.yml"
+  _add_optional_tool_credentials
   _init_defaults
   run _preflight_credentials
   [ "$status" -eq 0 ]
@@ -1196,7 +1220,7 @@ time.sleep(5)
 
 @test "_preflight_credentials: both creds present, boot aider — returns 0 silently" {
   _setup_fake_home
-  touch "${HOME}/.aider.conf.yml"
+  _add_optional_tool_credentials
   _init_defaults
   _CMD_ARGS=("aider")
   run _preflight_credentials
@@ -1206,7 +1230,7 @@ time.sleep(5)
 
 @test "_preflight_credentials: all credentials present, boot codex — returns 0 silently" {
   _setup_fake_home
-  touch "${HOME}/.aider.conf.yml"
+  _add_optional_tool_credentials
   _init_defaults
   _CMD_ARGS=("codex")
   run _preflight_credentials
@@ -1242,6 +1266,33 @@ time.sleep(5)
   run _preflight_credentials
   [ "$status" -eq 0 ]
   [[ "$output" == *"Codex credentials not found"* ]]
+}
+
+@test "_preflight_credentials: OpenCode credentials missing — warns even when booting claude" {
+  _setup_fake_home
+  _init_defaults
+  _CMD_ARGS=("claude")
+  run _preflight_credentials
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OpenCode credentials not found"* ]]
+}
+
+@test "_preflight_credentials: claude creds missing, opencode present, picks opencode — switches and drops extra flags" {
+  run bash -c "
+    source '${FARADAI}'
+    _init_defaults
+    export HOME='${BATS_TEST_TMPDIR}/pc-sw-home-opencode'
+    mkdir -p \"\${HOME}/.claude\" \"\${HOME}/.local/share/opencode\"
+    touch \"\${HOME}/.local/share/opencode/auth.json\"
+    _CMD_ARGS=('claude' '--resume')
+    _is_interactive() { return 0; }
+    _preflight_credentials
+    printf 'CMD:%s\n' \"\${_CMD_ARGS[@]}\"
+  " <<< "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"switching to opencode"* ]]
+  [[ "$output" == *"--resume"* ]]
+  [[ "$output" == *"CMD:opencode"* ]]
 }
 
 @test "_preflight_credentials: claude creds missing, non-interactive — dies" {

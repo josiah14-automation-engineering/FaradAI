@@ -36,7 +36,16 @@ jobs:
 
   build:
     needs: [lint-shell, lint-dockerfile, unit-tests]
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        # Native runners for both architectures — no QEMU emulation, so build
+        # times and cache behavior match what a real build on that arch sees.
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -55,12 +64,15 @@ jobs:
           push: false
           load: true
           tags: faradai:ci
+          platforms: linux/${{ matrix.arch }}
           build-args: |
             USERNAME=testuser
             USER_UID=1001
             USER_GID=1001
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Scoped per-arch: an unscoped cache key would let the amd64 and
+          # arm64 legs overwrite each other's cache entries.
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
       - name: Smoke test (tool availability)
         run: |
