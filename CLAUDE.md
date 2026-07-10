@@ -10,7 +10,7 @@ You are running inside a Docker container. The filesystem boundary is intentiona
 
 **Do not inspect or modify system paths** — `/etc`, `/root`, `/usr`, `/var`, or anything outside `~/Development/personal` and `~/.claude`. The filesystem mount is the primary boundary; this is a second layer.
 
-**Do not read `~/.aider.conf.yml`.** This file contains an OpenRouter API key. Reading it — even incidentally during debugging — would transmit the key to Anthropic's servers as part of the conversation context.
+**Do not read `~/.aider/oauth-keys.env`.** This file contains an OpenRouter API key. Reading it — even incidentally during debugging — would transmit the key to Anthropic's servers as part of the conversation context. (`~/.aider.conf.yml` and `~/.aider.model.settings.yml` are plain model-selection config with no secrets in them — safe to read.)
 
 ## What is available
 

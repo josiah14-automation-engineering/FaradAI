@@ -369,7 +369,8 @@ _setup_fake_home() {
 # claude/codex); tests that want every tool considered configured call
 # this afterward instead of repeating the touch/mkdir pair per tool.
 _add_optional_tool_credentials() {
-  touch "${HOME}/.aider.conf.yml"
+  mkdir -p "${HOME}/.aider"
+  touch "${HOME}/.aider/oauth-keys.env"
   mkdir -p "${HOME}/.local/share/opencode"
   touch "${HOME}/.local/share/opencode/auth.json"
 }
@@ -810,6 +811,14 @@ time.sleep(5)
   [ -d "${HOME}/.local/share/opencode" ]
 }
 
+@test "_ensure_host_dirs: creates ~/.aider when absent" {
+  export HOME="${BATS_TEST_TMPDIR}/fresh-aider-home-$$"
+  mkdir -p "${HOME}"
+  [ ! -d "${HOME}/.aider" ]
+  _ensure_host_dirs
+  [ -d "${HOME}/.aider" ]
+}
+
 @test "_ensure_host_dirs: succeeds idempotently when dirs already exist" {
   export HOME="${BATS_TEST_TMPDIR}/existing-home-$$"
   mkdir -p "${HOME}/.claude" "${HOME}/.config/gh"
@@ -865,6 +874,20 @@ time.sleep(5)
 @test "_append_credential_mount_args: ~/.claude/.credentials.json present — mount included read-only" {
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *".credentials.json:ro"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.aider/oauth-keys.env present — mount included read-only" {
+  _setup_canon
+  mkdir -p "${HOME}/.aider"
+  touch "${HOME}/.aider/oauth-keys.env"
+  _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"oauth-keys.env:"*":ro"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.aider/oauth-keys.env absent — mount not included" {
+  _setup_canon
+  _append_credential_mount_args
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *"oauth-keys.env"* ]]
 }
 
 @test "_append_credential_mount_args: ~/.claude/.credentials.json absent — mount not included" {
@@ -933,6 +956,12 @@ time.sleep(5)
   ! [[ "${DOCKER_RUN_ARGS[*]}" == *"/.ssh:"* ]]
 }
 
+@test "_append_credential_mount_args: always mounts ~/.aider read-write" {
+  _setup_canon; _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.aider:/home/${USER}/.aider"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.aider:/home/${USER}/.aider:ro"* ]]
+}
+
 @test "_append_credential_mount_args: ~/.aider.conf.yml present — aider mount included" {
   _setup_canon
   touch "${HOME}/.aider.conf.yml"
@@ -944,6 +973,19 @@ time.sleep(5)
   _setup_canon   # _setup_fake_home does not create .aider.conf.yml
   _append_credential_mount_args
   ! [[ "${DOCKER_RUN_ARGS[*]}" == *".aider.conf.yml:"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.aider.model.settings.yml present — mount included read-only" {
+  _setup_canon
+  touch "${HOME}/.aider.model.settings.yml"
+  _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *".aider.model.settings.yml:"*":ro"* ]]
+}
+
+@test "_append_credential_mount_args: ~/.aider.model.settings.yml absent — mount not included" {
+  _setup_canon
+  _append_credential_mount_args
+  ! [[ "${DOCKER_RUN_ARGS[*]}" == *".aider.model.settings.yml:"* ]]
 }
 
 # ── _append_project_mount_args ─────────────────────────────────────────────────
@@ -1241,7 +1283,8 @@ time.sleep(5)
 @test "_preflight_credentials: claude creds missing — warns even when booting aider" {
   _setup_fake_home
   rm "${HOME}/.claude/.credentials.json"
-  touch "${HOME}/.aider.conf.yml"
+  mkdir -p "${HOME}/.aider"
+  touch "${HOME}/.aider/oauth-keys.env"
   _init_defaults
   _CMD_ARGS=("aider")
   run _preflight_credentials
@@ -1249,13 +1292,13 @@ time.sleep(5)
   [[ "$output" == *"Claude credentials not found"* ]]
 }
 
-@test "_preflight_credentials: aider conf missing — warns even when booting claude" {
+@test "_preflight_credentials: aider oauth key missing — warns even when booting claude" {
   _setup_fake_home
   _init_defaults
   _CMD_ARGS=("claude")
   run _preflight_credentials
   [ "$status" -eq 0 ]
-  [[ "$output" == *"aider configuration not found"* ]]
+  [[ "$output" == *"aider OpenRouter credentials not found"* ]]
 }
 
 @test "_preflight_credentials: codex credentials missing — warns even when booting claude" {
@@ -1326,8 +1369,8 @@ time.sleep(5)
     source '${FARADAI}'
     _init_defaults
     export HOME='${BATS_TEST_TMPDIR}/pc-sw-home'
-    mkdir -p \"\${HOME}/.claude\"
-    touch \"\${HOME}/.aider.conf.yml\"
+    mkdir -p \"\${HOME}/.claude\" \"\${HOME}/.aider\"
+    touch \"\${HOME}/.aider/oauth-keys.env\"
     _CMD_ARGS=('claude' '--resume')
     _is_interactive() { return 0; }
     _preflight_credentials
@@ -1344,8 +1387,8 @@ time.sleep(5)
     source '${FARADAI}'
     _init_defaults
     export HOME='${BATS_TEST_TMPDIR}/pc-bash-home'
-    mkdir -p \"\${HOME}/.claude\"
-    touch \"\${HOME}/.aider.conf.yml\"
+    mkdir -p \"\${HOME}/.claude\" \"\${HOME}/.aider\"
+    touch \"\${HOME}/.aider/oauth-keys.env\"
     _CMD_ARGS=('claude')
     _is_interactive() { return 0; }
     _preflight_credentials
@@ -1370,7 +1413,7 @@ time.sleep(5)
   [[ "$output" == *"CMD:bash"* ]]
 }
 
-@test "_preflight_credentials: aider conf missing, claude present, picks claude — switches and drops extra flags" {
+@test "_preflight_credentials: aider oauth key missing, claude present, picks claude — switches and drops extra flags" {
   run bash -c "
     source '${FARADAI}'
     _init_defaults

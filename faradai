@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-_FARADAI_VERSION="0.3.0-alpha.1"
+_FARADAI_VERSION="0.5.0-alpha.2"
 _UNINSTALL_BIN="${_UNINSTALL_BIN:-/usr/local/bin/uninstall-faradai}"
 
 # ── functions ──────────────────────────────────────────────────────────────────
@@ -511,17 +511,16 @@ _preflight_credentials() {
   local -A _TOOL_CREDENTIAL_PATH=(
     [claude]="${HOME}/.claude/.credentials.json"
     [codex]="${HOME}/.codex/auth.json"
-    [aider]="${HOME}/.aider.conf.yml"
+    [aider]="${HOME}/.aider/oauth-keys.env"
     [opencode]="${HOME}/.local/share/opencode/auth.json"
   )
-  # Distinct from the path table: aider's is a config file, not strictly
-  # "credentials", and capitalization varies (OpenCode) — kept as data
-  # rather than derived from the tool name, so the warning text stays
-  # accurate without special-casing any one tool in the logic below.
+  # Capitalization varies (OpenCode) -- kept as data rather than derived
+  # from the tool name, so the warning text stays accurate without
+  # special-casing any one tool in the logic below.
   local -A _TOOL_CREDENTIAL_LABEL=(
     [claude]="Claude credentials"
     [codex]="Codex credentials"
-    [aider]="aider configuration"
+    [aider]="aider OpenRouter credentials"
     [opencode]="OpenCode credentials"
   )
 
@@ -757,6 +756,7 @@ _ensure_host_dirs() {
   mkdir -p "${HOME}/.codex"
   mkdir -p "${HOME}/.config/gh"
   mkdir -p "${HOME}/.local/share/opencode"
+  mkdir -p "${HOME}/.aider"
 }
 
 # _maybe_mount_file
@@ -789,14 +789,24 @@ _append_credential_mount_args() {
     -v "${HOME}/.codex:/home/${USER}/.codex"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
     -v "${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode"
+    -v "${HOME}/.aider:/home/${USER}/.aider"
   )
 
   _maybe_mount_file "${HOME}/.claude/.credentials.json" \
     "/home/${USER}/.claude/.credentials.json" "ro"
 
+  # ~/.aider is otherwise read-write (aider's caches/analytics/install
+  # state live there and get written during normal use), but the actual
+  # OpenRouter secret gets the same read-only override treatment as
+  # ~/.claude/.credentials.json above.
+  _maybe_mount_file "${HOME}/.aider/oauth-keys.env" \
+    "/home/${USER}/.aider/oauth-keys.env" "ro"
+
   _maybe_mount_file "${HOME}/.claude.json"  "/home/${USER}/.claude.json"
   _maybe_mount_file "${HOME}/.gitconfig"    "/home/${USER}/.gitconfig" "ro"
   _maybe_mount_file "${HOME}/.aider.conf.yml" "/home/${USER}/.aider.conf.yml" "ro"
+  _maybe_mount_file "${HOME}/.aider.model.settings.yml" \
+    "/home/${USER}/.aider.model.settings.yml" "ro"
 
   if [[ "${_SSH_AGENT_APPROVED}" -eq 1 ]]; then
     DOCKER_RUN_ARGS+=(-v "${SSH_AUTH_SOCK}:/ssh-agent" -e SSH_AUTH_SOCK=/ssh-agent)

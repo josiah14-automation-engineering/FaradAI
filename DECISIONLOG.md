@@ -286,3 +286,19 @@ While making this change, bumped the pin to the current latest (`2.96.0`) rather
 - Drop the version pin and always install whatever `cli.github.com` currently serves — rejected; this trades a one-time fix for permanent loss of reproducibility (a rebuild six months from now would silently pick up whatever `gh` version is current then, with no record of what shipped). Not worth it once the Releases-`.deb` path was confirmed to work.
 - Mirror `gh` into the existing Ubuntu-snapshot-pinned apt sources — not possible; the snapshot service snapshots Ubuntu's own archive, not third-party vendor repos like GitHub's.
 - `dpkg -i` instead of `apt-get install <path>` — rejected; `apt-get install` on a local `.deb` still resolves and installs missing runtime dependencies from the configured repos, whereas `dpkg -i` would leave them unresolved and require a separate `apt-get install -f`.
+
+---
+
+## 2026-07-10 18:49 UTC — aider's OpenRouter credentials moved out of `~/.aider.conf.yml`, into a `:ro`-overlaid `~/.aider/oauth-keys.env`
+
+**Version scope:** 0.5.0-alpha.2, discovered while setting up an OpenRouter Fusion-based aider config on the host
+
+**Decision:** `_append_credential_mount_args` now mounts `~/.aider` read-write into the container (matching the existing `~/.claude`, `~/.codex`, `~/.local/share/opencode` pattern), with `~/.aider/oauth-keys.env` pinned `:ro` on top via `_maybe_mount_file` — the same overlay treatment `~/.claude/.credentials.json` already gets. `~/.aider.model.settings.yml` is now also mounted `:ro`, alongside the pre-existing `~/.aider.conf.yml` mount. `_preflight_credentials`'s aider credential check moved from `~/.aider.conf.yml` to `~/.aider/oauth-keys.env`. `CLAUDE.md`'s "do not read" secrets warning was repointed at the same file.
+
+**Why:** The original aider integration assumed a single flat `~/.aider.conf.yml` with the OpenRouter key inline (`api-key: openrouter=<key>`) — the file's `:ro` mount was the only protection, and `_preflight_credentials` checking the file's mere existence was an adequate proxy for "aider is configured." That assumption broke the moment aider's real OAuth flow was used instead of a hand-written key: aider 0.86.2 has a built-in OpenRouter OAuth flow that saves the token to `~/.aider/oauth-keys.env` (unconditionally loaded on every run, independent of cwd/git root) rather than into the yaml at all. Under the old mount, `~/.aider.conf.yml` continued to exist and pass the (now-meaningless) preflight check, while the actual credential file was never mounted — `faradai aider` would have had no working OpenRouter credentials, and worse, any Fusion-style per-model plugin config in a `~/.aider.model.settings.yml` (also unmounted) would have silently fallen back to OpenRouter's paid defaults instead of the free-tier models actually configured.
+
+Applying the same directory-plus-`:ro`-overlay pattern already used for Claude's `.credentials.json` keeps the fix consistent with the existing mount design rather than inventing a new one: `~/.aider/` legitimately holds non-secret local state too (`caches/`, `analytics.json`, `installs.json`), so a blanket `:ro` mount on the whole directory would have been wrong for the same reason it isn't used for `~/.claude` or `~/.codex`.
+
+**Alternatives considered:**
+- Mount only `~/.aider/oauth-keys.env` read-only, skip the rest of `~/.aider/` — rejected; loses cache/analytics persistence across container runs for no security benefit, since those files aren't secrets.
+- Keep credentials inline in `~/.aider.conf.yml` and just tell users not to use the OAuth flow — rejected; fighting aider's own built-in, more-convenient auth mechanism instead of supporting it properly isn't worth the avoided mount-config complexity, and a flat yaml with an inline key is worse practice than what aider's own OAuth flow already does correctly.

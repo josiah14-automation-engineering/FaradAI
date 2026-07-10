@@ -48,7 +48,7 @@ macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot 
 - Docker
 - A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
 - A Codex login session on the host (`codex login` — file-based credentials live in `~/.codex/auth.json`)
-- An `~/.aider.conf.yml` on the host with your OpenRouter API key (optional — for aider; skipped if the file does not exist)
+- An aider OpenRouter login on the host (run `aider` once — it offers a browser-based OAuth flow automatically when `~/.aider.conf.yml` points at an `openrouter/` model and no key is found, saving the token to `~/.aider/oauth-keys.env`; optional, skipped if that file does not exist)
 - An OpenCode login session on the host (`opencode auth login` — credentials live in `~/.local/share/opencode/auth.json`)
 
 ## Install
@@ -165,7 +165,10 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.claude/.credentials.json` | `~/.claude/.credentials.json` | read-only | Claude Code — OAuth token, overlaid `:ro` on top of the directory mount to protect it from writes |
 | `~/.claude.json` | `~/.claude.json` | read-write | Claude Code — top-level config file (sibling to `~/.claude/`, not inside it) |
 | `~/.codex/` | `~/.codex/` | read-write | Codex — login cache, configuration, sessions, and local state; requires file-based credential storage |
-| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — config and OpenRouter API key; `:ro` keeps the key out of agent write access (skipped if file does not exist on host) |
+| `~/.aider.conf.yml` | `~/.aider.conf.yml` | read-only | Aider — model selection config, no secrets (skipped if file does not exist on host) |
+| `~/.aider.model.settings.yml` | `~/.aider.model.settings.yml` | read-only | Aider — per-model settings (e.g. OpenRouter Fusion panel/judge config), no secrets (skipped if file does not exist on host) |
+| `~/.aider/` | `~/.aider/` | read-write | Aider — caches, analytics, install state |
+| `~/.aider/oauth-keys.env` | `~/.aider/oauth-keys.env` | read-only | Aider — OpenRouter OAuth token; `:ro` overlaid on top of the `~/.aider/` directory mount to protect it from writes, same treatment as `~/.claude/.credentials.json` above (skipped if file does not exist on host) |
 | `~/.local/share/opencode/` | `~/.local/share/opencode/` | read-write | OpenCode — credentials (`auth.json`), session database, and local state |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
@@ -214,14 +217,15 @@ Credentials are delivered as mounted files rather than environment variables —
 
 ### Aider configuration
 
-Aider reads `~/.aider.conf.yml` on startup. The relevant section for OpenRouter:
+Aider reads `~/.aider.conf.yml` (and `~/.aider.model.settings.yml`, for per-model settings) on startup:
 
 ```yaml
 model: openrouter/<provider>/<model>
-api-key: openrouter=<your-key>
 ```
 
-Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because the file is mounted `:ro`, config changes must be made on the host, not from inside the container.
+Use the model slug from OpenRouter's model directory. The `openrouter/` prefix is required by LiteLLM for provider routing. Because both files are mounted `:ro`, config changes must be made on the host, not from inside the container.
+
+Authentication is handled separately from config: run `aider` once on the host with no `OPENROUTER_API_KEY` set, and aider offers a browser-based OAuth flow automatically, saving the token to `~/.aider/oauth-keys.env`. That directory is mounted read-write into the container (aider's caches/analytics/install state live there too), but the OAuth token file itself gets the same `:ro` override treatment as `~/.claude/.credentials.json` — see [Security model](#security-model). Avoid putting an API key directly in `~/.aider.conf.yml`/`~/.aider.model.settings.yml`; both are otherwise safe for an agent to read and debug.
 
 ### Codex configuration
 
@@ -258,7 +262,7 @@ FaradAI mounts `~/.local/share/opencode/` read-write so OpenCode can reuse its l
 
 ## Security model
 
-**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude` and `~/.codex`, read-only `~/.aider.conf.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
+**Default profile: personal/FOSS development.** FaradAI's defaults are optimized for convenience on personal and open-source projects — writable global `~/.claude`, `~/.codex`, and `~/.aider`, read-only `~/.aider.conf.yml`/`~/.aider.model.settings.yml`, SSH agent forwarding, open outbound network. These are deliberate tradeoffs. If you are working with client code, proprietary data, or mixed-sensitivity workflows, see the [roadmap](ROADMAP.md) for the planned `FARADAI_PROFILE=strict` mode.
 
 **The Faraday cage is a filesystem, environment, and process boundary — plus the absence of the Docker socket.** Host processes are invisible inside the container (no `--pid=host`), and host environment variables do not leak in; everything in the container's environment was explicitly injected at launch. What the cage does not protect against: outbound network access is unrestricted (the agent can reach the internet freely — no egress filtering), and any secret passed as an environment variable is visible to the agent.
 
@@ -266,14 +270,14 @@ Credentials are kept out of environment variables and injected as mounted files 
 
 - Claude Code: OAuth token in `~/.claude/.credentials.json` (`:ro` overlay)
 - Codex: access tokens and local state in `~/.codex/` (read-write)
-- Aider: API key in `~/.aider.conf.yml` (`:ro`)
+- Aider: OpenRouter OAuth token in `~/.aider/oauth-keys.env` (`:ro` overlay on the otherwise-read-write `~/.aider/`); `~/.aider.conf.yml`/`~/.aider.model.settings.yml` hold model selection only, no secrets
 - OpenCode: access tokens and local state in `~/.local/share/opencode/` (read-write)
 
 Any secret present as an environment variable is visible to the agent and will appear in tool output if commands like `env` are run. Prefer file-based credential delivery. If a key must be in the environment, scope it to a cost-limited key with a short rotation cycle.
 
 **The `:ro` overlay on `~/.claude/.credentials.json` is not a secrecy mechanism.** It prevents the agent from overwriting your OAuth token, but the agent can still read the file directly if instructed to. If it does, the token will be transmitted to the agent's upstream servers as part of the conversation context.
 
-**The `:ro` mount on `~/.aider.conf.yml` is not a secrecy mechanism.** The agent can read the file directly if instructed to — for example, if you ask it to debug an aider configuration issue. If it does, the key will be transmitted to the agent's upstream servers as part of the conversation context. This is a calculated risk: scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius.
+**The `:ro` overlay on `~/.aider/oauth-keys.env` is not a secrecy mechanism**, for the same reason. Scope your OpenRouter key to a hard cost limit so that any exposure has a bounded blast radius. Never put a raw API key directly into `~/.aider.conf.yml`/`~/.aider.model.settings.yml`, even temporarily — those files are the ones meant to be safe for an agent to read and debug; the OAuth flow (run `aider` on the host with no key set) is what keeps the actual secret confined to `~/.aider/oauth-keys.env`.
 
 **The writable `~/.codex/` mount is not a secrecy mechanism.** It includes `auth.json` when file-based credential storage is enabled. Codex can read, modify, or delete its host state, including access tokens. This supports token refresh and session persistence; a credential broker is the intended longer-term containment mechanism.
 
@@ -321,6 +325,9 @@ The image was built before aider was included. Rebuild: `./build.sh && ./install
 
 **Wrong model slug in `~/.aider.conf.yml`**
 aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
+
+**aider can't authenticate to OpenRouter inside the container**
+`~/.aider/oauth-keys.env` is missing or empty on the host — run `aider` once on the host (with no `OPENROUTER_API_KEY` set) to complete the OAuth flow, which creates that file. Rebuild isn't needed; the mount picks up the file automatically on the next `faradai aider` launch.
 
 **`gh` not authenticated inside the container**
 `~/.config/gh/` is mounted from the host. If you have previously run `gh auth login` on the host, credentials will be available inside the container automatically. If not, run `gh auth login` from inside the container — tokens will persist to the host mount and survive restarts.

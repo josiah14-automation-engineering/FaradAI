@@ -93,6 +93,18 @@ Initial release. Core features:
 
 - `_preflight_credentials` refactored from four copy-pasted per-tool blocks into a single data-driven loop over a tool→credential-path table — adding OpenCode as a 4th tool would otherwise have meant a 5th round of copy-paste.
 
+## [0.5.0-alpha.2] — 2026-07-10
+
+### Fixed
+
+- aider's OpenRouter credentials were never actually reaching the container. `faradai aider` only ever mounted `~/.aider.conf.yml` — aider's real OAuth token (`~/.aider/oauth-keys.env`) and any per-model settings (`~/.aider.model.settings.yml`, e.g. OpenRouter Fusion panel/judge config) were invisible inside FaradAI, silently leaving aider unauthenticated or falling back to unintended (potentially paid) defaults. `~/.aider` is now mounted read-write (matching Claude/Codex/OpenCode), with `~/.aider/oauth-keys.env` pinned `:ro` on top — the same overlay treatment `~/.claude/.credentials.json` already gets; `~/.aider.model.settings.yml` is now mounted `:ro` alongside the existing `~/.aider.conf.yml` mount ([DECISIONLOG](DECISIONLOG.md#2026-07-10-1849-utc--aiders-openrouter-credentials-moved-out-of-aiderconfyml-into-a-ro-overlaid-aideroauth-keysenv)).
+- `_preflight_credentials`'s aider check moved from `~/.aider.conf.yml` (which no longer implies working credentials now that the OAuth token lives elsewhere) to the actual credential file, `~/.aider/oauth-keys.env`.
+- `faradai --version` / `faradai version` was printing a stale `0.3.0-alpha.1` — two releases behind — because `_FARADAI_VERSION` wasn't bumped alongside the last two releases. Corrected to `0.5.0-alpha.2`.
+
+### Security
+
+- `CLAUDE.md`'s "do not read" secrets warning was pointed at `~/.aider.conf.yml`, which is now stale: that file holds model-selection config only. Repointed at `~/.aider/oauth-keys.env`, the file that actually holds the OpenRouter token.
+
 ## [0.4.0-alpha.1] — 2026-06-16
 
 ### Added
