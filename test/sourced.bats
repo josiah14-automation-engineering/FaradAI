@@ -232,6 +232,50 @@ setup() {
   [[ "$output" == *"no running container 'faradai-myproject'"* ]]
 }
 
+# _maybe_attach_existing routes through entrypoint.sh (not the raw tool binary)
+# so that provisioning/wrapping logic that lives in entrypoint.sh applies on
+# every attach, not just the create path. Regression coverage for a bug where
+# `docker exec faradai codex` on an already-running container never saw
+# entrypoint.sh at all, so a tool launched via attach never got ponytail
+# provisioning or headroom wrapping applied.
+
+@test "_maybe_attach_existing: attach mode + running — execs via entrypoint.sh, not the raw tool" {
+  _init_defaults
+  _MODE="attach"
+  _CONTAINER_RUNNING="true"
+  _CONTAINER_NAME="faradai"
+  export MOCK_DOCKER_CALL_LOG="${BATS_TEST_TMPDIR}/docker-calls-attach.log"
+  run _maybe_attach_existing codex --resume
+  [ "$status" -eq 0 ]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"/usr/local/bin/entrypoint.sh"* ]]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"codex"* ]]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"--resume"* ]]
+}
+
+@test "_maybe_attach_existing: auto mode + running — execs via entrypoint.sh, not the raw tool" {
+  _init_defaults
+  _MODE="auto"
+  _CONTAINER_RUNNING="true"
+  _CONTAINER_NAME="faradai"
+  export MOCK_DOCKER_CALL_LOG="${BATS_TEST_TMPDIR}/docker-calls-auto.log"
+  run _maybe_attach_existing opencode
+  [ "$status" -eq 0 ]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"/usr/local/bin/entrypoint.sh"* ]]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"opencode"* ]]
+}
+
+@test "_maybe_attach_existing: no CMD_ARGS — still routes through entrypoint.sh, defaulting to claude" {
+  _init_defaults
+  _MODE="attach"
+  _CONTAINER_RUNNING="true"
+  _CONTAINER_NAME="faradai"
+  export MOCK_DOCKER_CALL_LOG="${BATS_TEST_TMPDIR}/docker-calls-default.log"
+  run _maybe_attach_existing
+  [ "$status" -eq 0 ]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"/usr/local/bin/entrypoint.sh"* ]]
+  [[ "$(cat "${MOCK_DOCKER_CALL_LOG}")" == *"claude"* ]]
+}
+
 # ── _resolve_workdir ───────────────────────────────────────────────────────────
 
 @test "_resolve_workdir: valid existing directory — returns 0" {
@@ -329,6 +373,55 @@ setup() {
   export FARADAI_NETWORK_MODE="none"
   _load_runtime_config
   [ "${FARADAI_NETWORK_MODE}" = "none" ]
+}
+
+@test "_load_runtime_config: sets FARADAI_ENABLE_HEADROOM default when unset" {
+  unset FARADAI_ENABLE_HEADROOM
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_HEADROOM}" = "0" ]
+}
+
+@test "_load_runtime_config: sets FARADAI_ENABLE_PONYTAIL default when unset" {
+  unset FARADAI_ENABLE_PONYTAIL
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_PONYTAIL}" = "0" ]
+}
+
+@test "_load_runtime_config: preserves FARADAI_ENABLE_HEADROOM=1 under open network" {
+  export FARADAI_NETWORK_MODE=open FARADAI_ENABLE_HEADROOM=1
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_HEADROOM}" = "1" ]
+}
+
+@test "_load_runtime_config: preserves FARADAI_ENABLE_PONYTAIL=1 under open network" {
+  export FARADAI_NETWORK_MODE=open FARADAI_ENABLE_PONYTAIL=1
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_PONYTAIL}" = "1" ]
+}
+
+@test "_load_runtime_config: FARADAI_NETWORK_MODE=none forces FARADAI_ENABLE_HEADROOM to 0" {
+  export FARADAI_NETWORK_MODE=none FARADAI_ENABLE_HEADROOM=1
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_HEADROOM}" = "0" ]
+}
+
+@test "_load_runtime_config: FARADAI_NETWORK_MODE=none forces FARADAI_ENABLE_PONYTAIL to 0" {
+  export FARADAI_NETWORK_MODE=none FARADAI_ENABLE_PONYTAIL=1
+  _load_runtime_config
+  [ "${FARADAI_ENABLE_PONYTAIL}" = "0" ]
+}
+
+@test "_load_runtime_config: FARADAI_NETWORK_MODE=none prints a notice when forcing flags off" {
+  export FARADAI_NETWORK_MODE=none FARADAI_ENABLE_HEADROOM=1 FARADAI_ENABLE_PONYTAIL=1
+  run _load_runtime_config
+  [[ "$output" == *"disabling headroom & ponytail"* ]]
+}
+
+@test "_load_runtime_config: FARADAI_NETWORK_MODE=none stays silent when flags are already off" {
+  export FARADAI_NETWORK_MODE=none
+  unset FARADAI_ENABLE_HEADROOM FARADAI_ENABLE_PONYTAIL
+  run _load_runtime_config
+  [[ "$output" != *"disabling headroom & ponytail"* ]]
 }
 
 # ── Pass 3 helpers ─────────────────────────────────────────────────────────────
@@ -811,6 +904,14 @@ time.sleep(5)
   [ -d "${HOME}/.local/share/opencode" ]
 }
 
+@test "_ensure_host_dirs: creates ~/.config/opencode when absent" {
+  export HOME="${BATS_TEST_TMPDIR}/fresh-opencode-config-home-$$"
+  mkdir -p "${HOME}"
+  [ ! -d "${HOME}/.config/opencode" ]
+  _ensure_host_dirs
+  [ -d "${HOME}/.config/opencode" ]
+}
+
 @test "_ensure_host_dirs: creates ~/.aider when absent" {
   export HOME="${BATS_TEST_TMPDIR}/fresh-aider-home-$$"
   mkdir -p "${HOME}"
@@ -869,6 +970,12 @@ time.sleep(5)
   _setup_canon; _append_credential_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode"* ]]
   [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode:ro"* ]]
+}
+
+@test "_append_credential_mount_args: always mounts ~/.config/opencode read-write" {
+  _setup_canon; _append_credential_mount_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.config/opencode:/home/${USER}/.config/opencode"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" != *"${HOME}/.config/opencode:/home/${USER}/.config/opencode:ro"* ]]
 }
 
 @test "_append_credential_mount_args: ~/.claude/.credentials.json present — mount included read-only" {
@@ -1033,6 +1140,48 @@ time.sleep(5)
   _append_nix_mount_args
   [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.config/nix:/home/${USER}/.config/nix:ro"* ]]
   [[ "${DOCKER_RUN_ARGS[*]}" == *"${HOME}/.local/state/nix:/home/${USER}/.local/state/nix:ro"* ]]
+}
+
+# ── _append_feature_flag_args ──────────────────────────────────────────────────
+#
+# _append_feature_flag_args passes the values _load_runtime_config already
+# resolved (including the FARADAI_NETWORK_MODE=none override) into the
+# container's environment. entrypoint.sh trusts whatever it receives rather
+# than re-deriving the network-mode decision itself, so this function is the
+# single point that turns "resolved config" into "-e flags on the container."
+
+@test "_append_feature_flag_args: FARADAI_ENABLE_HEADROOM=1 — -e flag carries resolved value" {
+  _setup_canon
+  export FARADAI_ENABLE_HEADROOM=1 FARADAI_ENABLE_PONYTAIL=0
+  _load_runtime_config
+  _append_feature_flag_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_HEADROOM=1"* ]]
+}
+
+@test "_append_feature_flag_args: FARADAI_ENABLE_PONYTAIL=1 — -e flag carries resolved value" {
+  _setup_canon
+  export FARADAI_ENABLE_HEADROOM=0 FARADAI_ENABLE_PONYTAIL=1
+  _load_runtime_config
+  _append_feature_flag_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_PONYTAIL=1"* ]]
+}
+
+@test "_append_feature_flag_args: both unset — -e flags carry 0, not omitted" {
+  _setup_canon
+  unset FARADAI_ENABLE_HEADROOM FARADAI_ENABLE_PONYTAIL
+  _load_runtime_config
+  _append_feature_flag_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_HEADROOM=0"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_PONYTAIL=0"* ]]
+}
+
+@test "_append_feature_flag_args: FARADAI_NETWORK_MODE=none — -e flags reflect the override, not the raw caller value" {
+  _setup_canon
+  export FARADAI_NETWORK_MODE=none FARADAI_ENABLE_HEADROOM=1 FARADAI_ENABLE_PONYTAIL=1
+  _load_runtime_config
+  _append_feature_flag_args
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_HEADROOM=0"* ]]
+  [[ "${DOCKER_RUN_ARGS[*]}" == *"-e FARADAI_ENABLE_PONYTAIL=0"* ]]
 }
 
 # ── _append_extra_docker_args ──────────────────────────────────────────────────

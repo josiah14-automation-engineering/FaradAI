@@ -302,3 +302,80 @@ Applying the same directory-plus-`:ro`-overlay pattern already used for Claude's
 **Alternatives considered:**
 - Mount only `~/.aider/oauth-keys.env` read-only, skip the rest of `~/.aider/` — rejected; loses cache/analytics persistence across container runs for no security benefit, since those files aren't secrets.
 - Keep credentials inline in `~/.aider.conf.yml` and just tell users not to use the OAuth flow — rejected; fighting aider's own built-in, more-convenient auth mechanism instead of supporting it properly isn't worth the avoided mount-config complexity, and a flat yaml with an inline key is worse practice than what aider's own OAuth flow already does correctly.
+
+---
+
+## 2026-07-11 17:04 UTC — Ponytail/headroom as opt-in flags, resolved once in the host CLI
+
+**Version scope:** 0.6.0-alpha.1
+
+**Decision:** `FARADAI_ENABLE_PONYTAIL` and `FARADAI_ENABLE_HEADROOM` (both default `0`) are resolved exactly once, in `_load_runtime_config` on the host `faradai` script — including forcing both to `0` whenever `FARADAI_NETWORK_MODE=none` — and the resolved values are passed into the container as `-e` flags. `entrypoint.sh` trusts whatever it receives rather than re-deriving the network-mode decision itself.
+
+**Why:** both features need network (marketplace/registry fetches for ponytail; headroom's proxy needs to reach an upstream LLM), so the `FARADAI_NETWORK_MODE=none` override has to apply to both. Resolving it in exactly one place means there's only one implementation of that rule to keep correct — `entrypoint.sh` has no independent path to set these flags differently anyway, since the host CLI fully controls the container's environment.
+
+**Alternatives considered:**
+- Re-check `FARADAI_NETWORK_MODE` a second time inside `entrypoint.sh` (defense in depth) — rejected as redundant; there's no scenario where the container's env could diverge from what `faradai` set.
+
+---
+
+## 2026-07-12 12:37 UTC — Attach-mode launches route through `entrypoint.sh`, not the raw tool binary
+
+**Version scope:** 0.6.0-alpha.1
+
+**Decision:** `_maybe_attach_existing` now execs `docker exec -it <container> /usr/local/bin/entrypoint.sh <tool> <args>` instead of `docker exec -it <container> <tool> <args>` directly, in both explicit attach (`-a`) and auto-attach-to-running-container modes.
+
+**Why:** ponytail provisioning and headroom wrapping both live in `entrypoint.sh`, which previously only ran once, at `docker run` (container-create) time. A tool launched later by attaching to an already-running container — e.g. `faradai codex` against a container originally started via `faradai claude` — skipped that logic entirely, so an attached session never got ponytail provisioned or headroom wrapping applied even with the flags on. `docker exec` inherits the container's `-e` environment automatically, so `FARADAI_ENABLE_HEADROOM`/`FARADAI_ENABLE_PONYTAIL` reach `entrypoint.sh` on the attach path without extra plumbing. Regression coverage added in `test/sourced.bats` (attach/auto-attach/no-args-default cases).
+
+**Alternatives considered:**
+- Duplicate the provisioning/wrapping calls directly in `_maybe_attach_existing` — rejected; would fork the same logic across two files instead of keeping `entrypoint.sh` as the single dispatch point for both the create and attach paths.
+
+---
+
+## 2026-07-12 14:04 UTC — headroom installed with a narrow pip extras set; `[memory]` and build-time-configurable extras deferred (#65)
+
+**Version scope:** 0.6.0-alpha.1
+
+**Decision:** the image installs `headroom-ai[proxy,code,html,reports,spreadsheet,otel]`, not `[all]`. `[memory]` — headroom's cross-agent shared-memory store — is left out for now.
+
+**Why:** `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` (multi-GB with default CUDA wheels, hundreds of MB even pinned to a CPU-only wheel) plus `[voice]`/`[image]` extras unrelated to a text-based coding-agent sandbox. `proxy` is the minimum needed for `headroom wrap` to run at all; `code` adds AST-aware compression relevant to coding tasks; `html`/`reports`/`spreadsheet`/`otel` are lightweight, no-torch extras kept on their own merits (web content extraction, dashboard output, spreadsheet ingestion, metrics export). `[memory]` would be genuinely useful for workflows that rotate heavily between agents on the same project, but faradai currently bakes one fixed extras set for every user — not everyone wants the torch dependency cost paid for a feature they may not use.
+
+**Alternatives considered:**
+- Include `[memory]` now — rejected for this release; deferred until extras can be made configurable at build time, planned for after the Go/Nushell CLI migration (#65). User's call: "leave memory out for now, after go+nushell migration I can work on making these extras opt-in at build-time."
+- Install `[all]` for simplicity — rejected outright given the torch/CUDA size cost for extras this image has no use for.
+
+---
+
+## 2026-07-12 14:09 UTC — Verified ponytail adds no new external network exposure
+
+**Version scope:** 0.6.0-alpha.1
+
+**Decision:** proceed with the ponytail integration as designed — no additional warning banner, and no exclusion of its bundled MCP server.
+
+**Why:** direct inspection of ponytail's runtime code (all six hook/MCP/extension JS files — `ponytail-activate.js`, `ponytail-subagent.js`, `ponytail-mode-tracker.js`, `ponytail-runtime.js`, `ponytail-config.js`, `ponytail-instructions.js` — plus `ponytail-mcp/index.js` and `pi-extension/index.js`) found zero network calls, zero hardcoded API endpoints, and zero telemetry/analytics beacons. At runtime it only injects instruction text into the same prompt Claude Code/Codex is already sending to Anthropic's/OpenAI's API — it doesn't add a new destination for data, it changes what's included in a call already being made. The one external touchpoint is at install time: `claude plugin marketplace add DietrichGebert/ponytail` is a git-based fetch from GitHub, the same trust category as faradai's own `update` mechanism. The repo's `.env.example` (`ANTHROPIC_API_KEY=sk-ant-...`) looked suspicious at first glance but is inert for this integration — it's for `promptfoo`, ponytail's own dev-time eval tooling, and isn't wired into `plugin.json`'s `hooks`/`skills` fields, so it never runs when the plugin is installed and used normally.
+
+**Alternatives considered:** none needed — the verification confirmed the integration as already designed was safe; no mitigation to weigh.
+
+---
+
+## 2026-07-12 14:43 UTC — `~/.config` pre-created and chowned at image build time
+
+**Version scope:** 0.6.0-alpha.1, discovered during live container smoketesting
+
+**Decision:** the Dockerfile now runs `mkdir -p ~/.config && chown ${USER_UID}:${USER_GID} ~/.config` during the image build, before any mount can ever attach.
+
+**Why:** `~/.config` is never itself a bind mount — only `~/.config/gh` and `~/.config/opencode` are. If `~/.config` doesn't already exist when those nested mounts attach at `docker run` time, Docker auto-creates it as `root:root` to hold the mount points, silently blocking the container user from writing any *other* subdirectory directly under `~/.config` — including tools like headroom that create their own config directory there on first run. This surfaced live as an `rtk init` permission error during smoketesting with `FARADAI_ENABLE_HEADROOM=1`. Creating the directory with correct ownership before any mount is attached avoids the auto-vivification-as-root path entirely.
+
+**Alternatives considered:** none beyond the direct fix — pre-creating the directory at build time matches the existing pattern already used for `~/.local/share/opencode` and `~/.aider`.
+
+---
+
+## 2026-07-12 15:10 UTC — Ponytail plugin provisioning stays launch-time, not build-time-pinned
+
+**Version scope:** 0.6.0-alpha.1
+
+**Decision:** `entrypoint.sh` continues to unconditionally run `claude plugin marketplace add` + `claude plugin install` (and the codex/opencode equivalents) on every launch when `FARADAI_ENABLE_PONYTAIL=1`, trusting the CLI to no-op/fast-update rather than tracking install state or baking a pinned version into the image at build time.
+
+**Why:** re-fetching on every launch initially looked wasteful, prompting an in-session detour into build-time-install-with-pinned-versions work. Live testing during that same session showed subsequent launches already boot fast in practice — the plugin CLI's own no-op path is cheap — making the fix low-gain for the added complexity. Keeping launch-time provisioning also means ponytail stays current automatically instead of requiring a rebuild to bump a pinned version. User's call, mid-implementation: "let's cancel the plugin install persistence check - it's booting faster now on subsequent invokations of FaradAI. This is a low-gain issue to fix, and doing it this way keeps the plugins up-to-date."
+
+**Alternatives considered:**
+- Build-time install with a pinned version, checked/updated only when the pin changes — started, then explicitly dropped this session; would add Dockerfile/build complexity and version-pin maintenance for a problem that measurement showed wasn't real.

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Generic call-logging mock for entrypoint.bats. Symlinked as claude, codex,
+# opencode, headroom, aider so entrypoint.sh's real code runs against fake
+# binaries instead of the real tools.
+#
+# Controllable via environment variables (set per-test):
+#
+#   MOCK_CALL_LOG_DIR     — if set, every invocation's argv is appended to
+#                           <dir>/<toolname>.log (one arg per line, blank
+#                           line between calls).
+#   MOCK_<TOOL>_EXIT      — exit code for a non-"plugin" invocation of that
+#                           tool (default 0), e.g. MOCK_CLAUDE_EXIT=1.
+#   MOCK_<TOOL>_PLUGIN_EXIT — exit code specifically when $1 is "plugin"
+#                           (default 0), e.g. MOCK_CLAUDE_PLUGIN_EXIT=1, so
+#                           tests can simulate a provisioning failure without
+#                           also failing the tool's normal launch.
+name="$(basename "$0")"
+
+if [[ -n "${MOCK_CALL_LOG_DIR:-}" ]]; then
+  log="${MOCK_CALL_LOG_DIR}/${name}.log"
+  { printf '%s\n' "$@"; printf '\n'; } >> "${log}"
+fi
+
+upper="$(printf '%s' "${name}" | tr '[:lower:]' '[:upper:]')"
+if [[ "${1:-}" == "plugin" ]]; then
+  var="MOCK_${upper}_PLUGIN_EXIT"
+else
+  var="MOCK_${upper}_EXIT"
+fi
+
+exit "${!var:-0}"

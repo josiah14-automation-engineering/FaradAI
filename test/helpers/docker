@@ -10,6 +10,16 @@
 #                               set to 1 to simulate container-not-found
 #   MOCK_DOCKER_INSPECT_RUNNING — output for 'docker inspect' (default "");
 #                               set to "true" or "false" to control running state
+#   MOCK_DOCKER_CALL_LOG       — if set, every invocation's full argv is appended
+#                               to this file (one arg per line, blank line between
+#                               calls), so tests can assert on the exact command
+#                               faradai builds (e.g. exec/attach targets) rather
+#                               than just the exit code.
+if [[ -n "${MOCK_DOCKER_CALL_LOG:-}" ]]; then
+  printf '%s\n' "$@" >> "${MOCK_DOCKER_CALL_LOG}"
+  printf '\n' >> "${MOCK_DOCKER_CALL_LOG}"
+fi
+
 case "$1" in
   info)    exit 0 ;;
   image)

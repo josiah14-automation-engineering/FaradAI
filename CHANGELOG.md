@@ -110,3 +110,26 @@ Initial release. Core features:
 ### Added
 
 - `FARADAI_MOUNT_NIX_STORE`: opt-in (default `0`) bind-mount of the host's `/nix` store, `~/.config/nix`, and `~/.local/state/nix`, enabling flake-defined devShells (e.g. `nix develop`) inside the container. `/nix/store`, `~/.config/nix`, `~/.local/state/nix`, and `/nix/var/nix/profiles` are read-only; the rest of `/nix/var/nix` (Nix's mutable bookkeeping — `db`, `gcroots`, `temproots`, `gc.lock`, …) is writable on top, which Nix requires for any store-touching operation including read-only `nix develop`. Store *contents* stay immutable regardless. The image ships a `~/.nix-profile` symlink and `PATH` entry that resolve into the host's store when mounted, so the container always uses the host's Nix version — no separate version pin to maintain ([DECISIONLOG](DECISIONLOG.md#2026-06-15-1526-utc--faradai-shares-the-hosts-nix-store-blast-radius-controlled-by-filesystem-permissions-not-nix-config-99), [2026-06-16](DECISIONLOG.md)) (#99)
+
+## [0.6.0-alpha.1] — 2026-07-12
+
+### Added
+
+- `FARADAI_ENABLE_PONYTAIL` (opt-in, default `0`): provisions the [ponytail](https://github.com/DietrichGebert/ponytail) plugin ("laziest senior dev" minimal-code-generation hooks) for Claude Code, Codex, and OpenCode at launch. No aider integration — none exists upstream. Forced to `0` under `FARADAI_NETWORK_MODE=none` ([DECISIONLOG](DECISIONLOG.md#2026-07-11-1704-utc--ponytailheadroom-as-opt-in-flags-resolved-once-in-the-host-cli)).
+- `FARADAI_ENABLE_HEADROOM` (opt-in, default `0`): launches any of the four agents wrapped via `headroom wrap`, a local context-compression proxy. Also forced to `0` under `FARADAI_NETWORK_MODE=none`.
+- headroom pre-installed via pipx (`headroom-ai[proxy,code,html,reports,spreadsheet,otel]`) — deliberately narrower than `[all]` to avoid pulling in torch; see extras rationale ([DECISIONLOG](DECISIONLOG.md#2026-07-12-1404-utc--headroom-installed-with-narrow-pip-extras-memory-and-build-time-configurable-extras-deferred-65)).
+
+### Fixed
+
+- `docker exec` attach paths (`-a`, and auto-attach to an already-running container) now route through `entrypoint.sh` instead of execing the tool binary directly, so ponytail provisioning and headroom wrapping apply on every launch, not just a container's initial `docker run` ([DECISIONLOG](DECISIONLOG.md#2026-07-12-1237-utc--attach-mode-launches-route-through-entrypointsh-not-the-raw-tool-binary)).
+- `~/.config` is now created and chowned to the container user during the image build, preventing Docker from auto-vivifying it as `root:root` (blocking tools like headroom from writing their own config subdirectory) when nested mounts (`~/.config/gh`, `~/.config/opencode`) attach without it already existing ([DECISIONLOG](DECISIONLOG.md#2026-07-12-1443-utc--config-pre-created-and-chowned-at-image-build-time)).
+
+### Security
+
+- Verified ponytail's runtime code makes no network calls of its own — it only injects instruction text into prompts already being sent to Anthropic's/OpenAI's API. Full verification in [DECISIONLOG](DECISIONLOG.md#2026-07-12-1409-utc--verified-ponytail-adds-no-new-external-network-exposure).
+
+### Internal
+
+- `~/.config/opencode/` now always mounted read-write (needed for `FARADAI_ENABLE_PONYTAIL=1` to merge its plugin entry into `opencode.json`), joining the existing `~/.local/share/opencode/` mount.
+- Ponytail plugin installation stays launch-time rather than moving to a build-time-pinned install, after measurement showed the launch-time cost was already low in practice ([DECISIONLOG](DECISIONLOG.md#2026-07-12-1510-utc--ponytail-plugin-provisioning-stays-launch-time-not-build-time-pinned)).
+- 288 tests (was 241): new coverage in `test/sourced.bats` and `test/unit.bats` for the feature-flag resolution/wiring pipeline, plus a new `test/entrypoint.bats` (24 tests) exercising `entrypoint.sh`'s provisioning and dispatch logic directly via call-logging mocks.

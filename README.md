@@ -138,6 +138,13 @@ By default, `faradai` auto-detects whether a container named `faradai` is alread
 |----------|---------|-------------|
 | `FARADAI_MOUNT_NIX_STORE` | `0` | bind-mount the host's `/nix` store, `~/.config/nix`, and `~/.local/state/nix` into the container, enabling flake-defined devShells (`nix develop`, `nix build`, ...) |
 
+**Feature flags**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FARADAI_ENABLE_HEADROOM` | `0` | launch tools wrapped via `headroom wrap` — a local proxy that compresses tool output/context before it reaches the LLM. Covers all four agents (`claude`, `codex`, `aider`, `opencode`). Needs network on first use to fetch its ONNX runtime and compression model, so it's forced to `0` when `FARADAI_NETWORK_MODE=none` |
+| `FARADAI_ENABLE_PONYTAIL` | `0` | provision the [ponytail](https://github.com/DietrichGebert/ponytail) plugin ("laziest senior dev" minimal-code-generation hooks) for Claude Code, Codex, and OpenCode. **No aider integration** — ponytail has no aider plugin upstream, so aider sessions run without it regardless of this flag. Also forced to `0` when `FARADAI_NETWORK_MODE=none` (its marketplace/registry fetches need network) |
+
 **Docker extras**
 
 | Variable | Default | Description |
@@ -170,6 +177,7 @@ FARADAI_WORKDIR=~/projects FARADAI_MEMORY=8g FARADAI_CPUS=8 faradai
 | `~/.aider/` | `~/.aider/` | read-write | Aider — caches, analytics, install state |
 | `~/.aider/oauth-keys.env` | `~/.aider/oauth-keys.env` | read-only | Aider — OpenRouter OAuth token; `:ro` overlaid on top of the `~/.aider/` directory mount to protect it from writes, same treatment as `~/.claude/.credentials.json` above (skipped if file does not exist on host) |
 | `~/.local/share/opencode/` | `~/.local/share/opencode/` | read-write | OpenCode — credentials (`auth.json`), session database, and local state |
+| `~/.config/opencode/` | `~/.config/opencode/` | read-write | OpenCode — global config (`opencode.json`), including the plugin list `FARADAI_ENABLE_PONYTAIL=1` writes to |
 | `~/.gitconfig` | `~/.gitconfig` | read-only | git commits — author identity |
 | `~/.config/gh/` | `~/.config/gh/` | read-write | GitHub CLI — auth tokens; created on the host if it does not exist so `gh auth login` inside the container persists across restarts |
 | `$SSH_AUTH_SOCK` | `/ssh-agent` | read-only | SSH agent socket — forwarded automatically when present; set `FARADAI_ENABLE_SSH_AGENT=0` to disable |
@@ -242,6 +250,16 @@ Then sign in on the host with `codex login`. `~/.codex/auth.json` contains acces
 
 FaradAI mounts `~/.local/share/opencode/` read-write so OpenCode can reuse its login and local session state. Sign in on the host with `opencode auth login` (see OpenCode's own docs for provider-specific steps, including [Zen](https://opencode.ai/docs/zen) if you use it). `~/.local/share/opencode/auth.json` contains access tokens; treat the entire mounted directory as sensitive.
 
+### Ponytail and headroom (opt-in)
+
+Both are off by default; set `FARADAI_ENABLE_PONYTAIL=1` and/or `FARADAI_ENABLE_HEADROOM=1` to turn them on (see [Configuration](#configuration)). `FARADAI_NETWORK_MODE=none` forces both off regardless of these vars, since both need network.
+
+[Ponytail](https://github.com/DietrichGebert/ponytail) is not baked into the image — it's fetched from its own marketplace/registry at container launch (`claude plugin marketplace add`/`codex plugin marketplace add`, or a config entry for OpenCode), the same way you'd install it by hand. That means the first launch with `FARADAI_ENABLE_PONYTAIL=1` does a network fetch; later launches re-run the same install commands, which are trusted to no-op quickly rather than being tracked as "already done" by faradai itself. Claude Code and Codex get it as a real plugin with lifecycle hooks; OpenCode gets it via a `~/.config/opencode/opencode.json` plugin entry that FaradAI merges in without touching your other settings. **Aider has no ponytail integration upstream**, so this flag has no effect on aider sessions.
+
+[Headroom](https://github.com/headroomlabs-ai/headroom) wraps whichever tool you launch via `headroom wrap <tool>`, starting a local compression proxy in front of it — covers all four agents. Its first use fetches an ONNX runtime and a compression model over the network; that fetch isn't pre-baked into the image, so it happens inside the container on first launch.
+
+The image installs a deliberately narrow set of headroom's [pip extras](https://github.com/headroomlabs-ai/headroom#get-started-60-seconds) — `proxy` (what `wrap` needs to run at all), `code` (AST-aware compression for coding tasks), `html`/`reports`/`spreadsheet`/`otel` (lightweight, no-torch extras). `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` — hundreds of MB even pinned to a CPU-only wheel, multi-GB if it resolves the default CUDA wheel — plus `[voice]`/`[image]` extras unrelated to a text-based coding sandbox, so we don't install it. Notably absent: `[memory]` (headroom's cross-agent shared-memory store, which needs `[ml]`'s torch dependency) — genuinely useful for workflows that rotate heavily between agents on the same project, but not included by default since faradai currently bakes one fixed extras set for everyone. Making extras configurable at build time (rather than everyone getting the same install) is planned for after the Go/Nushell CLI migration ([#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)); until then, add extras by editing `HEADROOM_VERSION`'s install line in the [Dockerfile](Dockerfile) and rebuilding.
+
 ## What's in the image
 
 - Ubuntu 24.04
@@ -250,6 +268,7 @@ FaradAI mounts `~/.local/share/opencode/` read-write so OpenCode can reuse its l
 - Codex CLI (`codex`)
 - aider (via pipx venv, pre-installed)
 - OpenCode CLI (`opencode`)
+- headroom (`headroom-ai[proxy,code,html,reports,spreadsheet,otel]`, via pipx venv, pre-installed) — opt-in context-compression proxy; see `FARADAI_ENABLE_HEADROOM` under Configuration and [Ponytail and headroom](#ponytail-and-headroom-opt-in) for the extras rationale
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
 - gh (GitHub CLI) — installed from GitHub's official apt repository

@@ -28,6 +28,7 @@ ARG AIDER_VERSION=0.86.2
 ARG CLAUDE_CODE_VERSION=2.1.205
 ARG CODEX_VERSION=0.141.0
 ARG OPENCODE_VERSION=1.17.18
+ARG HEADROOM_VERSION=0.31.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -58,6 +59,20 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
 RUN npm config set prefix "/home/${USERNAME}/.local" \
  && pipx install aider-chat==${AIDER_VERSION} \
  && pipx runpip aider-chat cache purge \
+ && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} +
+
+# Deliberately narrower than [all]: [all] pulls in torch via [ml]/[memory]/[evals]
+# (multi-GB with default CUDA wheels, hundreds of MB even pinned CPU-only) plus
+# [voice]/[image] extras unrelated to a text-based coding-agent sandbox. proxy is
+# what `headroom wrap` needs to run at all (includes onnxruntime-based Kompress
+# compression and mcp — no torch); code adds AST-aware compression for coding
+# tasks; html/reports/spreadsheet/otel are lightweight, no-torch extras kept for
+# their own merits (web content extraction, dashboard output, spreadsheet
+# ingestion, metrics export). All of it (proxy/code/html/reports/spreadsheet/otel)
+# ships prebuilt wheels for linux x86_64/aarch64 — no Rust toolchain needed at
+# build time on either TARGETARCH this image supports.
+RUN pipx install "headroom-ai[proxy,code,html,reports,spreadsheet,otel]"==${HEADROOM_VERSION} \
+ && pipx runpip headroom-ai cache purge \
  && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} +
 
 RUN npm install -g @openai/codex@${CODEX_VERSION} \
@@ -147,6 +162,16 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && { groupdel ubuntu 2>/dev/null || true; } \
  && groupadd --gid ${USER_GID} ${USERNAME} \
  && useradd --uid ${USER_UID} --gid ${USER_GID} --create-home --shell /bin/bash ${USERNAME}
+
+# ~/.config is never itself a bind mount (only ~/.config/gh and ~/.config/opencode
+# are), so if it doesn't already exist when those nested mounts are attached at
+# `docker run` time, Docker auto-creates it as root:root to hold the mount
+# points — silently blocking the container user from writing any *other*
+# subdirectory directly under ~/.config (e.g. tools like headroom's rtk that
+# create their own ~/.config/<tool> dir on first run). Creating it here, owned
+# by the container user, before any mount is ever attached, avoids that.
+RUN mkdir -p "/home/${USERNAME}/.config" \
+ && chown ${USER_UID}:${USER_GID} "/home/${USERNAME}/.config"
 
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 

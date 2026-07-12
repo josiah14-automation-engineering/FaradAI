@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-_FARADAI_VERSION="0.5.0-alpha.2"
+_FARADAI_VERSION="0.6.0-alpha.1"
 _UNINSTALL_BIN="${_UNINSTALL_BIN:-/usr/local/bin/uninstall-faradai}"
 
 # ── functions ──────────────────────────────────────────────────────────────────
@@ -37,6 +37,8 @@ Environment variables:
   FARADAI_CPUS              Container CPU limit (default: 4)
   FARADAI_PIDS              Container PID limit (default: 512)
   FARADAI_NETWORK_MODE      Network access: open (default) or none (no outbound network)
+  FARADAI_ENABLE_HEADROOM   Launch tools wrapped via `headroom wrap` for context compression (default: 0); forced to 0 when FARADAI_NETWORK_MODE=none
+  FARADAI_ENABLE_PONYTAIL   Provision the ponytail plugin for Claude Code/Codex/OpenCode (default: 0); forced to 0 when FARADAI_NETWORK_MODE=none
   FARADAI_ENABLE_SSH_AGENT  Forward SSH agent socket when available (default: 1)
   FARADAI_TRUST_SSH_AGENT   Set to 1 to skip the SSH agent forwarding confirmation prompt (default: 0)
   FARADAI_MOUNT_SSH_DIR     Mount ~/.ssh read-only into the container (default: 0)
@@ -460,6 +462,16 @@ _resolve_container_state() {
 # Writes: nothing — may exec (replacing this process) or return
 #
 # $@ = CMD_ARGS forwarded to the container; defaults to claude when empty.
+#
+# Routes through /usr/local/bin/entrypoint.sh rather than execing the tool
+# binary directly. entrypoint.sh is where ponytail provisioning and headroom
+# wrapping live (see entrypoint.sh); without this, a tool launched by
+# attaching to an already-running container (e.g. `faradai codex` while a
+# `faradai claude` container is up) would skip that logic entirely, since it
+# only ran once at `docker run` time for whichever tool was launched first.
+# docker exec inherits the container's -e environment automatically, so
+# FARADAI_ENABLE_HEADROOM/FARADAI_ENABLE_PONYTAIL (set via _append_feature_flag_args
+# at container creation) reach entrypoint.sh here without needing their own -e flags.
 _maybe_attach_existing() {
   if [[ "${_MODE}" == "attach" ]]; then
     if [[ "${_CONTAINER_RUNNING}" != "true" ]]; then
@@ -471,11 +483,11 @@ _maybe_attach_existing() {
       fi
       exit 1
     fi
-    exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
+    exec docker exec -it "${_CONTAINER_NAME}" /usr/local/bin/entrypoint.sh "${@:-claude}"
   fi
 
   if [[ "${_MODE}" == "auto" && "${_CONTAINER_RUNNING}" == "true" ]]; then
-    exec docker exec -it "${_CONTAINER_NAME}" "${@:-claude}"
+    exec docker exec -it "${_CONTAINER_NAME}" /usr/local/bin/entrypoint.sh "${@:-claude}"
   fi
 }
 
@@ -639,18 +651,37 @@ _remove_stale_container() {
 
 # _load_runtime_config
 #
-# Reads:  FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE (optional)
-# Writes: FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE
+# Reads:  FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE,
+#         FARADAI_ENABLE_HEADROOM, FARADAI_ENABLE_PONYTAIL (all optional)
+# Writes: FARADAI_MEMORY, FARADAI_CPUS, FARADAI_PIDS, FARADAI_NETWORK_MODE,
+#         FARADAI_ENABLE_HEADROOM, FARADAI_ENABLE_PONYTAIL
+#
+# This is the single place that decides the *effective* value of the feature
+# flags: headroom and ponytail both need network (marketplace/registry fetches,
+# and headroom's proxy needs to reach an upstream LLM), so FARADAI_NETWORK_MODE=none
+# forces them off regardless of what the caller set. entrypoint.sh (inside the
+# container) trusts the resolved value it receives rather than re-deriving this
+# decision itself.
 _load_runtime_config() {
   FARADAI_MEMORY="${FARADAI_MEMORY:-4g}"
   FARADAI_CPUS="${FARADAI_CPUS:-4}"
   FARADAI_PIDS="${FARADAI_PIDS:-512}"
   FARADAI_NETWORK_MODE="${FARADAI_NETWORK_MODE:-open}"
+  FARADAI_ENABLE_HEADROOM="${FARADAI_ENABLE_HEADROOM:-0}"
+  FARADAI_ENABLE_PONYTAIL="${FARADAI_ENABLE_PONYTAIL:-0}"
 
   _validate_memory
   _validate_cpus
   _validate_pids
   _validate_network_mode
+
+  if [[ "${FARADAI_NETWORK_MODE}" == "none" ]]; then
+    if [[ "${FARADAI_ENABLE_HEADROOM}" == "1" || "${FARADAI_ENABLE_PONYTAIL}" == "1" ]]; then
+      echo "faradai: FARADAI_NETWORK_MODE=none — disabling headroom & ponytail (both need network)" >&2
+    fi
+    FARADAI_ENABLE_HEADROOM=0
+    FARADAI_ENABLE_PONYTAIL=0
+  fi
 }
 
 # _debug_print_plan
@@ -745,6 +776,24 @@ _append_network_args() {
   fi
 }
 
+# _append_feature_flag_args
+#
+# Reads:  FARADAI_ENABLE_HEADROOM, FARADAI_ENABLE_PONYTAIL
+# Writes: DOCKER_RUN_ARGS
+#
+# Must run after _load_runtime_config, which resolves the effective values
+# (including the FARADAI_NETWORK_MODE=none override). Passes them into the
+# container's environment so entrypoint.sh can read them; docker exec
+# inherits a container's -e environment automatically, so an attach-mode
+# `docker exec ... entrypoint.sh` (see _maybe_attach_existing) sees the same
+# values without needing its own -e flags.
+_append_feature_flag_args() {
+  DOCKER_RUN_ARGS+=(
+    -e "FARADAI_ENABLE_HEADROOM=${FARADAI_ENABLE_HEADROOM}"
+    -e "FARADAI_ENABLE_PONYTAIL=${FARADAI_ENABLE_PONYTAIL}"
+  )
+}
+
 # _ensure_host_dirs
 #
 # Reads:  HOME
@@ -755,6 +804,7 @@ _ensure_host_dirs() {
   mkdir -p "${HOME}/.claude"
   mkdir -p "${HOME}/.codex"
   mkdir -p "${HOME}/.config/gh"
+  mkdir -p "${HOME}/.config/opencode"
   mkdir -p "${HOME}/.local/share/opencode"
   mkdir -p "${HOME}/.aider"
 }
@@ -788,6 +838,7 @@ _append_credential_mount_args() {
     -v "${HOME}/.claude:/home/${USER}/.claude"
     -v "${HOME}/.codex:/home/${USER}/.codex"
     -v "${HOME}/.config/gh:/home/${USER}/.config/gh"
+    -v "${HOME}/.config/opencode:/home/${USER}/.config/opencode"
     -v "${HOME}/.local/share/opencode:/home/${USER}/.local/share/opencode"
     -v "${HOME}/.aider:/home/${USER}/.aider"
   )
@@ -925,6 +976,7 @@ _build_docker_run_args() {
   _append_credential_mount_args
   _append_project_mount_args
   _append_nix_mount_args
+  _append_feature_flag_args
   _append_extra_docker_args
   DOCKER_RUN_ARGS+=(-w "${FARADAI_WORKDIR}" faradai:latest "$@")
 }

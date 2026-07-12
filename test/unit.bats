@@ -542,3 +542,53 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" != *"WARNING: debug mode active"* ]]
 }
+
+# ── feature-flag wiring end-to-end (via FARADAI_DEBUG's traced docker run) ────
+#
+# _debug_print_plan enables `set -x` right before _exec_docker_run, so the
+# traced `+ docker run ...` line is the one place the fully-built
+# DOCKER_RUN_ARGS are observable from outside the process. These tests drive
+# the real script end-to-end rather than asserting against a function in
+# isolation, so they also exercise _load_runtime_config and
+# _append_feature_flag_args together as they actually run in main().
+
+@test "feature flags: FARADAI_ENABLE_HEADROOM=1 reaches the container as an -e flag" {
+  run env FARADAI_DEBUG=1 FARADAI_ENABLE_HEADROOM=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-e FARADAI_ENABLE_HEADROOM=1"* ]]
+}
+
+@test "feature flags: FARADAI_ENABLE_PONYTAIL=1 reaches the container as an -e flag" {
+  run env FARADAI_DEBUG=1 FARADAI_ENABLE_PONYTAIL=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-e FARADAI_ENABLE_PONYTAIL=1"* ]]
+}
+
+@test "feature flags: unset — both -e flags default to 0" {
+  run env FARADAI_DEBUG=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-e FARADAI_ENABLE_HEADROOM=0"* ]]
+  [[ "$output" == *"-e FARADAI_ENABLE_PONYTAIL=0"* ]]
+}
+
+@test "feature flags: FARADAI_NETWORK_MODE=none forces both -e flags to 0 even when caller sets them to 1" {
+  run env FARADAI_DEBUG=1 FARADAI_NETWORK_MODE=none FARADAI_ENABLE_HEADROOM=1 FARADAI_ENABLE_PONYTAIL=1 "${FARADAI}"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"-e FARADAI_ENABLE_HEADROOM=0"* ]]
+  [[ "$output" == *"-e FARADAI_ENABLE_PONYTAIL=0"* ]]
+  [[ "$output" == *"disabling headroom & ponytail"* ]]
+}
+
+# ── _usage mentions new feature flags ──────────────────────────────────────────
+
+@test "_usage: mentions FARADAI_ENABLE_HEADROOM" {
+  run "${FARADAI}" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FARADAI_ENABLE_HEADROOM"* ]]
+}
+
+@test "_usage: mentions FARADAI_ENABLE_PONYTAIL" {
+  run "${FARADAI}" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FARADAI_ENABLE_PONYTAIL"* ]]
+}
