@@ -29,6 +29,7 @@ ARG CLAUDE_CODE_VERSION=2.1.205
 ARG CODEX_VERSION=0.141.0
 ARG OPENCODE_VERSION=1.17.18
 ARG HEADROOM_VERSION=0.31.0
+ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.33.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -48,6 +49,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     | tee /etc/apt/sources.list.d/nodesource.list > /dev/null \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
+    git=1:2.43.0-1ubuntu7.3 \
     nodejs=22.22.2-1nodesource1 \
     python3=3.12.3-0ubuntu2.1 \
     python3-pip=24.0+dfsg-1ubuntu1.3 \
@@ -74,6 +76,24 @@ RUN npm config set prefix "/home/${USERNAME}/.local" \
 RUN pipx install "headroom-ai[proxy,code,html,reports,spreadsheet,otel]"==${HEADROOM_VERSION} \
  && pipx runpip headroom-ai cache purge \
  && find /home/${USERNAME}/.local -name "__pycache__" -type d -exec rm -rf {} +
+
+# headroom-ai's PyPI wheel only ships its native anthropic/openai baseURL
+# override for OpenCode -- routing every other provider (DeepSeek/Zen,
+# Gemini, Copilot, custom gateways) through the proxy needs headroom's
+# separate transparent transport plugin (plugins/opencode/ in its git repo,
+# which patches fetch/http globally), not part of the wheel at all. Built
+# from source here and left under .local/share so the COPY --from=builder
+# .local step below carries it into the final image; HEADROOM_OPENCODE_
+# PLUGIN_PATH (set as an ENV in the final stage) points headroom at the
+# built dist/entry.opencode.js. node_modules is removed after build since
+# tsup bundles everything the plugin needs into dist/.
+RUN git clone --branch "${HEADROOM_OPENCODE_PLUGIN_REF}" --depth 1 \
+    https://github.com/chopratejas/headroom "/home/${USERNAME}/.local/share/headroom-src" \
+ && cd "/home/${USERNAME}/.local/share/headroom-src/plugins/opencode" \
+ && npm install \
+ && npm run build \
+ && rm -rf node_modules "/home/${USERNAME}/.local/share/headroom-src/.git" \
+ && npm cache clean --force
 
 RUN npm install -g @openai/codex@${CODEX_VERSION} \
  && npm cache clean --force \
@@ -184,6 +204,11 @@ COPY --from=builder --chown=${USER_UID}:${USER_GID} \
 RUN ln -sf "/home/${USERNAME}/.local/state/nix/profiles/profile" "/home/${USERNAME}/.nix-profile"
 
 ENV PATH="/home/${USERNAME}/.nix-profile/bin:${PATH}"
+
+# Read by headroom's own headroom_opencode_plugin_path() lookup -- points it
+# at the transport plugin built in the builder stage above (see that RUN's
+# comment for why the PyPI wheel alone doesn't cover this).
+ENV HEADROOM_OPENCODE_PLUGIN_PATH="/home/${USERNAME}/.local/share/headroom-src/plugins/opencode/dist/entry.opencode.js"
 
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
