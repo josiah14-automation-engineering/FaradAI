@@ -25,11 +25,11 @@ ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
 ARG TARGETARCH
 ARG AIDER_VERSION=0.86.2
-ARG CLAUDE_CODE_VERSION=2.1.205
-ARG CODEX_VERSION=0.141.0
-ARG OPENCODE_VERSION=1.17.18
-ARG HEADROOM_VERSION=0.31.0
-ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.33.0
+ARG CLAUDE_CODE_VERSION=2.1.252
+ARG CODEX_VERSION=0.151.0
+ARG OPENCODE_VERSION=1.18.25
+ARG HEADROOM_VERSION=0.37.0
+ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.37.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -154,6 +154,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     bind9-dnsutils=1:9.18.39-0ubuntu0.24.04.5 \
+    bubblewrap=0.9.0-1ubuntu0.1 \
     git=1:2.43.0-1ubuntu7.3 \
     iproute2=6.1.0-1ubuntu6.3 \
     iputils-ping=3:20240117-1ubuntu0.1 \
