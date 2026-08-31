@@ -133,3 +133,14 @@ Initial release. Core features:
 - `~/.config/opencode/` now always mounted read-write (needed for `FARADAI_ENABLE_PONYTAIL=1` to merge its plugin entry into `opencode.json`), joining the existing `~/.local/share/opencode/` mount.
 - Ponytail plugin installation stays launch-time rather than moving to a build-time-pinned install, after measurement showed the launch-time cost was already low in practice ([DECISIONLOG](DECISIONLOG.md#2026-07-12-1510-utc--ponytail-plugin-provisioning-stays-launch-time-not-build-time-pinned)).
 - 288 tests (was 241): new coverage in `test/sourced.bats` and `test/unit.bats` for the feature-flag resolution/wiring pipeline, plus a new `test/entrypoint.bats` (24 tests) exercising `entrypoint.sh`'s provisioning and dispatch logic directly via call-logging mocks.
+
+## [0.6.0-alpha.2] — 2026-08-31
+
+### Changed
+
+- Updated Claude Code to `2.1.252`, Codex to `0.151.0`, OpenCode to `1.18.25`, and Headroom plus its OpenCode transport plugin to `0.37.0`.
+
+### Fixed
+
+- Added Ubuntu's `bubblewrap` package so Codex can use the system sandbox helper instead of its bundled fallback.
+- Headroom `0.37.0` retires the stale tokensave MCP integration and constrains its MCP dependency to the compatible 1.x API.
