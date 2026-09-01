@@ -1,5 +1,18 @@
 # Decision Log
 
+## 2026-09-01 — Trivy is the baseline container security scanner
+
+**Version scope:** Go/Elvish/Podman migration
+
+**Decision:** Use Trivy for vulnerability, Containerfile and image misconfiguration, secret, and license scanning. High and critical findings fail the check, including vulnerabilities without a published fix. Keep Hadolint for focused Containerfile authoring rules.
+
+**Why:** Trivy covers FaradAI's required security surfaces with one configuration and one vulnerability database. That broader coverage is more useful now than operating separate SBOM-generation and vulnerability-matching tools.
+
+**Alternatives considered:**
+- Syft plus Grype — deferred. Add them if FaradAI later needs more robust SBOM generation, publication, attestation, or downstream exchange workflows; do not duplicate the baseline vulnerability scan before then.
+
+---
+
 Terse record of significant architectural and security decisions made after the first release (v0.1.0-alpha.1). For the full session-based development history through v1, see [BUILDLOG.md](BUILDLOG.md). For user-facing release notes, see [CHANGELOG.md](CHANGELOG.md).
 
 Each entry: date, version scope, the decision, why, and alternatives considered.
@@ -379,3 +392,21 @@ Applying the same directory-plus-`:ro`-overlay pattern already used for Claude's
 
 **Alternatives considered:**
 - Build-time install with a pinned version, checked/updated only when the pin changes — started, then explicitly dropped this session; would add Dockerfile/build complexity and version-pin maintenance for a problem that measurement showed wasn't real.
+
+---
+
+## 2026-09-01 01:47 UTC — Elvish supersedes Nushell; TOML selected for configuration (#65)
+
+**Version scope:** Go/Elvish/Podman migration; supersedes the Nushell portions of the 2026-05-24, 2026-05-27, and 2026-05-27 04:47 UTC decisions
+
+**Decision:** The `faradai` CLI will still migrate to Go and the container runtime will still migrate from Docker to Podman. Elvish replaces Nushell for post-install support scripts and will be available in the FaradAI image for contributors and agents working on the project. Persistent FaradAI configuration will move from environment variables and most FaradAI-specific CLI flags to TOML; invocation-specific agent arguments remain CLI arguments.
+
+**Why — Elvish:** BSD support is a primary Elvish target, while it is not a primary Nushell focus. FreeBSD is an explicit FaradAI portability target, so Elvish aligns the support-script runtime with the platforms the migration is intended to unlock instead of merely avoiding GNU/BSD userland differences on macOS.
+
+**Why — TOML:** FaradAI configuration is human-edited structured data: resource limits, network policy, mounts, agents, and feature flags. TOML provides readable typed values, comments, and clear tables without turning configuration into executable code. It is less error-prone for hand editing than JSON, less semantically complex than YAML, and substantially smaller in scope than HCL, CUE, Dhall, or Jsonnet.
+
+**Alternatives considered:**
+- Nushell — rejected because its BSD support is not a primary project focus, while BSD portability is a FaradAI migration goal.
+- JSON — rejected for primary human-authored configuration because it lacks comments and is unnecessarily strict for routine edits.
+- YAML — rejected because its larger, more surprising type system and parser surface provide no benefit FaradAI needs.
+- HCL, CUE, Dhall, and Jsonnet — rejected as configuration languages with more runtime, dependency, or conceptual machinery than FaradAI's static settings require.

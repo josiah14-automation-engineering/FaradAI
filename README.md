@@ -32,14 +32,14 @@ faradai                # launches Claude Code in a sandboxed container
 | macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (the maintainer's Apple hardware runs Linux/Asahi, not macOS); requires Bash 4+ and platform-specific SSH agent setup (see notes below) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
-| FreeBSD | ⚠️ Planned — Docker unavailable on FreeBSD; targeted for the Go/Nushell migration via a switch from Docker to Podman (#65) |
+| FreeBSD | ⚠️ Planned — Docker unavailable on FreeBSD; targeted for the Go/Elvish migration via a switch from Docker to Podman (#65) |
 | OpenBSD | ❌ Out of scope |
 
 macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot reproduce issues on those platforms.
 
-**macOS: Bash version.** The `faradai` CLI uses Bash 4+ syntax. macOS ships Bash 3.2 (GPLv2). Install a modern Bash via Homebrew (`brew install bash`) and ensure it is on your `PATH`, or invoke `faradai` explicitly with `/opt/homebrew/bin/bash`. This constraint will be removed when the CLI migrates to Go or Nushell (see [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)).
+**macOS: Bash version.** The `faradai` CLI uses Bash 4+ syntax. macOS ships Bash 3.2 (GPLv2). Install a modern Bash via Homebrew (`brew install bash`) and ensure it is on your `PATH`, or invoke `faradai` explicitly with `/opt/homebrew/bin/bash`. This constraint will be removed when the CLI migrates to Go and the support scripts migrate to Elvish (see [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)).
 
-**FreeBSD: planned via Podman.** Docker is not available on FreeBSD. The Go/Nushell migration (#65) will switch the container runtime from Docker to Podman, which has native FreeBSD support. Until that migration lands, FreeBSD is unsupported.
+**FreeBSD: planned via Podman.** Docker is not available on FreeBSD. The Go/Elvish migration (#65) will switch the container runtime from Docker to Podman, which has native FreeBSD support. Elvish replaces the earlier Nushell choice because BSD support is a primary Elvish target but is not a primary Nushell focus. Until that migration lands, FreeBSD is unsupported.
 
 **macOS / Docker Desktop: SSH agent forwarding.** On native Linux, FaradAI forwards the agent socket via a direct bind mount of `$SSH_AUTH_SOCK`. Docker Desktop on macOS and Windows routes host sockets differently — the standard bind-mount approach may not work out of the box. Community-tested workarounds are tracked in [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47).
 
@@ -107,6 +107,8 @@ By default, `faradai` auto-detects whether a container named `faradai` is alread
 ### Configuration
 
 `faradai` reads environment variables to configure the container. Override inline or export from your shell rc file.
+
+The Go/Elvish migration will replace persistent environment-variable configuration with TOML. TOML was selected for readable, typed, comment-friendly configuration without the complexity of an executable configuration language. Invocation-specific agent arguments will remain CLI arguments. See [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) and the [decision log](DECISIONLOG.md).
 
 **Workspace**
 
@@ -258,7 +260,7 @@ Both are off by default; set `FARADAI_ENABLE_PONYTAIL=1` and/or `FARADAI_ENABLE_
 
 [Headroom](https://github.com/headroomlabs-ai/headroom) wraps whichever tool you launch via `headroom wrap <tool>`, starting a local compression proxy in front of it — covers all four agents. Its first use fetches an ONNX runtime and a compression model over the network; that fetch isn't pre-baked into the image, so it happens inside the container on first launch.
 
-The image installs a deliberately narrow set of headroom's [pip extras](https://github.com/headroomlabs-ai/headroom#get-started-60-seconds) — `proxy` (what `wrap` needs to run at all), `code` (AST-aware compression for coding tasks), `html`/`reports`/`spreadsheet`/`otel` (lightweight, no-torch extras). `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` — hundreds of MB even pinned to a CPU-only wheel, multi-GB if it resolves the default CUDA wheel — plus `[voice]`/`[image]` extras unrelated to a text-based coding sandbox, so we don't install it. Notably absent: `[memory]` (headroom's cross-agent shared-memory store, which needs `[ml]`'s torch dependency) — genuinely useful for workflows that rotate heavily between agents on the same project, but not included by default since faradai currently bakes one fixed extras set for everyone. Making extras configurable at build time (rather than everyone getting the same install) is planned for after the Go/Nushell CLI migration ([#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)); until then, add extras by editing `HEADROOM_VERSION`'s install line in the [Dockerfile](Dockerfile) and rebuilding.
+The image installs a deliberately narrow set of headroom's [pip extras](https://github.com/headroomlabs-ai/headroom#get-started-60-seconds) — `proxy` (what `wrap` needs to run at all), `code` (AST-aware compression for coding tasks), `html`/`reports`/`spreadsheet`/`otel` (lightweight, no-torch extras). `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` — hundreds of MB even pinned to a CPU-only wheel, multi-GB if it resolves the default CUDA wheel — plus `[voice]`/`[image]` extras unrelated to a text-based coding sandbox, so we don't install it. Notably absent: `[memory]` (headroom's cross-agent shared-memory store, which needs `[ml]`'s torch dependency) — genuinely useful for workflows that rotate heavily between agents on the same project, but not included by default since faradai currently bakes one fixed extras set for everyone. Making extras configurable at build time (rather than everyone getting the same install) is planned for after the Go/Elvish CLI migration ([#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)); until then, add extras by editing `HEADROOM_VERSION`'s install line in the [Dockerfile](Dockerfile) and rebuilding.
 
 ## What's in the image
 

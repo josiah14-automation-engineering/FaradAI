@@ -1,0 +1,22 @@
+failure-threshold: warning
+strict-labels: false
+trustedRegistries:
+  - docker.io
+  - ghcr.io
+label-schema:
+  org.opencontainers.image.source: text
+  org.opencontainers.image.revision: text
+  org.opencontainers.image.version: text
+  org.opencontainers.image.licenses: text
+  org.opencontainers.image.title: text
+  org.opencontainers.image.description: text
+  org.opencontainers.image.vendor: text
+override:
+  error:
+    - DL3002
+    - DL3006
+    - DL3007
+    - DL3015
+    - DL3025
+    - DL3064
+    - DL4006

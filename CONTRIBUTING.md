@@ -27,6 +27,10 @@ cd faradai
 ./install.sh   # builds the image and installs the CLI
 ```
 
+### Go/Elvish/Podman migration environment
+
+Enter the complete migration toolchain with `nix develop`; direnv users can allow the checked-in `.envrc`. Nix supplies Go, Elvish, Podman, Bats, and Hadolint. The root `go.mod` pins application and test libraries. The isolated `tools/go.mod` pins GolangCI-Lint and Trivy; invoke them from the repository root with `go tool -modfile=tools/go.mod TOOL`.
+
 ## Making changes
 
 Fork the repo and create a branch named for your change:

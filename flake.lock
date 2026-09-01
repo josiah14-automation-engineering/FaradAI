@@ -1,0 +1,49 @@
+{
+  "nodes": {
+    "mise": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1788231356,
+        "narHash": "sha256-qLlk7aaF9v+M7mOFNxUU49DwIFN3f+HnQ+J66ur69vk=",
+        "ref": "refs/heads/master",
+        "rev": "efec59d900f6a212eb7b38d8c35eccc4589935e8",
+        "revCount": 18,
+        "type": "git",
+        "url": "https://github.com/josiah14/mise.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/josiah14/mise.git"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1781328464,
+        "narHash": "sha256-j9uBlHI0eJ9zWU9IlF6SlBBPdeJu30hcvar31IRKHpw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "5a722a7155bfc9fbe657f28d26b71860d95324bc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "mise": "mise",
+        "nixpkgs": [
+          "mise",
+          "nixpkgs"
+        ]
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

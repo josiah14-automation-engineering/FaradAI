@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  default: none
+  enable:
+    # Go toolchain and high-confidence correctness suites.
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+    # Error and control-flow rules from GO_STYLE_GUIDE.md.
+    - errorlint
+    - gochecknoinits
+    - nilerr
+    - nilnesserr
+    - nolintlint
+
+    # Security and trust-boundary checks.
+    - bidichk
+    - gosec
+
+    # API, context, and test correctness.
+    - containedctx
+    - contextcheck
+    - ginkgolinter
+    - godoclint
+    - noctx
+    - revive
+    - tparallel
+    - usetesting
+
+  settings:
+    staticcheck:
+      checks:
+        - all
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

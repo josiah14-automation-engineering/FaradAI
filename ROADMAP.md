@@ -24,11 +24,11 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 
 ### Features
 
-- [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Nushell/Podman migration
+- [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Elvish/Podman migration
 
 ---
 
-## After Go/Nushell Migration
+## After Go/Elvish Migration
 
 Items deferred until after #65. The Bash-specific refactors may become irrelevant entirely.
 
@@ -60,7 +60,7 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 
 ## Won't Fix
 
-- [#75](https://github.com/josiah14-automation-engineering/FaradAI/issues/75) — BUG: Bash 4+ syntax (`${var,,}`) breaks macOS default Bash 3.2 — portability addressed by Go/Nushell migration (#65)
+- [#75](https://github.com/josiah14-automation-engineering/FaradAI/issues/75) — BUG: Bash 4+ syntax (`${var,,}`) breaks macOS default Bash 3.2 — portability addressed by Go/Elvish migration (#65)
 
 ---
 
@@ -78,7 +78,7 @@ Educational explorations that don't directly advance the project but may surface
 - [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29) — Credential broker / proxy sidecar
 - [#30](https://github.com/josiah14-automation-engineering/FaradAI/issues/30) — Per-project policy / config support
 - [#31](https://github.com/josiah14-automation-engineering/FaradAI/issues/31) — Broker network mode (`FARADAI_NETWORK_MODE=broker`, depends on #29)
-- [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) — Language strategy: migrate faradai to Go, support scripts to Nushell
+- [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) — Language strategy: migrate faradai to Go, support scripts to Elvish, and persistent configuration to TOML (supersedes the issue's original Nushell wording)
 - [#66](https://github.com/josiah14-automation-engineering/FaradAI/issues/66) — Post-v1.0.0: polyparadigm translation experiment
 - [#93](https://github.com/josiah14-automation-engineering/FaradAI/issues/93) — Spike: mirror repo on Radicle for decentralized resilience
 - [#99](https://github.com/josiah14-automation-engineering/FaradAI/issues/99) — Spike: decide whether FaradAI shares the host's Nix store or gets its own
