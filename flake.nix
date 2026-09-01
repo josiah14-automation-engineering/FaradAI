@@ -26,6 +26,12 @@
             ++ mise.lib.${system}.bats-1-12-0
             ++ mise.lib.${system}.hadolint-2-14-0
             ++ mise.lib.${system}.podman-5-8-2;
+
+          shellHook = ''
+            export FARADAI_DEV_PATH="$PATH"
+            export FARADAI_USER_ZDOTDIR="''${ZDOTDIR:-$HOME}"
+            export ZDOTDIR="${./dev-shell/zsh}"
+          '';
         };
       });
     };
