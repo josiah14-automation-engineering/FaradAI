@@ -15,6 +15,18 @@ setup() {
   mkdir -p "${MOCK_CALL_LOG_DIR}"
 }
 
+@test "headroom: removes its retired tokensave MCP block from persistent Codex config" {
+  mkdir -p "${HOME}/.codex"
+  printf '%s\n' 'keep = true' '# --- Headroom MCP server: tokensave ---' '[mcp_servers.tokensave]' 'command = "/home/faradai/.local/bin/tokensave"' 'args = ["serve"]' '# --- end Headroom MCP server: tokensave ---' 'also_keep = true' > "${HOME}/.codex/config.toml"
+
+  run env bash "${ENTRYPOINT}" bash -c true
+
+  [ "$status" -eq 0 ]
+  ! grep -q "tokensave" "${HOME}/.codex/config.toml"
+  grep -qx "keep = true" "${HOME}/.codex/config.toml"
+  grep -qx "also_keep = true" "${HOME}/.codex/config.toml"
+}
+
 # ── ponytail provisioning: claude ──────────────────────────────────────────
 
 @test "ponytail: FARADAI_ENABLE_PONYTAIL unset — claude plugin commands not invoked" {

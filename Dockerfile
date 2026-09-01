@@ -30,6 +30,7 @@ ARG CODEX_VERSION=0.151.0
 ARG OPENCODE_VERSION=1.18.25
 ARG HEADROOM_VERSION=0.37.0
 ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.37.0
+ARG RTK_VERSION=0.46.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -115,6 +116,27 @@ RUN case "${TARGETARCH:-amd64}" in \
  && curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.${_SC_ARCH}.tar.gz" \
     | tar -xz --strip-components=1 -C /tmp "shellcheck-${SHELLCHECK_VERSION}/shellcheck"
 
+# rtk (github.com/rtk-ai/rtk) is the CLI proxy Claude Code's hook config
+# (~/.claude/RTK.md, bind-mounted from the host) shells out to on every bash
+# command to cut token usage on routine dev operations. No crates.io package
+# and no Rust toolchain in this image, so pull the prebuilt per-arch release
+# binary directly, same pattern as shellcheck above. Checksums are pinned to
+# RTK_VERSION and must be updated together on any version bump (from that
+# release's checksums.txt). musl build used for amd64 (static, no libc
+# version coupling); gnu build is the only linux/arm64 artifact published.
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) _RTK_ARCHIVE="rtk-x86_64-unknown-linux-musl.tar.gz" \
+             _RTK_SHA256="79aa5b89c69566bbfeceb66c8a27cfbe52237fc7ee3e683115f43745a3262d21" ;; \
+      arm64) _RTK_ARCHIVE="rtk-aarch64-unknown-linux-gnu.tar.gz" \
+             _RTK_SHA256="e8c2e1787f46017ea7c5a711b2bc6a7f7cf61c7ad69385b4c1e4daff1135dcd1" ;; \
+      *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o "/tmp/${_RTK_ARCHIVE}" \
+    "https://github.com/rtk-ai/rtk/releases/download/v${RTK_VERSION}/${_RTK_ARCHIVE}" \
+ && echo "${_RTK_SHA256}  /tmp/${_RTK_ARCHIVE}" | sha256sum -c - \
+ && tar -xz -C /tmp -f "/tmp/${_RTK_ARCHIVE}" rtk \
+ && rm "/tmp/${_RTK_ARCHIVE}"
+
 FROM base AS final
 
 ARG USERNAME
@@ -197,6 +219,8 @@ RUN mkdir -p "/home/${USERNAME}/.config" \
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
 
 COPY --chmod=755 --from=builder /tmp/shellcheck /usr/local/bin/shellcheck
+
+COPY --chmod=755 --from=builder /tmp/rtk /usr/local/bin/rtk
 
 COPY --from=builder --chown=${USER_UID}:${USER_GID} \
     /home/${USERNAME}/.local \

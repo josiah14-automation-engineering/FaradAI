@@ -21,6 +21,14 @@ EOF
 _PONYTAIL_MARKETPLACE="DietrichGebert/ponytail"
 _PONYTAIL_OPENCODE_PACKAGE="@dietrichgebert/ponytail"
 
+# Headroom 0.37 retired tokensave, but its ownership ledger lives in the
+# replaced container while Codex's config persists on the host mount.
+_cleanup_retired_tokensave() {
+  local cfg="${HOME}/.codex/config.toml"
+  [[ -f "${cfg}" ]] || return 0
+  sed -i '/^# --- Headroom MCP server: tokensave ---$/,/^# --- end Headroom MCP server: tokensave ---$/d' "${cfg}"
+}
+
 # _provision_ponytail_claude / _codex / _opencode
 #
 # Each is a no-op if its tool isn't installed. claude/codex have their own
@@ -117,6 +125,8 @@ _dispatch_tool() {
   fi
   exec "${tool}" "$@"
 }
+
+_cleanup_retired_tokensave
 
 case "${1:-claude}" in
   claude|codex|aider|opencode)
