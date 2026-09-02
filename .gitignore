@@ -24,3 +24,7 @@ tags
 .\#*
 .dir-locals.el
 .aider*
+
+# Local tool state
+.direnv/
+.tokensave/
