@@ -1,5 +1,23 @@
 FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS base
 
+# Metadata
+ARG TITLE=FaradAI
+ARG DESCRIPTION="Local AI agent restriction container"
+ARG SOURCE="https://github.com/josiah14-automation-engineering/FaradAI"
+ARG VENDOR="Josiah Berkebile"
+ARG LICENSES="AGPL-3.0-or-later"
+ARG VERSION="v0.6.0-alpha.2"
+ARG REVISION="6a3122490661388e29049c2cf6c0496f49ec6edf"
+
+LABEL org.opencontainers.image.title="${TITLE}" \
+      org.opencontainers.image.description="${DESCRIPTION}" \
+      org.opencontainers.image.source="${SOURCE}" \
+      org.opencontainers.image.vendor="${VENDOR}" \
+      org.opencontainers.image.licenses="${LICENSES}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
+
+
 ARG SNAPSHOT_DATE=20260522T000000Z
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -40,7 +58,6 @@ ENV PIPX_HOME=/home/${USERNAME}/.local/pipx
 ENV PIPX_BIN_DIR=/home/${USERNAME}/.local/bin
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
     gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
@@ -88,12 +105,14 @@ RUN pipx install "headroom-ai[proxy,code,html,reports,spreadsheet,otel]"==${HEAD
 # PLUGIN_PATH (set as an ENV in the final stage) points headroom at the
 # built dist/entry.opencode.js. node_modules is removed after build since
 # tsup bundles everything the plugin needs into dist/.
-RUN git clone --branch "${HEADROOM_OPENCODE_PLUGIN_REF}" --depth 1 \
-    https://github.com/chopratejas/headroom "/home/${USERNAME}/.local/share/headroom-src" \
- && cd "/home/${USERNAME}/.local/share/headroom-src/plugins/opencode" \
- && npm install \
- && npm run build \
- && rm -rf node_modules "/home/${USERNAME}/.local/share/headroom-src/.git" \
+RUN headroom_src_dir="/home/${USERNAME}/.local/share/headroom-src" \
+ && headroom_opencode_plugin_dir="${headroom_src_dir}/plugins/opencode" \
+ && git clone --branch "${HEADROOM_OPENCODE_PLUGIN_REF}" --depth 1 \
+        https://github.com/chopratejas/headroom "${headroom_src_dir}" \
+ && npm --prefix "${headroom_opencode_plugin_dir}" install \
+ && npm --prefix "${headroom_opencode_plugin_dir}" run build \
+ && rm -rf "${headroom_opencode_plugin_dir}/node_modules" \
+           "${headroom_src_dir}/.git" \
  && npm cache clean --force
 
 RUN npm install -g @openai/codex@${CODEX_VERSION} \
@@ -165,7 +184,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # indefinitely, so downloading the pinned .deb directly is the only way to
 # keep gh reproducible — see DECISIONLOG.
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates \
     curl=8.5.0-2ubuntu10.9 \
     gnupg=2.4.4-2ubuntu17.4 \
  && mkdir -p /etc/apt/keyrings \
@@ -196,7 +214,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
     esac \
  && curl -fsSL -o /tmp/gh.deb \
     "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}.deb" \
- && apt-get install -y /tmp/gh.deb \
+ && apt-get install -y --no-install-recommends /tmp/gh.deb \
  && rm -f /tmp/gh.deb \
  && apt-get purge -y gnupg \
  && apt-get autoremove -y \

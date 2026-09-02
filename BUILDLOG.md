@@ -385,7 +385,7 @@ The distinction from the removed tmux mode: no user config mounts, no split-pane
 
 Ring-2.6-1T reviewed the post-Session-11 state of FaradAI via a non-interactive aider session backgrounded in tmux. Full findings in the pane capture; summary of decisions:
 
-**GPL3 License chosen.** Josiah decided on GPL3 to ensure FaradAI remains FOSS — derivative works must remain open-source. GPL3 closes the "use our work, give nothing back" loophole without restricting non-commercial or community use. LICENSE file added.
+**GPL3 License chosen.** Josiah decided on GPL3 to ensure FaradAI remains FOSS — derivative works must remain open-source. GPL3 closes the "use our work, give nothing back" loophole without restricting non-commercial or community use. LICENSE file added. This decision was superseded on 2026-09-02 by adoption of AGPL-3.0-or-later.
 
 **P0 — Network access:** Container has unrestricted outbound network access. Acknowledged as a known limitation of the current architecture; documented in the security model rather than technically restricted at this stage.
 

@@ -440,3 +440,11 @@ Language servers that rely on system-wide installations (e.g. a globally install
 
 **Multi-user `docker rm` behavior**
 `faradai` calls `docker rm -f faradai` before each new launch to clear any stopped container. On a shared machine where multiple users might run faradai containers, this could remove another user's stopped container if container names collide. Use `-n NAME` to give each session a unique name.
+
+---
+
+## License
+
+Copyright (C) 2026 Cloyd Garrett Berkebile.
+
+FaradAI is licensed under the [GNU Affero General Public License, version 3 or later](LICENSE).
