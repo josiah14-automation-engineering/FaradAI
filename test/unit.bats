@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-FARADAI="${BATS_TEST_DIRNAME}/../faradai"
+FARADAI="${BATS_TEST_DIRNAME}/../faradai-docker"
 
 setup() {
   # Prepend mock helpers so docker is intercepted before the real binary.

@@ -388,20 +388,13 @@ _dispatch_meta_commands() {
   esac
 }
 
-# _preflight_podman
+# _preflight_docker
 #
 # Reads:  nothing
-# Writes: nothing — exits if Podman is unavailable
-_preflight_podman() {
-  command -v podman > /dev/null 2>&1 || _die "Podman is not installed or not in PATH"
-  podman info > /dev/null || _die "Podman is installed but not ready.
-Review the error above, then run 'podman info' for full diagnostics.
-
-Common causes:
-- Linux: rootless storage, permissions, user namespaces, OCI runtime, or configuration errors.
-- macOS and Windows/WSL2: the Podman machine is missing, stopped, or unreachable.
-- Remote Podman: the configured socket or service is unreachable.
-- FreeBSD: jail-backed runtime support is unavailable or misconfigured."
+# Writes: nothing — exits if Docker is unavailable
+_preflight_docker() {
+  command -v docker > /dev/null 2>&1 || _die "docker is not installed or not in PATH"
+  docker info > /dev/null 2>&1 || _die "Docker daemon is not running"
 }
 
 # _dispatch_docker_metadata_commands CMD_ARGS...
@@ -995,7 +988,7 @@ main() {
   _parse_cli_flags "$@"
   _dispatch_meta_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
 
-  _preflight_podman
+  _preflight_docker
   _dispatch_docker_metadata_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
 
   _ensure_image_ready

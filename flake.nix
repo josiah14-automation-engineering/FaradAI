@@ -23,6 +23,7 @@
           packages =
             mise.lib.${system}.go-1-26-3
             ++ mise.lib.${system}.elvish-0-21-0
+            ++ mise.lib.${system}.bash-5-3p9
             ++ mise.lib.${system}.bats-1-12-0
             ++ mise.lib.${system}.hadolint-2-14-0
             ++ mise.lib.${system}.podman-5-8-2;
