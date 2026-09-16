@@ -1,0 +1,73 @@
+#!/usr/bin/env elvish
+
+use str
+
+pragma unknown-command = disallow
+
+# This script uses supplied environment variables:
+# RUNNING_CONTAINER
+if (not (has-env RUNNING_CONTAINER)) {
+  set E:RUNNING_CONTAINER = ''
+}
+
+if (== (count $args) 0) {
+  echo "ERROR: must supply at least 1 argument." >&2
+  exit 2
+}
+
+if (eq $args[0] "info") {
+  echo "Podman mock is ready"
+  exit 0
+}
+
+if (not (eq $args[0] "logs")) {
+  echo "ERROR: the first argument must be 'info' or 'logs'" >&2
+  exit 3
+}
+
+if (< (count $args) 2) {
+  echo (str:join " " [
+    "ERROR: the container name argument is required for the 'logs' command."
+  ]) >&2
+  exit 4
+}
+
+var have_tail_arg = (eq $args[1] "--tail")
+
+if (and $have_tail_arg (< (count $args) 4)) {
+  echo "ERROR: when using --tail at least 4 arguments total is required." >&2
+  exit 5
+}
+
+var container_name = $args[-1]
+var no_container_msg = (str:join " " [
+   'Error: no container with name or ID "'$container_name'" found:' ^
+   'no such container'
+])
+
+if (not (eq $E:RUNNING_CONTAINER $container_name)) {
+  echo $no_container_msg >&2
+  exit 1
+}
+
+var logs = (str:join "\n" [
+  $container_name": first line of the logs"
+  $container_name": the last line of the logs"
+])
+
+fn last-line {|text|
+  put [(str:split "\n" $text)][-1]
+}
+
+if $have_tail_arg {
+  if (== $args[2] 1) {
+    set logs = (last-line $logs)
+  } else {
+    echo "ERROR: expected 1 as the next argument after --tail" >&2
+    exit 6
+  }
+}
+
+echo $logs
+
+exit 0

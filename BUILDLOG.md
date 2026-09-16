@@ -15,7 +15,7 @@ behavior and [DECISIONLOG.md](DECISIONLOG.md) for settled rationale.
 | Nix investigation (2026-06-16) | Shared-store lock failure, rejected theories, syscall diagnosis, final mount policy |
 | IDE research (2026-06-16) | IDE agent approaches, isolation tradeoffs, deferred integration paths |
 | ARM64 validation (2026-07-08) | Native build, smoke testing, GitHub CLI packaging, CI architecture coverage |
-| Go/Elvish/Podman migration (2026-09-09 onward) | Migration boundaries, build conversion, executable specifications, runtime-preflight acceptance coverage |
+| Go/Elvish/Podman migration (2026-09-09 onward) | Migration boundaries, build conversion, executable specifications, runtime-preflight acceptance coverage, external-runtime contract validation |
 
 ---
 
@@ -1812,3 +1812,157 @@ literal period. The agent reviewed but did not write the implementation.
 `gofmt -d`, `go vet ./features/tests`, and Elvish compilation passed. Running
 `nix develop --command go test -v ./features/tests` passed both scenarios and
 all eight steps.
+
+### Container-runtime contracts made executable — 2026-09-18
+
+While preparing the container-log and status specifications, Josiah identified
+that mocks alone would silently preserve an obsolete assumption if Podman—or a
+future compatible runtime—changed the command interface FaradAI consumes. He
+added focused contract helpers which execute the real runtime before the
+affected feature path proceeds. The logs contract exercises
+`logs --tail 1 <container>` against a deliberately nonexistent name and
+requires a nonzero exit plus both the name and the case-insensitive phrase
+`no such container`. The inspect contract explicitly uses `--type container`
+and likewise checks only the missing-container behavior FaradAI consumes,
+rather than pinning a runtime's complete diagnostic wording.
+
+The checks are declarations of actual dependencies, not general environment
+smoke tests. The logs feature suite requires the logs contract. The preflight
+status scenario requires the inspect contract immediately before exercising
+FaradAI's status path; the same helper can guard the dedicated status feature
+later. Keeping each check at its smallest real consumer prevents unrelated
+features from being suppressed while replacing cascades of misleading mock
+failures with one causal contract failure.
+
+The same review corrected the feature boundary. The agent had suggested
+grouping logs and status under `container_metadata` files, but Josiah pushed
+back that “metadata” describes the current implementation rather than a
+user-visible capability. The logs work now lives in a container-log-request
+feature, and status will have its own request feature. This keeps each
+specification cohesive and allows either command's implementation to change
+without preserving an internal category in the test architecture.
+
+This design resulted from useful pushback by Josiah. The agent initially
+resisted validating some of the real-runtime behavior and questioned whether
+the inspect guard coupled preflight to status too tightly. Josiah correctly
+pointed out that the scenario actually invokes the status mechanism, so its
+dependency on the inspect interface is real and the guard documents the exact
+test code that must be removed if that execution path changes. The resulting
+boundary is clearer: real-runtime checks validate the external API surface;
+Godog scenarios validate FaradAI's observable behavior; PATH-injected mocks
+then isolate scenario decisions without pretending to prove the runtime API.
+
+The work immediately justified the extra care. Inspection showed that
+FaradAI's logs arguments were ordered incorrectly for options: the runtime
+expects `logs [options] <container>`, not `logs <container> [options]`. It also
+exposed a Podman-specific ambiguity: untyped `podman inspect faradai` can
+resolve an image when no Podman container has that name, so status must request
+the container type explicitly. Josiah extracted the shared process runner and
+runtime lookup into test-only helpers, kept the contract assertions tolerant
+of the compatible Docker, Podman, and nerdctl missing-container diagnostics,
+and confirmed that the complete test suite still passes.
+
+### Container-log behavior scenarios underway — 2026-09-22
+
+Josiah continued the user-visible container-log feature with one PATH-injected
+Elvish `podman` fake whose behavior is configured by scenario state through the
+`RUNNING_CONTAINER` environment variable. The Godog harness now constructs the
+active `faradai` command without mutating the test process environment and
+covers requesting logs from both the default container and a custom-named
+container. Shared output assertions compare the complete captured log stream,
+including its terminal newline. That newline initially made visually identical
+strings compare unequal; rendering diagnostics with `%q` exposed the exact
+byte-level difference and made future whitespace failures legible.
+
+Every line of Go in this work was written by Josiah. The agent's role remained
+limited to answering language and API questions, tracing failures, reviewing
+iterations, and maintaining documentation. Across the Godog work, the agent
+observed Josiah's independence increase rapidly: early sessions involved
+frequent guidance on composite literals, pointer receivers, callback
+registration, and Go error handling; in this continuation he independently
+organized feature-specific state, constructed isolated command environments and
+argument vectors, factored shared command and assertion helpers, and iterated
+from failing scenario output. The collaboration has shifted noticeably from
+help with writing Go toward review of behavior, contracts, and design tradeoffs.
+
+The custom-container scenario also exposed an existing Bash CLI grammar
+constraint: the global name option must precede the first non-option command,
+so the supported form is `faradai -n custom logs`, not
+`faradai logs -n custom`. Everything after `logs` belongs to the runtime logs
+interface, where `-n` can itself be a logs option. The current acceptance test
+therefore exercises the existing supported order rather than hiding that
+dependency. This boundary will be reconsidered during the Go migration as
+persistent container configuration moves from CLI arguments and environment
+variables into TOML. An explicit separator such as
+`faradai -n custom logs -- --tail 1` remains a possible future boundary for
+invocation-specific runtime options.
+
+Default- and custom-container stdout assertions are implemented. Missing-
+container stderr, `--tail 1`, and exit-status result steps remain pending, so
+the feature is deliberately still part of the rolling migration commit.
+
+### First container-log behavior draft completed — 2026-09-22
+
+Josiah completed the remaining stderr, `--tail 1`, and exit-status steps and
+expanded the feature with a scenario requesting logs from a non-running custom-
+named container while the default container is running. That additional
+scenario arose from several errors Josiah encountered while writing the tests,
+then troubleshot and resolved entirely on his own.
+
+The exact errors and their resolution were deliberately not disclosed to the
+agent. The agent therefore cannot identify, reconstruct, or claim any role in
+that debugging—not implementation, guidance, suggestions, or troubleshooting.
+Its lack of knowledge is itself part of the record: this scenario and the
+insight behind it were produced independently by Josiah before the agent saw
+the completed draft. The agent's involvement began afterward with a requested
+static review of the finished work.
+
+That review found the default-name assertion could accept `faradai-custom`
+because it searched for the substring `faradai`. The first proposed fix—match
+the quoted name—was rejected when Josiah supplied Docker's unquoted diagnostic,
+contrasting with Podman's quoted form. Discussion moved through generic word
+boundaries and the current `faradai-<customization>` naming invariant before
+arriving at the actual diagnostic-fragment contract: a match begins at the
+message boundary or after a character outside the container-name character set,
+and ends at the message boundary, whitespace, `.`, `,`, `:`, `;`, or either
+quote character. Quoting each expected fragment with `regexp.QuoteMeta` keeps
+the matcher literal while accepting both runtimes' punctuation and rejecting
+name prefixes such as `faradai` in `faradai-custom` or `faradai-custom` in
+`faradai-customized`.
+
+The other static-review findings were corrected as well: the tail assertion
+guards the actual minimum split length, log mismatch diagnostics include the
+exit code, missing-container wrappers return the shared matcher's error
+directly, and expected log output includes its terminal newline. Project tools
+for the eventual executable verification are provided by the pinned Nix
+development shell rather than assumed to exist on the ambient `PATH`.
+
+### Container-status request feature defined — 2026-09-24
+
+Josiah drafted a dedicated user-visible container-status feature with eight
+scenarios spanning default and custom names, successful reports, missing
+containers, both containers present, and no containers present. Review reduced
+that set to the smallest complete behavior matrix: default requested and found,
+custom requested and found, default requested while only custom exists, and
+custom requested while only default exists. The two mismatch cases cover the
+same not-found outcomes as an empty runtime while additionally proving FaradAI
+does not fall back to another container; both-present success cases add no
+distinct behavior.
+
+The review also clarified three specification details. Text below a `Scenario:`
+line is a description, not a continuation of its name. Absence must mean the
+requested container does not exist—not merely that it is not running—because
+`podman inspect` can report an existing stopped container. A failed custom-name
+request must identify the fully resolved `faradai-custom` name. The feature was
+therefore named for the user action, container status request, rather than the
+result or the implementation-shaped metadata category previously rejected.
+
+After those behavior decisions were settled, Josiah explicitly delegated the
+mechanical rewrite as a one-off exception to the learning-project boundary: the
+wording and deletion work offered little additional educational value. The
+agent renamed the draft to `features/container_status_request.feature` and
+rewrote it as the four scenarios above. No Go, Elvish, system mock, step harness,
+or Podman integration was written. Executable coverage remains pending; its
+dedicated suite should reuse the existing helpers and place
+`requireContainerInspectContract(t)` immediately before exercising status
+behavior. No automated check currently consumes the new feature file.
