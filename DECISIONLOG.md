@@ -1,5 +1,20 @@
 # Decision Log
 
+Use this log for the reasoning behind non-obvious choices. For current behavior,
+start with [README.md](README.md), the code, and the tests.
+Entries record the date, version scope, decision, rationale, and alternatives.
+
+## Topic index
+
+| Topic | Decisions to scan |
+|---|---|
+| Build and supply chain | Trivy baseline; Ubuntu snapshots and shared base stage; BuildKit cache decision; update integrity and GPG; version-pin layers; GitHub CLI packaging |
+| Runtime lifecycle and identity | `$USER` normalization; ephemeral containers; managed labels; attach-mode entrypoint; pre-created configuration directories |
+| Credentials, mounts, and isolation | Credential recovery; shared Nix store; aider OAuth overlay; ponytail network exposure |
+| Agent tools and extensions | Codex and OpenCode expansion; ponytail and headroom policy, dependencies, and provisioning |
+| Language, platform, and test architecture | Go migration; FreeBSD and Podman; Elvish and TOML; incremental Docker replacement; Godog runtime-preflight tests |
+| Agent governance | Expert-mentor role and implementation boundary |
+
 ## 2026-09-01 — Trivy is the baseline container security scanner
 
 **Version scope:** Go/Elvish/Podman migration
@@ -10,12 +25,6 @@
 
 **Alternatives considered:**
 - Syft plus Grype — deferred. Add them if FaradAI later needs more robust SBOM generation, publication, attestation, or downstream exchange workflows; do not duplicate the baseline vulnerability scan before then.
-
----
-
-Terse record of significant architectural and security decisions made after the first release (v0.1.0-alpha.1). For the full session-based development history through v1, see [BUILDLOG.md](BUILDLOG.md). For user-facing release notes, see [CHANGELOG.md](CHANGELOG.md).
-
-Each entry: date, version scope, the decision, why, and alternatives considered.
 
 ---
 
@@ -410,3 +419,51 @@ Applying the same directory-plus-`:ro`-overlay pattern already used for Claude's
 - JSON — rejected for primary human-authored configuration because it lacks comments and is unnecessarily strict for routine edits.
 - YAML — rejected because its larger, more surprising type system and parser surface provide no benefit FaradAI needs.
 - HCL, CUE, Dhall, and Jsonnet — rejected as configuration languages with more runtime, dependency, or conceptual machinery than FaradAI's static settings require.
+
+---
+
+## 2026-09-09 — Repository agents are expert mentors, not project implementers
+
+**Decision:** Agents working in FaradAI guide, diagnose, review, advise, and may maintain documentation, but do not write the project's code, specifications, or tests. Syntax and conceptual examples are allowed when they are separate from the concrete project solution and Josiah must apply the demonstrated idea himself. Agents may present needed technical information directly; searching documentation and forums is not treated as a learning objective.
+
+**Why:** The migration is also a deliberate Go, Godog, and systems-engineering learning exercise. Keeping implementation ownership with Josiah builds the intended skills and prevents generated code from outrunning his understanding, while direct mentoring avoids substituting low-value information hunting for engineering practice.
+
+**Alternatives considered:**
+
+- Let agents implement changes after discussion — rejected because reviewing generated solutions does not exercise the same design and implementation skills as producing them.
+- Withhold direct answers and require independent documentation searches — rejected because locating scattered syntax facts is busy-work, not the skill this project is intended to develop.
+
+---
+
+## 2026-09-09 — Preserve the Docker implementation while Podman and Go replace it incrementally (#65)
+
+**Decision:** `faradai-docker` remains the working legacy implementation until the Go CLI reaches its first complete, usable version. The legacy Docker install and Bats paths continue to target it. The active `faradai` script migrates to Podman first; later, Bash delegates individual migrated functions to the compiled Go binary until Go owns the entire CLI. Elvish is limited to support scripts such as the new Podman build path and will not become an intermediate implementation of the main CLI. Platform profiles are deferred until behavior parity is complete. The credential and network broker is separate follow-up work.
+
+**Why:** FaradAI must remain usable throughout the migration. Separating the stable Docker path from the changing implementation avoids forcing an all-at-once rewrite or making partially migrated code the only runnable version. Migrating container-runtime behavior before replacing functions in Go keeps each transition observable. Avoiding an Elvish version of the main CLI prevents implementing the same orchestration twice before reaching Go.
+
+**Alternatives considered:**
+
+- Replace the working CLI in place — rejected because intermediate migration states would interrupt normal FaradAI use.
+- Migrate the main CLI through Elvish before Go — rejected as a throwaway second rewrite; Elvish remains valuable for the smaller support scripts.
+- Build the credential/network broker during compatibility migration — deferred so the first migration can preserve existing behavior before introducing a new security boundary.
+- Add platform profiles early — deferred until the common behavior is stable and can be validated on the maintainer's Asahi Linux, macOS, and x86_64 Linux systems plus the planned FreeBSD VM.
+
+---
+
+## 2026-09-09 — Runtime-preflight acceptance tests use Godog with separated state and a Nix-only child PATH (#65)
+
+**Decision:** User-facing preflight behavior is specified in generic “required container runtime” language under `features/`, while the current Go step implementation exercises Podman. Each scenario owns two state objects: `ScenarioEnvironment` for setup inputs and `ScenarioRunResult` for stdout, stderr, and exit status. Given steps mutate only the environment; the When step will consume that environment through a closure and write only the result; Then steps inspect only the result.
+
+The unavailable-runtime fixture derives a child PATH rather than changing the Go test process. It first requires Podman to be present in the parent Nix devShell, then retains only normalized direct `/nix/store/` PATH entries while removing the directory resolved for the runtime. Setup failures return wrapped Go errors. Guard clauses handle invalid preconditions and leave the successful path unnested.
+
+**Why:** Generic feature wording describes stable user behavior and need not change if the selected runtime changes. The wrapped `LookPath` error still names the concrete executable, so diagnostics remain actionable without duplicating a runtime name in hand-written error text. Separate input and result types make scenario phases explicit and discourage assertion code from depending on setup details. Filtering the child PATH preserves declared Nix dependencies while hiding both the selected runtime and host directories; it also exposes accidental reliance on undeclared host tools. Go-style early error returns are clearer here than mutable return-state variables and nested success branches.
+
+**Assumption:** The Nix devShell places its selected Podman executable in a direct `/nix/store/.../bin` entry before host paths and provides every other executable the application needs. This fixture removes the resolved runtime directory, not every possible Podman-bearing Nix store directory. Broader discovery should be added only if that assumption stops holding in a real test environment.
+
+**Alternatives considered:**
+
+- Empty the entire child PATH — rejected because it would also hide declared utilities that FaradAI may legitimately need before or during preflight.
+- Remove only the first runtime directory while retaining host PATH entries — rejected because a host Podman installation could remain discoverable and undeclared host dependencies could mask omissions from the devShell.
+- Scan and classify every possible runtime installation — rejected as unnecessary for the current controlled Nix fixture.
+- Use one aggregate scenario-world object, package globals, or context-based state lookup — rejected in favor of two small typed values with clear phase ownership.
+- Fake a failing Podman executable — rejected because that represents “installed but not ready,” a different observable behavior from “not installed.”

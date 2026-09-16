@@ -1,103 +1,123 @@
 # Smoke Test
 
-Run these from inside the container after a successful `./install.sh`:
+The installed CLI still uses the stable Docker implementation. Run these on the
+host first:
 
-**Tools and versions**
+```bash
+./install.sh
+faradai bash
+```
+
+Run the remaining checks inside that container unless stated otherwise.
+
+## Tools and versions
+
 ```bash
 claude --version
+codex --version
 aider --version
+opencode --version
 gh --version
 python3 --version
 git --version
+shellcheck --version
+rtk --version
 ```
 
-**Mounts**
+## Mounts
+
+Check credential paths without printing their contents:
+
 ```bash
-pwd                              # should match the directory faradai was launched from
-ls . | head -5                   # working dir contents
-ls ~/.claude/.credentials.json
+pwd                              # matches the directory used to launch faradai
+ls . | head -5                   # shows that working directory's contents
+test -f ~/.claude/.credentials.json
+test -f ~/.codex/auth.json
+test -f ~/.aider/oauth-keys.env
+test -f ~/.local/share/opencode/auth.json
 stat -c "%A %n" ~/.claude/.credentials.json
-ls ~/.config/gh                          # should exist (mounted from host)
+test -d ~/.config/gh
 ```
 
-**Capability drop**
+## Confinement and resource limits
+
 ```bash
-cat /proc/self/status | grep Cap
+grep Cap /proc/self/status
 # CapPrm and CapEff should both be 0000000000000000
-```
 
-**no_new_privs**
-```bash
-cat /proc/self/status | grep NoNewPrivs
-# Should be 1
-```
+grep NoNewPrivs /proc/self/status
+# NoNewPrivs should be 1
 
-**Resource limits**
-```bash
 cat /sys/fs/cgroup/memory.max 2>/dev/null || cat /sys/fs/cgroup/memory/memory.limit_in_bytes
-cat /sys/fs/cgroup/pids.max 2>/dev/null          # should match FARADAI_PIDS (default: 512)
-cat /sys/fs/cgroup/cpu.max 2>/dev/null           # quota period; quota/period = CPU count
+cat /sys/fs/cgroup/pids.max 2>/dev/null          # FARADAI_PIDS; default 512
+cat /sys/fs/cgroup/cpu.max 2>/dev/null           # quota / period = CPU count
 ```
 
-**gh auth**
+## Authentication
+
 ```bash
 gh auth status
 ```
 
-**SSH agent forwarding**
-
-> Pre-condition: host SSH agent must be running with at least one key loaded (`ssh-add -l` on the host returns keys). If not, see the "Host SSH agent setup" section in README.md.
+For SSH-agent forwarding, the host agent must be running with at least one key
+loaded. See "SSH agent forwarding" in `README.md` if needed.
 
 ```bash
-echo "$SSH_AUTH_SOCK"     # should be /ssh-agent
-ls -la /ssh-agent         # should show a socket: srwx... or srwxr-xr-x ...
-ssh-add -l | wc -l        # should be >= 1 (avoids printing fingerprints and email labels)
+echo "$SSH_AUTH_SOCK"     # /ssh-agent
+ls -la /ssh-agent         # a socket
+ssh-add -l | wc -l        # at least 1; avoids printing key labels
 ```
 
-Optional — verify Git host authentication works end-to-end:
+Optional end-to-end Git host check:
+
 ```bash
-ssh -T git@github.com     # "Hi <username>! You've successfully authenticated..."
+ssh -T git@github.com
 ```
 
-**SSH agent disabled (`FARADAI_ENABLE_SSH_AGENT=0`)**
+To verify the disabled path, start a separate container from the host:
 
-Launch the container with `FARADAI_TRUST_DIR=1 FARADAI_ENABLE_SSH_AGENT=0 faradai bash`, then inside:
 ```bash
-echo "${SSH_AUTH_SOCK:-unset}"   # should print: unset
-ls /ssh-agent 2>&1               # should fail: No such file or directory
+FARADAI_TRUST_DIR=1 FARADAI_ENABLE_SSH_AGENT=0 faradai bash
 ```
 
-**tmux → aider round-trip**
-
-Verifies that Claude Code can start an aider session in a background tmux pane, send a prompt, and capture the response — the internal pattern used for running Ring alongside Claude.
-
-> **Caveat:** Aider may show a "Would you like to see what's new in this version?" interactive prompt on startup. If it does, it will intercept subsequent commands as invalid Y/N answers. Send `n` to dismiss it before the `/model` command.
+Then check inside it:
 
 ```bash
-# Start a detached tmux session and launch aider in it
-tmux new-session -d -s smoke-aider
-tmux send-keys -t smoke-aider "aider --no-git" Enter
+test -z "${SSH_AUTH_SOCK:-}"
+test ! -e /ssh-agent
+```
 
-# Give aider time to initialize
+## tmux to aider round-trip
+
+This verifies that one agent can run aider in a background tmux session. It uses
+the model already selected in `~/.aider.conf.yml`.
+
+```bash
+tmux new-session -d -s smoke-aider \
+  'AIDER_ANALYTICS_DISABLE=true aider --no-git --no-check-update'
 sleep 6
+tmux capture-pane -t smoke-aider -p
+```
 
-# Dismiss the "What's new?" prompt if it appears
-tmux send-keys -t smoke-aider "n" Enter
-sleep 2
+Do not send input until the captured pane shows aider's bare `>` prompt. Wait
+and capture again if initialization is still running. Then:
 
-# Set the model explicitly (works around any slug mismatch in ~/.aider.conf.yml)
-tmux send-keys -t smoke-aider "/model openrouter/inclusionai/ring-2.6-1t" Enter
-sleep 2
-
-# Send a minimal prompt and wait for a response
+```bash
 tmux send-keys -t smoke-aider "say the word hello and nothing else" Enter
 sleep 15
-
-# Capture and inspect the pane — should contain a response and a token/cost line
 tmux capture-pane -t smoke-aider -p
-
-# Clean up
 tmux kill-session -t smoke-aider
 ```
 
-Expected: the captured output contains a response from the model and a token/cost summary line. No `LLM Provider NOT provided` or credential errors.
+Expected: a model response and token/cost summary, with no provider or credential
+error.
+
+## Podman migration path
+
+The Podman image build and runtime-preflight acceptance tests are usable, but the
+main runtime migration is not complete. Run these from the host repository:
+
+```bash
+nix develop --command ./build.elv
+nix develop --command go test ./...
+```

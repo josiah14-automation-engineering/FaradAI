@@ -1,27 +1,44 @@
 # FaradAI — Claude Code Container
 
-You are running inside a Docker container. The filesystem boundary is intentional and enforced at the OS level.
+Start repository work at [AGENTS.md](AGENTS.md), then read the documents it
+routes to for the current task. Return to that index whenever the task changes
+scope or reaches an architecture, security, style, or verification decision.
+
+You are running inside a FaradAI container. The filesystem boundary is intentional and enforced at the OS level.
 
 ## Filesystem ceiling
 
-`~/Development/personal` is both the working directory and the top of the accessible filesystem. It maps directly to the same path on the host machine.
+`~/Development/personal` is the project search root and the only mounted host
+project tree. It maps directly to the same path on the host machine. Other
+explicit configuration and credential mounts are listed in `README.md`; they
+are not general search space.
 
 **Never search above this directory.** Do not walk up toward `/home`, `/root`, or any other path outside the mount. When you need to find a file and the path is unknown, search from `.` or ask.
 
-**Do not inspect or modify system paths** — `/etc`, `/root`, `/usr`, `/var`, or anything outside `~/Development/personal` and `~/.claude`. The filesystem mount is the primary boundary; this is a second layer.
+**Do not inspect or modify system paths** such as `/etc`, `/root`, `/usr`, or
+`/var`. Do not search explicit host configuration mounts; inspect a non-secret
+configuration file only when the task requires it. The filesystem mounts are
+the primary boundary; these rules are a second layer.
 
-**Do not read `~/.aider/oauth-keys.env`.** This file contains an OpenRouter API key. Reading it — even incidentally during debugging — would transmit the key to Anthropic's servers as part of the conversation context. (`~/.aider.conf.yml` and `~/.aider.model.settings.yml` are plain model-selection config with no secrets in them — safe to read.)
+**Do not read credential files.** This includes
+`~/.claude/.credentials.json`, `~/.codex/auth.json`,
+`~/.aider/oauth-keys.env`, `~/.local/share/opencode/auth.json`, and GitHub or
+SSH credentials. Reading one — even incidentally during debugging — can send
+the secret to the model provider as conversation context. Aider's
+`~/.aider.conf.yml` and `~/.aider.model.settings.yml` contain model selection,
+not credentials, and are safe to inspect when relevant.
 
 ## What is available
 
 - All projects under `~/Development/personal`
-- `~/.claude` — your settings, memory, and credentials
+- `~/.claude` — settings and memory; do not inspect its credential file
 - Python 3 and pip — available for intermediate scripting tasks
 - git, curl, Node.js
 
 ## What is not available
 
-Everything else on the host filesystem. This is by design.
+Host files not explicitly listed in the `README.md` mount table are unavailable.
+This is by design.
 
 ## Git tools
 
@@ -33,10 +50,5 @@ For exporting commits as files: `git format-patch` produces `.patch` files (one 
 
 ## Collaboration
 
-Josiah is an active collaborator on this project, not a passenger. Before writing any code or making structural changes:
-
-1. Explain what you're considering and why.
-2. Ask for his input or approval before proceeding.
-3. If there are tradeoffs or alternatives, surface them — let him decide.
-
-Do not implement first and explain after. His judgment shapes this project; treat every non-trivial decision as a conversation.
+Follow the role, change-authority, mentoring, and collaboration rules in
+[AGENT_WORKFLOW.md](AGENT_WORKFLOW.md).

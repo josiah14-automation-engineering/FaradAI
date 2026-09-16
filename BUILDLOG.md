@@ -1,5 +1,22 @@
 # FaradAI Build Log
 
+This is chronological working history, including experiments and lessons that
+may no longer describe current behavior. Use [README.md](README.md) for current
+behavior and [DECISIONLOG.md](DECISIONLOG.md) for settled rationale.
+
+## Navigation
+
+| Entries | Main topics |
+|---|---|
+| Sessions 1–13 (2026-05-11–20) | Initial container design, mounts, authentication, aider integration, secret-handling lessons, image construction, runtime modes |
+| Sessions 14–20 (2026-05-20) | Hardening, configuration validation, CI, SSH, health checks, update and uninstall workflows |
+| Sessions 21–30 (2026-05-20–22) | External reviews, issue triage, CLI refactoring, trust prompts, portability, security preflight checks |
+| Sessions 31–42 (2026-05-22–23) | Bats coverage, release process, Nix and network controls, language evaluation, recovery flows, near-misses and review lessons |
+| Nix investigation (2026-06-16) | Shared-store lock failure, rejected theories, syscall diagnosis, final mount policy |
+| IDE research (2026-06-16) | IDE agent approaches, isolation tradeoffs, deferred integration paths |
+| ARM64 validation (2026-07-08) | Native build, smoke testing, GitHub CLI packaging, CI architecture coverage |
+| Go/Elvish/Podman migration (2026-09-09 onward) | Migration boundaries, build conversion, executable specifications, runtime-preflight acceptance coverage |
+
 ---
 
 ## Session 1 — 2026-05-11
@@ -1693,3 +1710,105 @@ Rebuilt clean on the M2 (`aarch64`, Docker Engine reporting `linux/arm64` native
 With a verified build in hand: README and ROADMAP platform tables now read "Linux ✅ Primary — maintainer-tested (x86_64 and arm64, including Apple Silicon under Asahi Linux)," and the macOS row was corrected to be precise about *why* it's still untested — the maintainer's Apple hardware runs Linux, not macOS, so the Docker Desktop path remains unverified. `ci.yml`'s `build` job became a matrix over `{amd64: ubuntu-24.04, arm64: ubuntu-24.04-arm}` — both native GitHub-hosted runners (the repo is public, so ARM64 hosted runners are free; no QEMU emulation needed), with the `type=gha` cache scoped per-arch so the two legs don't clobber each other's cache entries.
 
 Released as `0.5.0-alpha.1` — Josiah's call: ARM64 support is the headline feature of the release (minor bump), with the `gh` pin fix folded in as a supporting fix rather than its own release.
+
+---
+
+## Podman migration and first Godog acceptance scenario — 2026-09-09 (#65)
+
+### Collaboration boundary established
+
+Before continuing the migration, Josiah directed that repository agents operate as experienced engineering mentors rather than project implementers. At his request, the agent recorded that boundary in `AGENTS.md`: agents may inspect, diagnose, advise, and edit documentation, but Josiah writes the project code, specifications, and tests. Generic examples remain available for teaching syntax and concepts; requiring documentation searches as an exercise does not. The agent followed that boundary throughout the Godog work below while Josiah authored the implementation.
+
+### Migration plan tightened
+
+Josiah broke the cross-platform migration into deliberately incremental work: establish the OCI/Podman build first, migrate the small support scripts to Elvish, then replace the main `faradai` Bash CLI one function at a time with Go, beginning with pure functions and leaving argument parsing until last. During the Go transition, Bash will call the compiled Go binary for migrated functions. Platform-specific profiles remain the final phase, after behavior parity is established. The credential/network broker remains separate follow-up work rather than part of the compatibility migration.
+
+The agent challenged an early proposal to mix the Elvish and Go migrations and helped identify the compatibility boundary. Josiah chose to keep one support-shell language, Elvish, while keeping the main CLI out of Elvish because it is headed to Go.
+
+### First Podman/OCI build completed
+
+Josiah migrated `Dockerfile` to `Containerfile`, `.dockerignore` to `.containerignore`, completed the OCI image labels, and worked through the remaining Hadolint findings. At Josiah's direction, the agent updated the existing license to AGPL-3.0. The agent explained the relevant Containerfile, npm-prefix, shell, certificate, and OCI-label behavior while Josiah made the Containerfile edits.
+
+Josiah then wrote `build.elv` with syntax guidance from the agent. `build.elv` builds the OCI image with Podman; the Docker-based `build.sh` remains alongside it for the legacy track. Josiah ran the Podman build successfully on the M2 Asahi Linux host. The harmless OCI-format warnings caused by `SHELL` are deferred for a later warning-cleanup pass.
+
+### Legacy implementation preserved during migration
+
+The working tree now preserves the Docker CLI as `faradai-docker`. `install.sh` installs that legacy script, and the existing Bats suites point to it, allowing FaradAI to remain usable while the active `faradai` script migrates toward Podman and then Go.
+
+The active `faradai` script now performs a Podman preflight. It distinguishes a missing executable from an installed-but-unready runtime and preserves `podman info` diagnostics, including likely Linux, macOS/WSL2, remote, and FreeBSD failure classes. Other Docker-specific execution paths have not yet migrated, so this is intentionally not described as a complete Podman conversion.
+
+### First Godog feature scaffolded
+
+Josiah created `features/execution_preflight.feature` and `features/tests/execution_preflight_test.go`, added Godog 0.16.0, and wrote the feature, suite runner, step registrations, scenario-state types, and the first Given implementation. The agent taught the Go and Godog syntax as Josiah worked: composite literals, pointer receivers, first-class method values, callback registration, closure-based dependency capture, error wrapping, and guard-clause style.
+
+Josiah separated scenario inputs (`ScenarioEnvironment`) from observed outputs (`ScenarioRunResult`) rather than using a single catch-all world object. He then implemented the unavailable-runtime fixture by deriving a child PATH without mutating the test process: it requires the parent Nix devShell to contain Podman, removes the resolved runtime directory and all non-`/nix/store/` entries, normalizes entries before comparison, and stores the filtered PATH for the future subprocess step. The agent reviewed each iteration for correctness and idiomatic Go while leaving the implementation to Josiah.
+
+The Given setup and When launch step are complete and reviewed. To keep Bash
+available inside the Nix-only fixture PATH, Josiah added mise's immutable
+`bash-5-3p9` export to the FaradAI devShell and advanced the mise lock to the
+new `v0.3.0-alpha.1` release. The agent documented, committed, tagged, and
+published that mise release after Josiah authored its Bash definition and
+flake wiring.
+
+Josiah introduced `ScenarioState` to carry the prepared environment and
+observed result between Godog steps, then implemented `launchFaradAI`. The
+step executes the active script directly so its shebang resolves Bash,
+inherits the devShell environment with the filtered PATH overriding the
+original value, captures stdout and stderr separately, and distinguishes an
+expected nonzero process exit from a test-harness launch failure. The agent
+guided the `exec.Cmd`, environment, buffer, and `ExitError` behavior and
+reviewed the implementation without writing it. Josiah ran the package tests
+through the editor and confirmed that both implemented steps execute
+successfully. The two result assertions remain pending, so the acceptance
+scenario has not yet passed end to end.
+
+### First Godog scenario completed — 2026-09-11
+
+Josiah completed the two result steps. The reporting assertion now evaluates
+captured stderr against a runtime-neutral regular expression while preserving
+the public `faradai:` error prefix and the established “not installed or not
+in PATH” wording. While developing it, Josiah corrected a character class that
+used `/r/n` instead of the regular-expression escapes `\r\n`, then found that
+the otherwise-valid expression was accidentally being applied to stdout while
+the failure diagnostic displayed stderr. The completed exit assertion verifies
+that the process returned a nonzero status.
+
+The agent explained Go's regular-expression behavior, traced the mismatched
+output stream, and reviewed the full scenario without modifying the
+implementation.
+`gofmt -d` produced no changes, `go vet ./features/tests` passed, and
+`nix develop --command go test -v ./features/tests` passed one scenario and all
+four steps. A diagnostic run outside the devShell could not resolve Bash after
+the fixture removed non-Nix PATH entries; rerunning inside the required
+FaradAI devShell succeeded and confirmed that the newly pinned mise Bash
+environment supports the intended fixture boundary.
+
+The final review also revisited Josiah's earlier C-era single-exit and explicit
+`else` habits. The agent explained that Go's guard-clause style makes an
+already-terminated branch explicit without carrying mutable return-state
+variables through the rest of a function; deeply scattered returns remain a
+separate readability concern.
+
+### Installed-but-not-ready runtime scenario completed — 2026-09-11
+
+Josiah added the second execution-preflight scenario for a container runtime
+that is available on PATH but not ready. He kept application launch and
+unsuccessful exit as shared Godog steps, grouped shared and scenario-specific
+registrations and implementations under matching headings, and added the two
+new Given and Then steps without duplicating shared behavior.
+
+The new fixture is an executable Elvish system mock named `podman`. It exits
+nonzero for `podman info` and succeeds for other invocations. The Given step
+prepends the mock directory to the child PATH, leaving the developer's process
+environment unchanged. The agent raised the possibility that a missing or
+non-executable fixture could fall through to a real Podman later on PATH;
+Josiah explicitly accepted that low-probability test-fixture risk rather than
+add validation or more PATH construction. The tracked fixture and executable
+mode are the chosen boundary until real evidence justifies hardening it.
+
+Josiah implemented the runtime-neutral not-ready assertion against captured
+stderr, anchored the step and output expressions, and escaped the message's
+literal period. The agent reviewed but did not write the implementation.
+`gofmt -d`, `go vet ./features/tests`, and Elvish compilation passed. Running
+`nix develop --command go test -v ./features/tests` passed both scenarios and
+all eight steps.

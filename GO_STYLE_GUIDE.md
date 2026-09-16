@@ -46,7 +46,9 @@ This guide applies to the Go CLI and Go tests. Prefer clear standard-library cod
 
 ## Testing
 
-The project test stack is the standard `testing` package, Gomega, `go-cmp`, native fuzzing, Rapid, and Godog/Cucumber.
+The current test stack is the standard `testing` package and Godog/Cucumber.
+Use standard-library assertions and comparisons while they remain clear; add a
+test dependency only when a concrete case makes it simpler or safer.
 
 ### Executable specifications
 
@@ -61,11 +63,7 @@ The project test stack is the standard `testing` package, Gomega, `go-cmp`, nati
 
 - Use `testing` as the runner. Prefer table tests and subtests when cases share behavior, not merely to reduce line count.
 - Call `t.Parallel()` only after confirming the test has no shared mutable process, environment, filesystem, port, or container state. Use `-parallel` and `-p` to control runner concurrency.
-- Create Gomega per test with `g := NewWithT(t)`. Never use global `RegisterTestingT`; it is unsafe with parallel tests.
-- Use ordinary Gomega matchers for readable assertions. Use `Eventually` and `Consistently` only for behavior that is genuinely asynchronous, always with a context or explicit timeout; never replace synchronization with arbitrary sleeps.
-- Use `go-cmp` for semantic comparison or detailed structured diffs. Supply explicit `cmp.Option` values for ignored fields, ordering, tolerances, or equivalence.
 - Use `testing.F` for coverage-guided fuzzing of TOML parsing, validation, names, paths, and argument construction. Seed the corpus with valid and boundary examples; a fuzz target must be deterministic and must not execute Podman.
-- Use Rapid when a property needs rich generators, shrinking, or state-machine testing. Good properties include round trips, invariant preservation, deterministic resolution, and "project policy can restrict but never elevate user permissions."
 - Prefer small handwritten fakes over generated mocks. Test observable behavior rather than call choreography.
 - Put test fixtures in `testdata/`; use `t.TempDir`, `t.Setenv`, and `t.Cleanup` for isolation.
 
@@ -75,5 +73,4 @@ The project test stack is the standard `testing` package, Gomega, `go-cmp`, nati
 - [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
 - [Google Go Style Guide](https://google.github.io/styleguide/go/)
 - [`testing`](https://pkg.go.dev/testing) and [Go fuzzing](https://go.dev/doc/security/fuzz/)
-- [Gomega](https://onsi.github.io/gomega/), [`go-cmp`](https://pkg.go.dev/github.com/google/go-cmp/cmp), and [Rapid](https://pgregory.net/rapid/)
 - [Cucumber Gherkin reference](https://cucumber.io/docs/gherkin/reference/) and [Godog](https://github.com/cucumber/godog)

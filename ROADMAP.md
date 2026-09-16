@@ -1,6 +1,7 @@
 # FaradAI — Priority Index
 
-Priority-ordered list of open GitHub issues. All content lives in the issues.
+Priority index for current, deferred, and exploratory work. Linked GitHub issues
+carry the detailed requirements and their authoritative open/closed state.
 
 ---
 
@@ -12,18 +13,24 @@ Priority-ordered list of open GitHub issues. All content lives in the issues.
 | macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (maintainer's Apple hardware runs Linux/Asahi, not macOS) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
-| FreeBSD / OpenBSD | ❌ No Docker support |
+| FreeBSD | ⚠️ Migration target — Podman/Go/Elvish path in progress; not yet supported or maintainer-tested |
+| OpenBSD | ❌ Out of scope |
 
 ---
 
 ## Now
 
+### Security
+
+- [#102](https://github.com/josiah14-automation-engineering/FaradAI/issues/102) — restore per-agent isolation when Codex's nested sandbox is disabled inside FaradAI
+
 ### Maintenance
 
-- [#96](https://github.com/josiah14-automation-engineering/FaradAI/issues/96) — chore: bump Claude Code 2.1.143 → 2.1.167
+- [#96](https://github.com/josiah14-automation-engineering/FaradAI/issues/96) — bundled-agent version maintenance; current pins are Claude Code 2.1.270, Codex 0.154.0, aider 0.86.2, and OpenCode 1.18.30, pending build validation
 
 ### Features
 
+- [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) — active migration: Go CLI, Elvish support scripts, Podman runtime, and TOML configuration
 - [#94](https://github.com/josiah14-automation-engineering/FaradAI/issues/94) — enhancement: optionally mount project source files `:ro` to prevent agent writes during code-author sessions — needed to safely use FaradAI while working on the Go/Elvish/Podman migration
 
 ---
@@ -69,6 +76,7 @@ Items deferred until after #65. The Bash-specific refactors may become irrelevan
 Educational explorations that don't directly advance the project but may surface ideas worth pulling in.
 
 - [#40](https://github.com/josiah14-automation-engineering/FaradAI/issues/40) — Migrate complex Bash scripting to Rash — paradigm-first design exploration; may motivate targeted changes (e.g. miniKanren in select places) but not a direct project deliverable
+- [#95](https://github.com/josiah14-automation-engineering/FaradAI/issues/95) — experiment with AI code generation from Cucumber/Gherkin specifications
 
 ---
 
@@ -78,7 +86,5 @@ Educational explorations that don't directly advance the project but may surface
 - [#29](https://github.com/josiah14-automation-engineering/FaradAI/issues/29) — Credential broker / proxy sidecar
 - [#30](https://github.com/josiah14-automation-engineering/FaradAI/issues/30) — Per-project policy / config support
 - [#31](https://github.com/josiah14-automation-engineering/FaradAI/issues/31) — Broker network mode (`FARADAI_NETWORK_MODE=broker`, depends on #29)
-- [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65) — Language strategy: migrate faradai to Go, support scripts to Elvish, and persistent configuration to TOML (supersedes the issue's original Nushell wording)
 - [#66](https://github.com/josiah14-automation-engineering/FaradAI/issues/66) — Post-v1.0.0: polyparadigm translation experiment
 - [#93](https://github.com/josiah14-automation-engineering/FaradAI/issues/93) — Spike: mirror repo on Radicle for decentralized resilience
-- [#99](https://github.com/josiah14-automation-engineering/FaradAI/issues/99) — Spike: decide whether FaradAI shares the host's Nix store or gets its own

@@ -1,5 +1,8 @@
 # Faradai Shell Script — Code Review
 
+> Historical review of `faradai` 0.2.0-alpha.1. Findings may have been fixed or
+> superseded; use current code, tests, and `DECISIONLOG.md` for present behavior.
+
 **File:** `faradai`
 **Date:** 2026-05-24
 **Reviewer:** Ring-2.6-1T (via aider)

@@ -17,7 +17,8 @@ Closes #
 
 ## Checklist
 
-- [ ] `shellcheck` passes on any modified shell scripts
-- [ ] `hadolint` passes on any Dockerfile changes
-- [ ] Smoke-tested locally (`faradai bash`, tools reachable, mounts correct)
+- [ ] Relevant automated tests pass (Go/Godog and/or Bats)
+- [ ] Relevant linters or compile checks pass (ShellCheck, Elvish, Hadolint)
+- [ ] `Containerfile` changes build on the affected Docker and/or Podman path
+- [ ] Runtime changes were smoke-tested on the affected path
 - [ ] Documentation updated if user-facing behavior changed

@@ -5,9 +5,9 @@ This guide applies to `Containerfile` authoring, image builds, and Podman runtim
 ## Naming and build context
 
 - Name build definitions `Containerfile`; use `.containerignore` to keep credentials, VCS data, tests not needed by the build, and local artifacts out of the context.
-- Build with Podman and request a fresh base image every time: `podman build --pull=always ...`.
-- Use fully qualified base references with a release tag, for example `docker.io/library/ubuntu:24.04`. Do not use `latest`.
-- Release tags are intentionally preferred over digest pins so routine rebuilds receive publisher security fixes. Rebuild regularly and retain the resulting image digest in release/build records for auditability.
+- Build with Podman and fetch the base only when absent: `podman build --pull=missing ...`.
+- Pin the base with both a release tag and digest, as the current `ubuntu:24.04@sha256:...` reference does. Do not use `latest`.
+- Update the base digest deliberately when taking publisher security fixes, then retain the resulting image digest in release/build records for auditability.
 - Pin downloaded tools and language dependencies to versions, and verify externally downloaded artifacts with a checksum or signature.
 
 ## Containerfile construction
@@ -51,7 +51,7 @@ This guide applies to `Containerfile` authoring, image builds, and Podman runtim
 ## Verification
 
 - Lint `Containerfile` with the repository `.hadolint.yaml`; document narrowly scoped inline exceptions for intentional Podman-specific behavior.
-- Build with a clean context and `--pull=always`, then run smoke tests against the resulting image without bind-mounted build overrides.
+- Build with a clean context and `--pull=missing`, then run smoke tests against the resulting image without bind-mounted build overrides.
 - Scan the built image with `go tool -modfile=tools/go.mod trivy image IMAGE`; the repository `trivy.yaml` makes high or critical vulnerabilities, misconfigurations, secrets, or license findings fail the check, including findings without a published fix.
 - Inspect the image configuration and history for users, entrypoint, labels, layers, and accidental secrets.
 - Exercise rootless startup, shutdown, signal handling, resource limits, read-only mounts, denied privilege escalation, and both supported architectures.

@@ -32,24 +32,25 @@ faradai                # launches Claude Code in a sandboxed container
 | macOS (Docker Desktop) | ⚠️ Best effort — architecturally supported, not maintainer-tested (the maintainer's Apple hardware runs Linux/Asahi, not macOS); requires Bash 4+ and platform-specific SSH agent setup (see notes below) |
 | Windows (WSL2 + Docker Desktop) | ⚠️ Best effort — likely works, not maintainer-tested |
 | Windows (native) | ❌ Out of scope |
-| FreeBSD | ⚠️ Planned — Docker unavailable on FreeBSD; targeted for the Go/Elvish migration via a switch from Docker to Podman (#65) |
+| FreeBSD | ⚠️ Migration target — the Podman/Go/Elvish path is in progress; not yet supported or maintainer-tested |
 | OpenBSD | ❌ Out of scope |
 
 macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot reproduce issues on those platforms.
 
 **macOS: Bash version.** The `faradai` CLI uses Bash 4+ syntax. macOS ships Bash 3.2 (GPLv2). Install a modern Bash via Homebrew (`brew install bash`) and ensure it is on your `PATH`, or invoke `faradai` explicitly with `/opt/homebrew/bin/bash`. This constraint will be removed when the CLI migrates to Go and the support scripts migrate to Elvish (see [#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)).
 
-**FreeBSD: planned via Podman.** Docker is not available on FreeBSD. The Go/Elvish migration (#65) will switch the container runtime from Docker to Podman, which has native FreeBSD support. Elvish replaces the earlier Nushell choice because BSD support is a primary Elvish target but is not a primary Nushell focus. Until that migration lands, FreeBSD is unsupported.
+**FreeBSD: migration in progress via Podman.** Docker is not available on FreeBSD. The OCI image now builds through Podman, but the main runtime migration is incomplete and has not been validated on FreeBSD. The Go/Elvish migration (#65) targets that support; Elvish replaced the earlier Nushell choice because BSD support is a primary Elvish target.
 
 **macOS / Docker Desktop: SSH agent forwarding.** On native Linux, FaradAI forwards the agent socket via a direct bind mount of `$SSH_AUTH_SOCK`. Docker Desktop on macOS and Windows routes host sockets differently — the standard bind-mount approach may not work out of the box. Community-tested workarounds are tracked in [#47](https://github.com/josiah14-automation-engineering/FaradAI/issues/47).
 
 ## Prerequisites
 
 - Docker
-- A Claude Code login session on the host (`claude login` — credentials live in `~/.claude/`)
-- A Codex login session on the host (`codex login` — file-based credentials live in `~/.codex/auth.json`)
-- An aider OpenRouter login on the host (run `aider` once — it offers a browser-based OAuth flow automatically when `~/.aider.conf.yml` points at an `openrouter/` model and no key is found, saving the token to `~/.aider/oauth-keys.env`; optional, skipped if that file does not exist)
-- An OpenCode login session on the host (`opencode auth login` — credentials live in `~/.local/share/opencode/auth.json`)
+- Host credentials for each agent you intend to use:
+  - Claude Code: `claude login` (`~/.claude/`)
+  - Codex: `codex login` with file-based storage (`~/.codex/auth.json`)
+  - aider with OpenRouter: run `aider` once on the host to complete its browser OAuth flow (`~/.aider/oauth-keys.env`)
+  - OpenCode: `opencode auth login` (`~/.local/share/opencode/auth.json`)
 
 ## Install
 
@@ -57,7 +58,9 @@ macOS and WSL2 contributions and bug reports are welcome. The maintainer cannot 
 ./install.sh
 ```
 
-Builds the image and copies the `faradai` CLI script to `/usr/local/bin/faradai`. After this, `faradai` is available as a system command.
+Builds the image and installs the retained `faradai-docker` CLI as
+`/usr/local/bin/faradai`. After this, `faradai` is available as a system
+command.
 
 ## Run
 
@@ -77,12 +80,14 @@ An optional argument selects which tool to launch:
 | `faradai claude` | Claude Code; remaining args passed through (e.g. `--resume`) |
 | `faradai codex` | Codex; remaining args passed through (e.g. `--resume`) |
 | `faradai aider` | aider; remaining args passed through (e.g. `--no-git`) |
+| `faradai opencode` | OpenCode; remaining args passed through |
 | `faradai bash` | bare shell, useful for debugging |
 | `faradai logs` | stream container logs; remaining args passed to `docker logs` (e.g. `-f`); only useful while a container is running (containers exit with `--rm`) |
 | `faradai status` | show container state, image, and start time; only useful while a container is running (containers exit with `--rm`) |
 | `faradai version` | print the faradai CLI version |
 | `faradai update` | pull latest tagged release and reinstall |
 | `faradai uninstall` | remove all faradai containers, the image, and installed binaries |
+| `faradai help` | show command and environment-variable help |
 
 ### Multi-project and multi-container usage
 
@@ -260,7 +265,7 @@ Both are off by default; set `FARADAI_ENABLE_PONYTAIL=1` and/or `FARADAI_ENABLE_
 
 [Headroom](https://github.com/headroomlabs-ai/headroom) wraps whichever tool you launch via `headroom wrap <tool>`, starting a local compression proxy in front of it — covers all four agents. Its first use fetches an ONNX runtime and a compression model over the network; that fetch isn't pre-baked into the image, so it happens inside the container on first launch.
 
-The image installs a deliberately narrow set of headroom's [pip extras](https://github.com/headroomlabs-ai/headroom#get-started-60-seconds) — `proxy` (what `wrap` needs to run at all), `code` (AST-aware compression for coding tasks), `html`/`reports`/`spreadsheet`/`otel` (lightweight, no-torch extras). `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` — hundreds of MB even pinned to a CPU-only wheel, multi-GB if it resolves the default CUDA wheel — plus `[voice]`/`[image]` extras unrelated to a text-based coding sandbox, so we don't install it. Notably absent: `[memory]` (headroom's cross-agent shared-memory store, which needs `[ml]`'s torch dependency) — genuinely useful for workflows that rotate heavily between agents on the same project, but not included by default since faradai currently bakes one fixed extras set for everyone. Making extras configurable at build time (rather than everyone getting the same install) is planned for after the Go/Elvish CLI migration ([#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)); until then, add extras by editing `HEADROOM_VERSION`'s install line in the [Dockerfile](Dockerfile) and rebuilding.
+The image installs a deliberately narrow set of headroom's [pip extras](https://github.com/headroomlabs-ai/headroom#get-started-60-seconds) — `proxy` (what `wrap` needs to run at all), `code` (AST-aware compression for coding tasks), `html`/`reports`/`spreadsheet`/`otel` (lightweight, no-torch extras). `[all]` pulls in `torch` via `[ml]`/`[memory]`/`[evals]` — hundreds of MB even pinned to a CPU-only wheel, multi-GB if it resolves the default CUDA wheel — plus `[voice]`/`[image]` extras unrelated to a text-based coding sandbox, so we don't install it. Notably absent: `[memory]` (headroom's cross-agent shared-memory store, which needs `[ml]`'s torch dependency) — genuinely useful for workflows that rotate heavily between agents on the same project, but not included by default since faradai currently bakes one fixed extras set for everyone. Making extras configurable at build time (rather than everyone getting the same install) is planned for after the Go/Elvish CLI migration ([#65](https://github.com/josiah14-automation-engineering/FaradAI/issues/65)); until then, add extras by editing `HEADROOM_VERSION`'s install line in the [`Containerfile`](Containerfile) and rebuilding.
 
 ## What's in the image
 
@@ -273,11 +278,14 @@ The image installs a deliberately narrow set of headroom's [pip extras](https://
 - headroom (`headroom-ai[proxy,code,html,reports,spreadsheet,otel]`, via pipx venv, pre-installed) — opt-in context-compression proxy; see `FARADAI_ENABLE_HEADROOM` under Configuration and [Ponytail and headroom](#ponytail-and-headroom-opt-in) for the extras rationale
 - Python 3 + pip + venv — available for intermediate scripting tasks
 - git, curl
-- gh (GitHub CLI) — installed from GitHub's official apt repository
+- gh (GitHub CLI) — installed from a version-pinned GitHub Releases `.deb`
+- bubblewrap — system sandbox helper used by Codex
+- rtk — command-output proxy used by configured agent hooks
 - vim — available when shelling in for manual edits or troubleshooting
 - tmux — terminal multiplexer; used internally for aider ↔ Claude handoff; available when shelling in
 - jq — JSON processor; useful for inspecting API responses and tool output inside the container
 - shellcheck — shell script linter; useful for validating scripts inside the container
+- OpenSSH client — Git and SSH-agent workflows
 - `HEALTHCHECK` — verifies `claude`, `codex`, `aider`, and `opencode` are runnable every 30s; useful for orchestration environments
 - Networking tools: `ping`, `netstat`/`ifconfig` (`net-tools`), `ip`/`ss` (`iproute2`), `dig`/`nslookup` (`dnsutils`), `nc` (`netcat-openbsd`)
 
@@ -342,7 +350,7 @@ SSH requires key files to be `600`. Fix: `chmod 600 ~/.ssh/id_*`.
 Run `echo $SSH_AUTH_SOCK` inside the container — it should return `/ssh-agent`. If empty, the agent was not forwarded at launch. See [Host SSH agent setup](#host-ssh-agent-setup) for instructions. If your keys are passphrase-protected, run `ssh-add` on the host before starting the container.
 
 **aider not found inside the container**
-The image was built before aider was included. Rebuild: `./build.sh && ./install.sh`.
+The image is stale. Rebuild and reinstall with `./install.sh`.
 
 **Wrong model slug in `~/.aider.conf.yml`**
 aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `model: openrouter/<provider>/<model>`. Edit the file on the host (it is mounted `:ro` inside the container).
@@ -354,25 +362,46 @@ aider / LiteLLM requires the `openrouter/` provider prefix. Correct format: `mod
 `~/.config/gh/` is mounted from the host. If you have previously run `gh auth login` on the host, credentials will be available inside the container automatically. If not, run `gh auth login` from inside the container — tokens will persist to the host mount and survive restarts.
 
 **`install.sh` fails with "sudo is required but not available"**
-`install.sh` needs `sudo` to copy the `faradai` binary to `/usr/local/bin`. Install sudo (`apt-get install sudo` on Debian/Ubuntu) or copy the binary manually: `cp faradai /usr/local/bin/faradai && cp uninstall-faradai /usr/local/bin/uninstall-faradai` as root.
+`install.sh` needs `sudo` to install the retained Docker CLI as `/usr/local/bin/faradai`. Install sudo (`apt-get install sudo` on Debian/Ubuntu) or copy the files manually: `cp faradai-docker /usr/local/bin/faradai && cp uninstall-faradai /usr/local/bin/uninstall-faradai` as root.
 
 ---
 
 ## Development
 
-FaradAI is built with Claude Code as a coding assistant. [`BUILDLOG.md`](BUILDLOG.md) is a deliberate session-by-session record of every decision, tradeoff, and reasoning thread through v0.1.0-alpha.1 — proof that this is not AI running loose without thought or supervision. Every change reflects a human judgment call.
+Development is human-led, with AI agents operating under the mentoring boundary
+in [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md). Start at [AGENTS.md](AGENTS.md) for
+the documentation map. [BUILDLOG.md](BUILDLOG.md) records chronological work and
+lessons, [DECISIONLOG.md](DECISIONLOG.md) records settled rationale, and
+[CHANGELOG.md](CHANGELOG.md) records user-facing releases.
 
-After v0.1.0-alpha.1, significant architectural and security decisions are captured in [`DECISIONLOG.md`](DECISIONLOG.md): a terse, indexed log of *why* non-obvious choices were made. [`CHANGELOG.md`](CHANGELOG.md) covers user-facing release notes; DECISIONLOG entries note which version they affect.
+The installed CLI remains the stable Docker implementation: `install.sh` runs
+`build.sh` and installs `faradai-docker` as `faradai`. The active migration is
+incremental: `build.elv` builds the OCI image with Podman, while the source
+`faradai` script currently adds Podman preflight behavior ahead of its remaining
+Docker orchestration. The Go/Elvish/Podman migration is not yet a complete
+replacement.
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Future work
 
-The container pattern is not specific to Claude Code, Codex, aider, or OpenCode — any CLI-based AI coding agent can be dropped in by adding it to the Dockerfile and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
+The container pattern is not specific to Claude Code, Codex, aider, or OpenCode — any CLI-based AI coding agent can be dropped in by adding it to the `Containerfile` and a mode to `entrypoint.sh`. If the project grows to justify the work, candidates include Goose, OpenHands, and others in the space. Contributions welcome if there's demand.
 
 ## Testing
 
-Tests use [bats-core v1.9.0](https://github.com/bats-core/bats-core/releases/tag/v1.9.0), pinned as a git submodule. After cloning the repo, initialise it once:
+The migration acceptance tests run through Go and Godog inside the Nix
+development shell:
+
+```bash
+nix develop --command go test ./...
+```
+
+The Gherkin features under `features/` describe runtime-neutral user behavior;
+the current step implementation exercises the active `faradai` script's Podman
+preflight.
+
+The stable Docker implementation retains three Bats suites. Bats-core v1.9.0
+is pinned as a git submodule; initialise it once after cloning:
 
 ```bash
 git submodule update --init
@@ -381,13 +410,15 @@ git submodule update --init
 Then run:
 
 ```bash
-test/libs/bats-core/bin/bats test/unit.bats test/sourced.bats
+env -u FARADAI_ENABLE_HEADROOM -u FARADAI_ENABLE_PONYTAIL \
+  test/libs/bats-core/bin/bats test/unit.bats test/sourced.bats test/entrypoint.bats
 ```
 
-Two test suites:
+Bats suites:
 
-- **`test/unit.bats`** — integration tests that execute the `faradai` script as a subprocess. Covers the `-c`/`-a`/`-n` flag parser, the `_append_extra_docker_args` allowlist, and the validators (`_validate_memory/cpus/pids/network_mode`).
-- **`test/sourced.bats`** — function-level tests that source the script directly (safe via the source-vs-execute guard). Tests each phase function in isolation: `_init_defaults`, `_parse_cli_flags`, `_dispatch_meta_commands`, `_maybe_attach_existing`, `_handle_ssh_agent_forwarding`, all `_append_*` arg-builders, and `_build_docker_run_args` ordering guards.
+- **`test/unit.bats`** — subprocess coverage for the stable `faradai-docker` CLI.
+- **`test/sourced.bats`** — function-level coverage for `faradai-docker` phases and argument construction.
+- **`test/entrypoint.bats`** — entrypoint dispatch plus ponytail and headroom provisioning with call-logging mocks.
 
 Docker is mocked via `test/helpers/` — no running daemon required.
 
@@ -423,20 +454,23 @@ This removes all faradai containers, the image, and the installed binaries. The 
 | `~/.config/gh/` | GitHub CLI auth tokens |
 | faradai source directory | Wherever you cloned the repo |
 
-**Updating pinned tool versions:** `@anthropic-ai/claude-code`, `@openai/codex`, and `aider-chat` are pinned in the Dockerfile. To update them, edit the version arguments and rebuild.
+**Updating pinned tool versions:** `@anthropic-ai/claude-code`, `@openai/codex`, `aider-chat`, and `opencode-ai` are pinned in the `Containerfile`. To update them, edit the version arguments and rebuild.
 
 ---
 
 ## Known issues and limitations
 
-**Docker filesystem I/O overhead**
-All file reads and writes go through Docker's overlay filesystem, which adds latency compared to native disk access. For most coding tasks this is imperceptible, but large `find` scans, heavy test suites writing many files, or build systems that hash large trees may be noticeably slower inside the container than on the host.
+**Docker Desktop filesystem I/O overhead**
+On macOS and Windows, bind-mounted project I/O crosses Docker Desktop's VM
+boundary and may be slower for large scans, write-heavy tests, or build systems
+that hash large trees. Native Linux bind mounts do not use the image's overlay
+filesystem for the project tree and are generally close to native I/O.
 
 **No GPU passthrough**
 The container runs with `--cap-drop ALL` and no `--device` flags by default. GPU access (e.g. for local model inference alongside the agent) requires `FARADAI_ALLOW_DEVICE=1` and the appropriate `--device` flag in `FARADAI_DOCKER_ARGS`. There is no first-class GPU profile yet.
 
 **Local LSP limitations**
-Language servers that rely on system-wide installations (e.g. a globally installed `pylsp` or `clangd`) will not be present inside the container unless they are added to the Dockerfile. LSPs that install into the project (e.g. via `npm install` or a virtualenv) work fine.
+Language servers that rely on system-wide installations (e.g. a globally installed `pylsp` or `clangd`) will not be present inside the container unless they are added to the `Containerfile`. LSPs that install into the project (e.g. via `npm install` or a virtualenv) work fine.
 
 **Multi-user `docker rm` behavior**
 `faradai` calls `docker rm -f faradai` before each new launch to clear any stopped container. On a shared machine where multiple users might run faradai containers, this could remove another user's stopped container if container names collide. Use `-n NAME` to give each session a unique name.

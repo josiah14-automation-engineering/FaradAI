@@ -42,37 +42,43 @@ git checkout -b feat/uninstall-command
 
 Keep commits small and focused — one logical change per commit. Write commit messages that describe *why*, not just *what*.
 
-Run `shellcheck` on any shell script changes before committing:
+When splitting existing work into multiple commits, prefer patch/hunk-based methods (`git add -p`, `git apply`) over manually deleting or moving code in tracked files to isolate a subset of the changes — hand-editing risks losing or corrupting work that a diff-level operation avoids.
+
+Run `shellcheck` on any Bash changes before committing:
 
 ```bash
-shellcheck faradai install.sh build.sh entrypoint.sh
+shellcheck faradai faradai-docker install.sh build.sh entrypoint.sh uninstall-faradai
 ```
 
-Run `hadolint` on any Dockerfile changes:
+Compile-check Elvish changes and lint `Containerfile` changes:
 
 ```bash
-hadolint Dockerfile
+elvish -compileonly build.elv
+hadolint Containerfile
 ```
 
 ## Testing
 
-There is no automated test suite yet. Manually smoke-test any code change:
+Run the relevant automated suites:
 
-1. **Build:** `./build.sh` — should complete without errors
-2. **Launch:** `faradai bash` — should drop into a shell inside the container
-3. **Tool check:** `claude --version`, `aider --version`, `gh --version` should all return output
-4. **Mount check:** confirm `$FARADAI_WORKDIR` is accessible inside the container
+```bash
+nix develop --command go test ./...
+env -u FARADAI_ENABLE_HEADROOM -u FARADAI_ENABLE_PONYTAIL \
+  test/libs/bats-core/bin/bats test/unit.bats test/sourced.bats test/entrypoint.bats
+```
 
-If you're adding a feature, include instructions in your PR for how to verify it.
+Use `./build.elv` for the Podman image path and `./build.sh` for the retained
+Docker path. For end-to-end checks of the installed Docker implementation,
+follow [SMOKETEST.md](SMOKETEST.md).
 
 ## Submitting a pull request
 
 1. Open an issue first if the change is anything beyond a small fix
 2. Keep the PR focused — one concern per PR
-3. Update relevant documentation (README if user-facing, BUILDLOG if architectural)
+3. Update the relevant documentation: README for current user behavior, DECISIONLOG for settled rationale, BUILDLOG for chronological lessons, and CHANGELOG for releases
 4. Describe what the change does and how you tested it
 
-PRs that pass `shellcheck` and `hadolint` cleanly are much easier to review.
+PRs should pass the checks relevant to the files they change.
 
 ## Questions
 
