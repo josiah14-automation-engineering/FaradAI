@@ -341,12 +341,29 @@ _parse_cli_flags() {
   _CMD_ARGS=()
 }
 
+_check_image_user() {
+  local image_user
+
+  image_user="$(docker image inspect faradai:latest \
+    --format '{{index .Config.Labels "org.opencontainers.image.faradai.username"}}' 2>/dev/null || true)"
+
+  if [[ -z "${image_user}" ]]; then
+    return 0
+  fi
+
+  if [[ "${image_user}" != "${USER}" ]]; then
+    echo "faradai: image was built for user '${image_user}' but running as '${USER}'" >&2
+    echo "faradai: mount paths inside the container will not match — rebuild with: ./install.sh" >&2
+    exit 1
+  fi
+}
+
 # _dispatch_meta_commands CMD_ARGS...
 #
 # Reads:  $@ (CMD_ARGS), _FARADAI_VERSION
 # Writes: nothing — exits or execs if matched, returns otherwise
 #
-# Handles commands that do not require Podman or image state.
+# Handles commands that do not require Docker or image state.
 _dispatch_meta_commands() {
   case "${1:-}" in
     --help|-h|help)
@@ -371,57 +388,33 @@ _dispatch_meta_commands() {
   esac
 }
 
-# _preflight_podman
+# _preflight_docker
 #
 # Reads:  nothing
-# Writes: nothing — exits if Podman is unavailable
-_preflight_podman() {
-  command -v podman > /dev/null 2>&1 || _die "Podman is not installed or not in PATH"
-  podman info > /dev/null || _die "Podman is installed but not ready.
-Review the error above, then run 'podman info' for full diagnostics.
-
-Common causes:
-- Linux: rootless storage, permissions, user namespaces, OCI runtime, or configuration errors.
-- macOS and Windows/WSL2: the Podman machine is missing, stopped, or unreachable.
-- Remote Podman: the configured socket or service is unreachable.
-- FreeBSD: jail-backed runtime support is unavailable or misconfigured."
+# Writes: nothing — exits if Docker is unavailable
+_preflight_docker() {
+  command -v docker > /dev/null 2>&1 || _die "docker is not installed or not in PATH"
+  docker info > /dev/null 2>&1 || _die "Docker daemon is not running"
 }
 
-# _dispatch_podman_metadata_commands CMD_ARGS...
+# _dispatch_docker_metadata_commands CMD_ARGS...
 #
 # Reads:  $@ (CMD_ARGS), _CONTAINER_NAME
 # Writes: nothing — exits or execs if matched, returns otherwise
 #
 # Handles commands that need Docker but not a running container or image.
-_dispatch_podman_metadata_commands() {
+_dispatch_docker_metadata_commands() {
   case "${1:-}" in
     logs)
-      exec podman logs "${@:2}" "${_CONTAINER_NAME}"
+      exec docker logs "${_CONTAINER_NAME}" "${@:2}"
       ;;
     status)
       local _fmt=$'name:    {{slice .Name 1}}\nstate:   {{.State.Status}}\nstarted: {{.State.StartedAt}}\nimage:   {{.Config.Image}}'
-      podman inspect --type container --format "${_fmt}" "${_CONTAINER_NAME}" 2>/dev/null \
+      docker inspect "${_CONTAINER_NAME}" --format "${_fmt}" 2>/dev/null \
         || _die "container '${_CONTAINER_NAME}' not found"
       exit 0
       ;;
   esac
-}
-
-_check_image_user() {
-  local image_user
-
-  image_user="$(podman image inspect faradai:latest \
-    --format '{{index .Config.Labels "org.opencontainers.image.faradai.username"}}' 2>/dev/null || true)"
-
-  if [[ -z "${image_user:-}" ]]; then
-    return 0
-  fi
-
-  if [[ "${image_user}" != "${USER}" ]]; then
-    echo "faradai: image was built for user '${image_user}' but running as '${USER}'" >&2
-    echo "faradai: mount paths inside the container will not match — rebuild with: ./install.sh" >&2
-    exit 1
-  fi
 }
 
 # _ensure_image_ready
@@ -429,7 +422,7 @@ _check_image_user() {
 # Reads:  USER (via _check_image_user)
 # Writes: nothing — exits on failure
 _ensure_image_ready() {
-  podman image inspect faradai:latest > /dev/null 2>&1 \
+  docker image inspect faradai:latest > /dev/null 2>&1 \
     || _die "image not found — run './install.sh' to build it"
   _check_image_user
 }
@@ -995,8 +988,8 @@ main() {
   _parse_cli_flags "$@"
   _dispatch_meta_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
 
-  _preflight_podman
-  _dispatch_podman_metadata_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
+  _preflight_docker
+  _dispatch_docker_metadata_commands "${_CMD_ARGS[@]+"${_CMD_ARGS[@]}"}"
 
   _ensure_image_ready
   _resolve_workdir

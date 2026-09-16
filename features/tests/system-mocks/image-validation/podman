@@ -1,0 +1,91 @@
+#!/usr/bin/env elvish
+
+use str
+
+pragma unknown-command = disallow
+
+var num-args = (count $args)
+
+if (== $num-args 1) {
+  if (eq $args[0] info) {
+    exit 0
+  }
+
+  echo "ERROR: when only 1 argument is provided, it must be 'info'" >&2
+  exit 10
+}
+
+if (< $num-args 3) {
+  echo "ERROR: must supply at least 3 arguments when not calling 'info'" >&2
+  exit 2
+}
+
+if (not-eq $args[0] image) {
+  echo "ERROR: first argument must be 'image'" >&2
+  exit 3
+}
+
+if (not-eq $args[1] inspect) {
+  echo "ERROR: second argument must be 'inspect'" >&2
+  exit 4
+}
+
+if (not-eq $args[2] 'faradai:latest') {
+  echo "ERROR: third argument must be 'faradai:latest'" >&2
+  exit 5
+}
+
+# This script uses supplied environment variables:
+# IMAGE_AVAILABLE [yes|no] unset -> no
+# IMAGE_USER
+
+if (not-eq $E:IMAGE_AVAILABLE yes) {
+  # following if block is a valid test path, not argument validation
+  if (or (eq $E:IMAGE_AVAILABLE no) ^
+             (eq $E:IMAGE_AVAILABLE '') ^
+             (not (has-env IMAGE_AVAILABLE))) {
+    echo "Error: faradai:latest: image not known" >&2
+    exit 1
+  }
+
+  echo "ERROR: unrecognized value for IMAGE_AVAILABLE" >&2
+  echo "Valid value are 'yes', 'no', or '' (empty string or unset defaults" ^
+       "to 'no')" >&2
+  echo "Received: "$E:IMAGE_AVAILABLE >&2
+  exit 6
+}
+
+# following if block is a valid test path, not argument validation
+if (== $num-args 3) {
+  echo "faradai:latest image is ready."
+  exit 0
+}
+
+if (not-eq $args[3] '--format') {
+  echo "ERROR: when a fourth argument is supplied, it must be '--format'"
+  exit 7
+}
+
+# verifying the correctness of the format template string is left to integration
+# tests, this is not the domain of feature spec validations.
+if (or (< $num-args 5) (eq $args[4] '')) {
+  echo "ERROR: the format template string must immediately follow '--format'"
+  exit 8
+}
+
+if (> $num-args 5) {
+  echo "ERROR: this mock takes at most 5 arguments"
+  exit 9
+}
+
+################################################################################
+# We end all validation here.
+################################################################################
+
+# even in the event that the requested label in the format isn't found, all
+# known container runtimes will still print an empty line with exit code 0.
+if (not (has-env IMAGE_USER)) {
+  set E:IMAGE_USER = ''
+}
+
+echo (str:trim-space $E:IMAGE_USER)
