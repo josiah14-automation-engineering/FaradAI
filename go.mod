@@ -2,10 +2,14 @@ module github.com/josiah14-automation-engineering/FaradAI
 
 go 1.26.0
 
+require github.com/cucumber/godog v0.16.0
+
 require (
-	github.com/cucumber/godog v0.16.0
-	github.com/google/go-cmp v0.7.0
-	github.com/onsi/gomega v1.43.0
-	github.com/pelletier/go-toml/v2 v2.4.3
-	pgregory.net/rapid v1.3.0
+	github.com/cucumber/gherkin/go/v42 v42.0.0 // indirect
+	github.com/cucumber/messages/go/v34 v34.2.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
+	github.com/hashicorp/go-memdb v1.3.5 // indirect
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 )
