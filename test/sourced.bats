@@ -11,7 +11,7 @@
 # the test process via 'exec docker run'. All tests here will fail until both
 # the guard and the phase functions exist.
 
-FARADAI="${BATS_TEST_DIRNAME}/../faradai"
+FARADAI="${BATS_TEST_DIRNAME}/../faradai-docker"
 
 setup() {
   export PATH="${BATS_TEST_DIRNAME}/helpers:${PATH}"

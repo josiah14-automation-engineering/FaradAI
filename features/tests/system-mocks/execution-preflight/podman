@@ -1,0 +1,7 @@
+#!/usr/bin/env elvish
+
+if (== $args[0] info) {
+  exit 1
+} else {
+  exit 0
+}

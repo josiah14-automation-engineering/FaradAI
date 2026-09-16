@@ -1,0 +1,82 @@
+#!/usr/bin/env elvish
+
+pragma unknown-command = disallow
+
+if (== (count $args) 0) {
+  echo "ERROR: must supply at least 1 argument." >&2
+  exit 2
+}
+
+# This script uses supplied environment variables:
+# RUNNING_CONTAINER
+if (not (has-env RUNNING_CONTAINER)) {
+  set E:RUNNING_CONTAINER = ''
+}
+
+if (eq $args[0] "info") {
+  echo "Podman status request mock is ready"
+  exit 0
+}
+
+if (not-eq $args[0] "inspect") {
+  echo "ERROR: the first argument must be 'info' or 'inspect'" >&2
+  exit 3
+}
+
+if (!= (count $args) 6) {
+  echo "ERROR: the container name, object type, and format template string" ^
+       "are required for the inspect command. Exactly and only these" ^
+       "arguments must be supplied" >&2
+  exit 4
+}
+
+# Regarding the next section of code:
+#
+# For simplicity, we only accept
+# the contract --type container --format <fmt string> <container name>
+# other argument orderings are not supported by this mock because at the time of
+# writing this script it was not necessary to sufficiently implement the Gherkin
+# feature tests
+
+if (not-eq $args[1] "--type") {
+  echo  "ERROR: the first argument after 'inspect' is expected to be '--type'" ^
+        "but was "$args[1] >&2
+  exit 5
+}
+
+if (not-eq $args[2] container) {
+  echo "ERROR: the object type provided is expected to be 'container'" ^
+       "but was "$args[2] >&2
+  exit 6
+}
+
+if (not-eq $args[3] "--format") {
+  echo "ERROR: the argument after the provided object type is expected to be" ^
+       "'--format' but was "$args[3] >&2
+  exit 7
+}
+
+if (eq $args[4] '') {
+  echo ^
+    "ERROR: the format template must be a non-empty string but was "$args[4] >&2
+  exit 8
+}
+
+var container_name = $args[5]
+
+################################################################################
+# END argument validations
+################################################################################
+
+if (or (eq $E:RUNNING_CONTAINER '') ^
+       (not-eq $E:RUNNING_CONTAINER $container_name)) {
+  echo 'Error: no such container "'$container_name'"' >&2
+  exit 1
+}
+
+echo 'name:    '$container_name'
+state:   running
+started: 2026-09-25T23:42:58.227595222Z
+image:   faradai:latest'
+
+exit 0

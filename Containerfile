@@ -43,12 +43,12 @@ ARG USERNAME
 ARG SHELLCHECK_VERSION=v0.11.0
 ARG TARGETARCH
 ARG AIDER_VERSION=0.86.2
-ARG CLAUDE_CODE_VERSION=2.1.286
-ARG CODEX_VERSION=0.159.2
-ARG OPENCODE_VERSION=1.18.30
-ARG HEADROOM_VERSION=0.37.0
-ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.37.0
-ARG RTK_VERSION=0.46.0
+ARG CLAUDE_CODE_VERSION=2.1.316
+ARG CODEX_VERSION=0.166.0
+ARG OPENCODE_VERSION=1.19.5
+ARG HEADROOM_VERSION=0.42.0
+ARG HEADROOM_OPENCODE_PLUGIN_REF=v0.42.0
+ARG RTK_VERSION=1.1.0
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -145,9 +145,9 @@ RUN case "${TARGETARCH:-amd64}" in \
 # version coupling); gnu build is the only linux/arm64 artifact published.
 RUN case "${TARGETARCH:-amd64}" in \
       amd64) _RTK_ARCHIVE="rtk-x86_64-unknown-linux-musl.tar.gz" \
-             _RTK_SHA256="79aa5b89c69566bbfeceb66c8a27cfbe52237fc7ee3e683115f43745a3262d21" ;; \
+             _RTK_SHA256="9454ad1b9489daa57ab0a9f4ebe2faaf4dc82b8a0f26c9e5135151abd7c9378d" ;; \
       arm64) _RTK_ARCHIVE="rtk-aarch64-unknown-linux-gnu.tar.gz" \
-             _RTK_SHA256="e8c2e1787f46017ea7c5a711b2bc6a7f7cf61c7ad69385b4c1e4daff1135dcd1" ;; \
+             _RTK_SHA256="a5c00c3ab0129884bcb757d348afc1a650efa0f4f0769da97c341f28f89719ed" ;; \
       *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
     esac \
  && curl -fsSL -o "/tmp/${_RTK_ARCHIVE}" \

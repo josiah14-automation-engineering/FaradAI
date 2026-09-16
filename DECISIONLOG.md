@@ -12,7 +12,7 @@ Entries record the date, version scope, decision, rationale, and alternatives.
 | Runtime lifecycle and identity | `$USER` normalization; ephemeral containers; managed labels; attach-mode entrypoint; pre-created configuration directories |
 | Credentials, mounts, and isolation | Credential recovery; shared Nix store; aider OAuth overlay; ponytail network exposure |
 | Agent tools and extensions | Codex and OpenCode expansion; ponytail and headroom policy, dependencies, and provisioning |
-| Language, platform, and test architecture | Go migration; FreeBSD and Podman; Elvish and TOML; incremental Docker replacement; Godog runtime-preflight tests |
+| Language, platform, and test architecture | Go migration; FreeBSD and Podman; Elvish and TOML; incremental Docker replacement; Godog runtime-preflight and image-readiness tests |
 | Agent governance | Expert-mentor role and implementation boundary |
 
 ## 2026-09-01 — Trivy is the baseline container security scanner
@@ -467,3 +467,39 @@ The unavailable-runtime fixture derives a child PATH rather than changing the Go
 - Scan and classify every possible runtime installation — rejected as unnecessary for the current controlled Nix fixture.
 - Use one aggregate scenario-world object, package globals, or context-based state lookup — rejected in favor of two small typed values with clear phase ownership.
 - Fake a failing Podman executable — rejected because that represents “installed but not ready,” a different observable behavior from “not installed.”
+
+---
+
+## 2026-11-05 — Image-readiness acceptance separates runtime contracts, application behavior, and template integration (#65)
+
+**Version scope:** Go/Elvish/Podman migration
+
+**Decision:** The real-runtime image-inspect guard uses a deliberately
+nonexistent image reference and requires a nonzero exit plus stderr containing
+`Error` and that exact reference. Godog scenarios remain fake-driven and cover
+missing, matching, mismatched, and absent or empty username-label behavior. The
+fake validates the narrow `image inspect` argument shape but does not parse or
+evaluate the format template. Actual FaradAI-to-real-Podman template output is
+a separate integration concern. Images without a username label remain
+accepted for backward compatibility, and the concise FaradAI diagnostics in
+these scenarios are intentionally matched exactly.
+
+**Why:** Docker and Podman report missing images with different sentences, but
+both identify the failed reference; a usage or interface failure would not
+provide that same evidence. Keeping template evaluation out of the fake avoids
+reimplementing Podman's behavior in a FaradAI behavior test. The three evidence
+layers therefore fail for distinct causes: the guard detects an incompatible
+runtime interface, the scenarios detect incorrect FaradAI decisions, and a
+future integration test will detect a real template or label-shape mismatch.
+
+**Alternatives considered:**
+
+- Inspect an image assumed to exist locally — rejected because the contract
+  check would depend on mutable developer state.
+- Match one complete Docker or Podman error sentence — rejected because the
+  compatible runtimes intentionally use different wording.
+- Interpret the format template in the fake — rejected because that would
+  couple application behavior coverage to the current Bash implementation and
+  duplicate runtime logic.
+- Reject images with no username label — rejected because that would break
+  compatibility with older FaradAI images.

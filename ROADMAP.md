@@ -26,7 +26,7 @@ carry the detailed requirements and their authoritative open/closed state.
 
 ### Maintenance
 
-- [#96](https://github.com/josiah14-automation-engineering/FaradAI/issues/96) — bundled-agent version maintenance; current pins are Claude Code 2.1.270, Codex 0.154.0, aider 0.86.2, and OpenCode 1.18.30, pending build validation
+- [#96](https://github.com/josiah14-automation-engineering/FaradAI/issues/96) — bundled-agent version maintenance; build-validated pins are Claude Code 2.1.316, Codex 0.166.0, aider 0.86.2, and OpenCode 1.19.5
 
 ### Features
 

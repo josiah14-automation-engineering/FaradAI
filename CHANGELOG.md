@@ -8,8 +8,13 @@ All notable user-facing changes to FaradAI are documented here. For architectura
 
 ### Changed
 
+- Updated bundled Claude Code from 2.1.286 to 2.1.316, Codex from 0.159.2 to 0.166.0, OpenCode from 1.18.30 to 1.19.5, Headroom and its OpenCode plugin from 0.37.0 to 0.42.0, and RTK from 0.46.0 to 1.1.0. Aider remains at its current 0.86.2 release.
 - Updated bundled Claude Code from 2.1.270 to 2.1.286 and Codex from 0.154.0 to 0.159.2.
 - Updated bundled Claude Code from 2.1.252 to 2.1.270, Codex from 0.151.0 to 0.154.0, and OpenCode from 1.18.25 to 1.18.30. Aider remains at its current 0.86.2 release.
+
+### Internal
+
+- The in-progress `faradai` migration now performs image availability and username-label validation through Podman, with executable coverage for missing, matching, mismatched, and unlabeled images. The installed `faradai-docker` CLI and its Docker Bats suites are unchanged.
 
 ## [0.1.0-alpha.1] — 2026-05-22
 
